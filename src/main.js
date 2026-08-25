@@ -216,7 +216,7 @@ async function render() {
     : add
       ? formPage(add)
       : section
-        ? sectionPage(section)
+        ? await sectionPage(section)
         : await dashboard()
 
   root.innerHTML = `
