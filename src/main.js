@@ -71,7 +71,75 @@ function loginPage() {
     </div>
   `
 }
-function dashboard() { return `<header class="page-heading"><p class="eyebrow">MVP · ambiente local</p><h1>Fundação do Affiliate Engine</h1><p>Uma visão navegável do domínio para validar a organização inicial, sem publicar, importar ou integrar dados externos.</p></header><section class="status-card"><div><p class="eyebrow">Estado atual</p><h2>Interface administrativa com persistência local</h2><p>Os cadastros ficam salvos neste navegador mesmo após atualizar a página.</p></div><span class="status-dot">Sem integrações externas</span></section><section><div class="section-title"><h2>Áreas disponíveis</h2><p>Escolha uma área para consultar e administrar os dados locais.</p></div><div class="area-grid">${sections.map((s) => `<button class="area-card" data-page="${s.id}"><span>${s.eyebrow}</span><strong>${s.label}</strong><small>${s.repository.list().length} registro(s) local(is)</small></button>`).join('')}</div></section><section class="next-steps"><h2>Backup dos dados</h2><p>Você pode exportar os cadastros para um arquivo JSON, importar um backup neste navegador ou restaurar os dados demonstrativos.</p><div class="form-actions"><button data-export>Exportar backup</button><button data-import>Importar backup</button><button class="danger" data-reset>Restaurar dados iniciais</button></div><input id="backup-file" type="file" accept="application/json,.json" hidden /></section><section class="next-steps"><h2>Limites desta etapa</h2><ul><li>Os dados são persistidos somente neste navegador e não são compartilhados entre dispositivos.</li><li>Nenhuma autenticação, automação, scraping ou publicação real foi implementada.</li><li>Telegram continua apenas como canal conceitual, sem credenciais ou chamadas de API.</li></ul></section>` }
+async function dashboard() {
+  const counts = await Promise.all(
+    sections.map(async (s) => {
+      const entries = await s.repository.list()
+      return {
+        id: s.id,
+        count: entries.length
+      }
+    })
+  )
+
+  const countById = Object.fromEntries(
+    counts.map((item) => [item.id, item.count])
+  )
+
+  return `<header class="page-heading">
+    <p class="eyebrow">MVP · Supabase</p>
+    <h1>Fundação do Affiliate Engine</h1>
+    <p>Uma visão navegável do domínio com persistência dos dados no banco.</p>
+  </header>
+
+  <section class="status-card">
+    <div>
+      <p class="eyebrow">Estado atual</p>
+      <h2>Interface administrativa integrada ao Supabase</h2>
+      <p>Os cadastros são armazenados no banco de dados e podem ser acessados posteriormente.</p>
+    </div>
+    <span class="status-dot">Integração com banco ativa</span>
+  </section>
+
+  <section>
+    <div class="section-title">
+      <h2>Áreas disponíveis</h2>
+      <p>Escolha uma área para consultar e administrar os dados.</p>
+    </div>
+
+    <div class="area-grid">
+      ${sections.map((s) => `
+        <button class="area-card" data-page="${s.id}">
+          <span>${s.eyebrow}</span>
+          <strong>${s.label}</strong>
+          <small>${countById[s.id] || 0} registro(s)</small>
+        </button>
+      `).join('')}
+    </div>
+  </section>
+
+  <section class="next-steps">
+    <h2>Backup dos dados</h2>
+    <p>Você pode exportar os cadastros para um arquivo JSON, importar um backup ou restaurar os dados demonstrativos.</p>
+
+    <div class="form-actions">
+      <button data-export>Exportar backup</button>
+      <button data-import>Importar backup</button>
+      <button class="danger" data-reset>Restaurar dados iniciais</button>
+    </div>
+
+    <input id="backup-file" type="file" accept="application/json,.json" hidden />
+  </section>
+
+  <section class="next-steps">
+    <h2>Limites desta etapa</h2>
+    <ul>
+      <li>Os dados são armazenados no Supabase.</li>
+      <li>A autenticação e as permissões continuam sendo tratadas separadamente.</li>
+      <li>Telegram continua apenas como canal conceitual, sem credenciais ou chamadas de API.</li>
+    </ul>
+  </section>`
+}
 function fieldInput(s, entry, field) { const reference = s.references?.[field]; if (reference) { const target = sections.find((item) => item.id === reference.section); const options = target.repository.list(); const current = Array.isArray(entry[field]) ? entry[field] : [entry[field]].filter(Boolean); return `<label><span>${labels[field]}</span><select name="${field}" ${reference.multiple ? 'multiple size="4"' : ''} required><option value="" ${current.length ? '' : 'selected'} ${reference.multiple ? 'hidden' : ''}>Selecione...</option>${options.map((item) => `<option value="${escapeHtml(item.name)}" ${current.includes(item.name) ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select>${reference.multiple ? '<small>Use Ctrl para selecionar mais de uma opção.</small>' : ''}</label>` } return `<label><span>${labels[field]}</span><input name="${field}" value="${escapeHtml(editable(entry, field))}" ${field === 'name' ? 'required' : ''} /></label>` }
 function sectionPage(s) { const entries = s.repository.list(); return `<header class="page-heading"><p class="eyebrow">${s.eyebrow}</p><div class="heading-row"><div><h1>${s.title}</h1><p>${s.intro}</p></div><button class="primary" data-add="${s.id}">+ Novo cadastro</button></div></header><section class="catalog" aria-label="${s.title}">${entries.length ? entries.map((entry) => `<article class="entry"><div><h2>${escapeHtml(entry.name)}</h2><p>${escapeHtml(entry.description)}</p></div><dl>${s.fields.map((field) => `<div><dt>${labels[field]}</dt><dd>${escapeHtml(value(entry[field]))}</dd></div>`).join('')}</dl><div class="entry-actions"><button data-edit="${entry.id}">Editar</button><button class="danger" data-remove="${entry.id}">Excluir</button></div></article>`).join('') : `<div class="empty">Nenhum cadastro nesta área.</div>`}</section><p class="notice">Os dados ficam salvos neste navegador. Use o backup da Visão geral antes de limpar os dados do navegador ou trocar de dispositivo.</p>` }
 function formPage(s, entry = null) { const isEdit = Boolean(entry); const blank = Object.fromEntries(['name', 'description', ...s.fields].map((field) => [field, ''])); const record = entry || blank; return `<header class="page-heading"><p class="eyebrow">${s.eyebrow}</p><h1>${isEdit ? 'Editar cadastro' : 'Novo cadastro'}</h1><p>${s.label}</p></header><form class="editor" data-section="${s.id}" data-id="${entry?.id || ''}">${fieldInput(s, record, 'name')}${fieldInput(s, record, 'description')}${s.fields.map((field) => fieldInput(s, record, field)).join('')}<div class="form-actions"><button type="button" data-page="${s.id}">Cancelar</button><button class="primary" type="submit">${isEdit ? 'Salvar alterações' : 'Adicionar cadastro'}</button></div></form>` }
