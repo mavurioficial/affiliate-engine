@@ -27,6 +27,13 @@ class LocalCatalog extends CatalogRepository {
     localStorage.setItem(this.key, JSON.stringify(this.entries))
   }
 
+  refreshNextId() {
+    this.nextId = this.entries.reduce((max, entry) => {
+      const match = String(entry.id).match(/local-(\d+)/)
+      return match ? Math.max(max, Number(match[1])) : max
+    }, this.entries.length) + 1
+  }
+
   list() { return [...this.entries] }
 
   create(entry) {
@@ -51,6 +58,19 @@ class LocalCatalog extends CatalogRepository {
     this.entries = this.entries.filter((entry) => entry.id !== id)
     this.persist()
     return true
+  }
+
+  replace(entries) {
+    if (!Array.isArray(entries)) throw new Error('Dados inválidos para o catálogo.')
+    this.entries = entries.map((entry) => ({ ...entry }))
+    this.refreshNextId()
+    this.persist()
+  }
+
+  reset() {
+    this.entries = this.seedEntries.map((entry) => ({ ...entry }))
+    this.refreshNextId()
+    localStorage.removeItem(this.key)
   }
 }
 
