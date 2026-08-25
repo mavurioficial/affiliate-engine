@@ -1,5 +1,4 @@
 import { sections } from './app/catalog.js'
-import './styles.css'
 
 const root = document.querySelector('#root')
 const labels = { locale: 'Localidade', currency: 'Moeda', markets: 'Mercados', languages: 'Idiomas', status: 'Estado', platform: 'Plataforma', category: 'Categoria', product: 'Produto', market: 'Mercado', offer: 'Oferta', destination: 'Destino', capability: 'Capacidade' }
@@ -11,4 +10,3 @@ function dashboard() { return `<header class="page-heading"><p class="eyebrow">M
 function sectionPage(s) { const entries = s.repository.list(); return `<header class="page-heading"><p class="eyebrow">${s.eyebrow}</p><div class="heading-row"><div><h1>${s.title}</h1><p>${s.intro}</p></div><span class="local-badge">Dados locais</span></div></header><section class="catalog" aria-label="${s.title}">${entries.map((entry) => `<article class="entry"><div><h2>${entry.name}</h2><p>${entry.description}</p></div><dl>${s.fields.map((field) => `<div><dt>${labels[field]}</dt><dd>${value(entry[field])}</dd></div>`).join('')}</dl></article>`).join('')}</section><p class="notice">Cadastro, edição e persistência serão adicionados após a definição do modelo físico, regras de validação e acesso.</p>` }
 function render() { const section = sections.find((s) => s.id === page); root.innerHTML = `<div class="shell">${navigation()}<main>${section ? sectionPage(section) : dashboard()}</main></div>`; root.querySelectorAll('[data-page]').forEach((button) => button.addEventListener('click', () => { page = button.dataset.page; render() })) }
 render()
-
