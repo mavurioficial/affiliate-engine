@@ -141,7 +141,52 @@ async function dashboard() {
   </section>`
 }
 function fieldInput(s, entry, field) { const reference = s.references?.[field]; if (reference) { const target = sections.find((item) => item.id === reference.section); const options = target.repository.list(); const current = Array.isArray(entry[field]) ? entry[field] : [entry[field]].filter(Boolean); return `<label><span>${labels[field]}</span><select name="${field}" ${reference.multiple ? 'multiple size="4"' : ''} required><option value="" ${current.length ? '' : 'selected'} ${reference.multiple ? 'hidden' : ''}>Selecione...</option>${options.map((item) => `<option value="${escapeHtml(item.name)}" ${current.includes(item.name) ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select>${reference.multiple ? '<small>Use Ctrl para selecionar mais de uma opção.</small>' : ''}</label>` } return `<label><span>${labels[field]}</span><input name="${field}" value="${escapeHtml(editable(entry, field))}" ${field === 'name' ? 'required' : ''} /></label>` }
-function sectionPage(s) { const entries = s.repository.list(); return `<header class="page-heading"><p class="eyebrow">${s.eyebrow}</p><div class="heading-row"><div><h1>${s.title}</h1><p>${s.intro}</p></div><button class="primary" data-add="${s.id}">+ Novo cadastro</button></div></header><section class="catalog" aria-label="${s.title}">${entries.length ? entries.map((entry) => `<article class="entry"><div><h2>${escapeHtml(entry.name)}</h2><p>${escapeHtml(entry.description)}</p></div><dl>${s.fields.map((field) => `<div><dt>${labels[field]}</dt><dd>${escapeHtml(value(entry[field]))}</dd></div>`).join('')}</dl><div class="entry-actions"><button data-edit="${entry.id}">Editar</button><button class="danger" data-remove="${entry.id}">Excluir</button></div></article>`).join('') : `<div class="empty">Nenhum cadastro nesta área.</div>`}</section><p class="notice">Os dados ficam salvos neste navegador. Use o backup da Visão geral antes de limpar os dados do navegador ou trocar de dispositivo.</p>` }
+async function sectionPage(s) {
+  const entries = await s.repository.list()
+
+  return `<header class="page-heading">
+    <p class="eyebrow">${s.eyebrow}</p>
+    <div class="heading-row">
+      <div>
+        <h1>${s.title}</h1>
+        <p>${s.intro}</p>
+      </div>
+      <button class="primary" data-add="${s.id}">+ Novo cadastro</button>
+    </div>
+  </header>
+
+  <section class="catalog" aria-label="${s.title}">
+    ${entries.length
+      ? entries.map((entry) => `
+        <article class="entry">
+          <div>
+            <h2>${escapeHtml(entry.name)}</h2>
+            <p>${escapeHtml(entry.description)}</p>
+          </div>
+
+          <dl>
+            ${s.fields.map((field) => `
+              <div>
+                <dt>${labels[field]}</dt>
+                <dd>${escapeHtml(value(entry[field]))}</dd>
+              </div>
+            `).join('')}
+          </dl>
+
+          <div class="entry-actions">
+            <button data-edit="${entry.id}">Editar</button>
+            <button class="danger" data-remove="${entry.id}">Excluir</button>
+          </div>
+        </article>
+      `).join('')
+      : `<div class="empty">Nenhum cadastro nesta área.</div>`
+    }
+  </section>
+
+  <p class="notice">
+    Os dados ficam salvos no Supabase.
+  </p>`
+}; return `<header class="page-heading"><p class="eyebrow">${s.eyebrow}</p><div class="heading-row"><div><h1>${s.title}</h1><p>${s.intro}</p></div><button class="primary" data-add="${s.id}">+ Novo cadastro</button></div></header><section class="catalog" aria-label="${s.title}">${entries.length ? entries.map((entry) => `<article class="entry"><div><h2>${escapeHtml(entry.name)}</h2><p>${escapeHtml(entry.description)}</p></div><dl>${s.fields.map((field) => `<div><dt>${labels[field]}</dt><dd>${escapeHtml(value(entry[field]))}</dd></div>`).join('')}</dl><div class="entry-actions"><button data-edit="${entry.id}">Editar</button><button class="danger" data-remove="${entry.id}">Excluir</button></div></article>`).join('') : `<div class="empty">Nenhum cadastro nesta área.</div>`}</section><p class="notice">Os dados ficam salvos neste navegador. Use o backup da Visão geral antes de limpar os dados do navegador ou trocar de dispositivo.</p>` }
 function formPage(s, entry = null) { const isEdit = Boolean(entry); const blank = Object.fromEntries(['name', 'description', ...s.fields].map((field) => [field, ''])); const record = entry || blank; return `<header class="page-heading"><p class="eyebrow">${s.eyebrow}</p><h1>${isEdit ? 'Editar cadastro' : 'Novo cadastro'}</h1><p>${s.label}</p></header><form class="editor" data-section="${s.id}" data-id="${entry?.id || ''}">${fieldInput(s, record, 'name')}${fieldInput(s, record, 'description')}${s.fields.map((field) => fieldInput(s, record, field)).join('')}<div class="form-actions"><button type="button" data-page="${s.id}">Cancelar</button><button class="primary" type="submit">${isEdit ? 'Salvar alterações' : 'Adicionar cadastro'}</button></div></form>` }
 async function render() {
   if (!session) {
