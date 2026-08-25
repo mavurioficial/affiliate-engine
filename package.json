@@ -1,0 +1,13 @@
+{
+  "name": "mavuri-affiliate-engine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/server.mjs",
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/server.mjs dist",
+    "check": "node scripts/check.mjs"
+  },
+  "dependencies": {}
+}
