@@ -5,9 +5,26 @@ const root = document.querySelector('#root')
 const labels = { name: 'Nome', description: 'Descrição', locale: 'Localidade', currency: 'Moeda', markets: 'Mercados', languages: 'Idiomas', status: 'Estado', platform: 'Plataforma', category: 'Categoria', product: 'Produto', market: 'Mercado', offer: 'Oferta', destination: 'Destino', capability: 'Capacidade' }
 let page = 'dashboard'
 let session = null
+let catalogs = {}
+let catalogsLoaded = false
 const value = (item) => Array.isArray(item) ? item.join(' · ') : item
 const editable = (entry, field) => Array.isArray(entry[field]) ? entry[field].join(', ') : (entry[field] ?? '')
 const escapeHtml = (item) => String(item ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;')
+async function loadCatalogs() {
+  const results = await Promise.all(
+    sections.map(async (section) => {
+      const entries = await section.repository.list()
+      return [section.id, entries]
+    })
+  )
+
+  catalogs = Object.fromEntries(results)
+  catalogsLoaded = true
+}
+
+function getEntries(section) {
+  return catalogs[section.id] || []
+}
 
 function navigation() { return `<aside><button class="brand" data-page="dashboard" aria-label="Ir ao dashboard"><span>M</span><b>Mavuri</b><em>Affiliate Engine</em></button><nav aria-label="Navegação principal"><button class="${page === 'dashboard' ? 'active' : ''}" data-page="dashboard">Visão geral</button><p>Administração</p>${sections.map((s) => `<button class="${page === s.id ? 'active' : ''}" data-page="${s.id}">${s.label}</button>`).join('')}</nav><footer>
   <strong>${session?.user?.email || ''}</strong><br>
