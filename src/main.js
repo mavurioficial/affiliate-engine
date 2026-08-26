@@ -101,6 +101,10 @@ function navigation() {
         >
           Nova divulgação
         </button>
+        <button data-page="buscar-ofertas">
+  <span>🔥</span>
+  Buscar ofertas
+</button>
 
         <p>Administração</p>
 
