@@ -1,32 +1,32 @@
-import { sections } from './app/catalog.js'
-import { developmentCatalogs } from './infrastructure/development/catalog.js'
-import { getSession, signIn, signOut, onAuthChange } from './app/auth.js'
+import { getSession, onAuthChange, signIn, signOut } from './auth.js'
+import { sections } from '../domain/catalog.js'
+import { developmentCatalogs } from '../infrastructure/development/catalog.js'
 
-const root = document.querySelector('#root')
+const root =
+  document.querySelector('#app')
 
-const labels = {
-  name: 'Nome',
-  description: 'Descrição',
-  locale: 'Localidade',
-  currency: 'Moeda',
-  markets: 'Mercados',
-  languages: 'Idiomas',
-  status: 'Estado',
-  platform: 'Plataforma',
-  category: 'Categoria',
-  product: 'Produto',
-  market: 'Mercado',
-  offer: 'Oferta',
-  destination: 'Destino',
-  capability: 'Capacidade'
-}
-
-let page = 'dashboard'
 let session = null
-let catalogs = {}
+let page = 'dashboard'
 let catalogsLoaded = false
 
-// Mantém o rascunho da divulgação enquanto o usuário navega.
+const catalogs = {}
+
+let ofertasEncontradas = []
+
+let ofertasBuscaDraft = {
+  platform: 'mercadolivre',
+  query: '',
+  discount: '0',
+  priceMax: '',
+  limit: '10'
+}
+
+let ofertasBuscaState = {
+  status: 'idle',
+  error: '',
+  sourceLabel: ''
+}
+
 let divulgacaoDraft = {
   platform: 'mercadolivre',
   productUrl: '',
@@ -42,443 +42,84 @@ let divulgacaoDraft = {
 
 let divulgacaoPreview = ''
 
-// --------------------------------------------------
-// MOTOR DE BUSCA DE OFERTAS
-// --------------------------------------------------
-// A interface nunca consulta diretamente uma plataforma.
-// Ela conversa com um provider. Hoje usamos demo; depois o
-// backend seguro poderá habilitar Mercado Livre e outras APIs.
-const ofertaSource = {
-  mode: 'demo',
-
-  providers: {
-    demo: {
-      enabled: true,
-      label: 'Dados demonstrativos'
-    },
-
-    mercadolivre: {
-      enabled: false,
-      label: 'Mercado Livre'
-    }
-  }
+const labels = {
+  locale: 'Idioma',
+  currency: 'Moeda',
+  markets: 'Mercados',
+  languages: 'Idiomas',
+  status: 'Status',
+  platform: 'Plataforma',
+  category: 'Categoria',
+  product: 'Produto',
+  market: 'Mercado',
+  offer: 'Oferta',
+  destination: 'Destino',
+  capability: 'Capacidade'
 }
 
-let ofertasBuscaDraft = {
-  platform: 'mercadolivre',
-  query: '',
-  discount: '20',
-  priceMax: '',
-  limit: '10'
-}
-
-let ofertasBuscaState = {
-  status: 'idle',
-  error: '',
-  sourceLabel: 'Dados demonstrativos'
-}
-
-let ofertasEncontradas = []
-
-// Contrato interno do Mavuri. Qualquer provider deve ser
-// normalizado para este formato antes de chegar à interface.
-function normalizeOffer(raw = {}) {
-  const price =
-    parseMoney(raw.price)
-
-  const previousPrice =
-    parseMoney(raw.previousPrice)
-
-  return {
-    id: String(
-      raw.id || crypto.randomUUID()
-    ),
-
-    platform:
-      raw.platform ||
-      'mercadolivre',
-
-    name:
-      raw.name ||
-      'Produto sem nome',
-
-    description:
-      raw.description ||
-      '',
-
-    productUrl:
-      raw.productUrl ||
-      raw.permalink ||
-      '',
-
-    affiliateUrl:
-      raw.affiliateUrl ||
-      '',
-
-    price,
-
-    previousPrice,
-
-    installments:
-      Number(raw.installments) ||
-      0,
-
-    installmentInterest:
-      raw.installmentInterest ||
-      'no-interest',
-
-    image:
-      raw.image ||
-      '',
-
-    category:
-      raw.category ||
-      '',
-
-    seller:
-      raw.seller ||
-      raw.store ||
-      '',
-
-    sellerRating:
-      raw.sellerRating ||
-      '',
-
-    capturedAt:
-      raw.capturedAt ||
-      new Date().toISOString()
-  }
-}
-
-const ofertasDemo = [
-  {
-    id: 'MLB-DEMO-001',
-    platform: 'mercadolivre',
-
-    name:
-      'Tênis Asics Gel Shogun',
-
-    description:
-      'Oferta demonstrativa para validar o fluxo automático.',
-
-    productUrl:
-      'https://www.mercadolivre.com.br/',
-
-    price: 285,
-    previousPrice: 459,
-
-    installments: 10,
-
-    installmentInterest:
-      'no-interest',
-
-    image:
-      'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80',
-
-    category:
-      'Calçados',
-
-    seller:
-      'Loja oficial demonstrativa'
-  },
-
-  {
-    id: 'MLB-DEMO-002',
-    platform: 'mercadolivre',
-
-    name:
-      'Smart TV 50 polegadas 4K',
-
-    description:
-      'Produto demonstrativo com desconto para testar a seleção.',
-
-    productUrl:
-      'https://www.mercadolivre.com.br/',
-
-    price: 2199,
-    previousPrice: 2999,
-
-    installments: 10,
-
-    installmentInterest:
-      'no-interest',
-
-    image:
-      'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=800&q=80',
-
-    category:
-      'Eletrônicos',
-
-    seller:
-      'Eletrônicos demonstrativo'
-  },
-
-  {
-    id: 'MLB-DEMO-003',
-    platform: 'mercadolivre',
-
-    name:
-      'Fone de Ouvido Bluetooth Premium',
-
-    description:
-      'Produto demonstrativo para validar filtros e geração.',
-
-    productUrl:
-      'https://www.mercadolivre.com.br/',
-
-    price: 179,
-    previousPrice: 299,
-
-    installments: 6,
-
-    installmentInterest:
-      'no-interest',
-
-    image:
-      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80',
-
-    category:
-      'Tecnologia',
-
-    seller:
-      'Tech demonstrativo'
-  },
-
-  {
-    id: 'MLB-DEMO-004',
-    platform: 'mercadolivre',
-
-    name:
-      'Air Fryer 5 Litros',
-
-    description:
-      'Produto demonstrativo para a primeira versão do motor.',
-
-    productUrl:
-      'https://www.mercadolivre.com.br/',
-
-    price: 349,
-    previousPrice: 499,
-
-    installments: 8,
-
-    installmentInterest:
-      'no-interest',
-
-    image:
-      'https://images.unsplash.com/photo-1648478635091-1b9f64b3b0f1?auto=format&fit=crop&w=800&q=80',
-
-    category:
-      'Casa',
-
-    seller:
-      'Casa demonstrativo'
-  },
-
-  {
-    id: 'MLB-DEMO-005',
-    platform: 'mercadolivre',
-
-    name:
-      'Notebook 15,6 polegadas',
-
-    description:
-      'Oferta demonstrativa com maior valor e desconto.',
-
-    productUrl:
-      'https://www.mercadolivre.com.br/',
-
-    price: 2899,
-    previousPrice: 3799,
-
-    installments: 12,
-
-    installmentInterest:
-      'with-interest',
-
-    image:
-      'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=80',
-
-    category:
-      'Informática',
-
-    seller:
-      'Informática demonstrativo'
-  }
-]
-
-async function fetchDemoOffers() {
-  // Mantém a mesma interface assíncrona que será usada
-  // posteriormente pelas APIs reais.
-  await new Promise(
-    (resolve) =>
-      setTimeout(
-        resolve,
-        350
-      )
+function escapeHtml(value) {
+  return String(
+    value ?? ''
   )
-
-  return ofertasDemo.map(
-    normalizeOffer
-  )
-}
-
-async function fetchMercadoLivreOffers() {
-  // Nunca coloque token ou segredo aqui.
-  //
-  // A futura integração deve chamar um backend do Mavuri,
-  // que por sua vez conversa com a API oficial.
-  throw new Error(
-    'A integração oficial do Mercado Livre ainda não foi habilitada.'
-  )
-}
-
-async function fetchOffersFromSource() {
-  if (
-    ofertaSource.mode ===
-    'mercadolivre'
-  ) {
-    return fetchMercadoLivreOffers()
-  }
-
-  return fetchDemoOffers()
-}
-
-function filterOffers(offers) {
-  const query =
-    String(
-      ofertasBuscaDraft.query || ''
-    )
-      .trim()
-      .toLowerCase()
-
-  const minimumDiscount =
-    Number(
-      ofertasBuscaDraft.discount
-    ) || 0
-
-  const maximumPrice =
-    Number(
-      ofertasBuscaDraft.priceMax
-    ) || 0
-
-  const limit =
-    Number(
-      ofertasBuscaDraft.limit
-    ) || 10
-
-  return offers
-    .filter((offer) => {
-      if (
-        offer.platform !==
-        ofertasBuscaDraft.platform
-      ) {
-        return false
-      }
-
-      const discount =
-        calculateDiscount(
-          offer.price,
-          offer.previousPrice
-        )
-
-      if (
-        discount <
-        minimumDiscount
-      ) {
-        return false
-      }
-
-      if (
-        maximumPrice > 0 &&
-        offer.price > maximumPrice
-      ) {
-        return false
-      }
-
-      if (!query) {
-        return true
-      }
-
-      const searchable = [
-        offer.name,
-        offer.description,
-        offer.category,
-        offer.seller
-      ]
-        .join(' ')
-        .toLowerCase()
-
-      return searchable.includes(
-        query
-      )
-    })
-    .sort((a, b) =>
-      calculateMavuriScore(b) -
-      calculateMavuriScore(a)
-    )
-    .slice(0, limit)
-}
-
-async function searchOffers() {
-  ofertasBuscaState = {
-    status: 'loading',
-
-    error: '',
-
-    sourceLabel:
-      ofertaSource.providers[
-        ofertaSource.mode
-      ]?.label ||
-      'Fonte de ofertas'
-  }
-
-  await render()
-
-  try {
-    const rawOffers =
-      await fetchOffersFromSource()
-
-    ofertasEncontradas =
-      filterOffers(
-        rawOffers.map(
-          normalizeOffer
-        )
-      )
-
-    ofertasBuscaState.status =
-      'success'
-  } catch (error) {
-    console.error(error)
-
-    ofertasEncontradas = []
-
-    ofertasBuscaState.status =
-      'error'
-
-    ofertasBuscaState.error =
-      error?.message ||
-      'Não foi possível buscar ofertas.'
-  }
-}
-
-const value = (item) =>
-  Array.isArray(item)
-    ? item.join(' · ')
-    : (item ?? '')
-
-const editable = (entry, field) =>
-  Array.isArray(entry[field])
-    ? entry[field].join(', ')
-    : (entry[field] ?? '')
-
-const escapeHtml = (item) =>
-  String(item ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
+    .replaceAll("'", '&#039;')
+}
+
+function value(input) {
+  if (
+    input === null ||
+    input === undefined ||
+    input === ''
+  ) {
+    return '—'
+  }
+
+  if (
+    Array.isArray(input)
+  ) {
+    return input.join(', ')
+  }
+
+  return String(input)
+}
+
+function editable(
+  entry,
+  field
+) {
+  const current =
+    entry?.[field]
+
+  if (
+    Array.isArray(current)
+  ) {
+    return current.join(', ')
+  }
+
+  return current ?? ''
+}
+
+function getEntries(section) {
+  return catalogs[
+    section.id
+  ] || []
+}
+
+async function loadCatalogs() {
+  for (
+    const section of sections
+  ) {
+    catalogs[
+      section.id
+    ] =
+      await section.repository.list()
+  }
+
+  catalogsLoaded = true
+}
 
 function parseMoney(value) {
   if (
@@ -490,7 +131,8 @@ function parseMoney(value) {
   }
 
   if (
-    typeof value === 'number'
+    typeof value ===
+    'number'
   ) {
     return Number.isFinite(value)
       ? value
@@ -499,16 +141,20 @@ function parseMoney(value) {
 
   const normalized =
     String(value)
-      .replace('R$', '')
       .trim()
       .replace(/\./g, '')
       .replace(',', '.')
 
-  return Number(normalized) || 0
+  const parsed =
+    Number(normalized)
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0
 }
 
 function formatMoney(value) {
-  const number =
+  const amount =
     Number(value) || 0
 
   return new Intl.NumberFormat(
@@ -517,7 +163,7 @@ function formatMoney(value) {
       style: 'currency',
       currency: 'BRL'
     }
-  ).format(number)
+  ).format(amount)
 }
 
 function calculateDiscount(
@@ -525,15 +171,15 @@ function calculateDiscount(
   previousPrice
 ) {
   const current =
-    parseMoney(price)
+    Number(price) || 0
 
   const previous =
-    parseMoney(previousPrice)
+    Number(previousPrice) || 0
 
   if (
-    !current ||
-    !previous ||
-    previous <= current
+    previous <= 0 ||
+    current <= 0 ||
+    current >= previous
   ) {
     return 0
   }
@@ -546,721 +192,355 @@ function calculateDiscount(
   )
 }
 
-function calculateMavuriScore(offer) {
+function calculateMavuriScore(
+  offer
+) {
+  let score = 50
+
   const discount =
     calculateDiscount(
       offer.price,
       offer.previousPrice
     )
 
-  let score = 40
-
-  score += Math.min(
-    discount,
-    50
-  )
+  score +=
+    Math.min(
+      30,
+      discount
+    )
 
   if (
-    offer.installments &&
+    offer.installments >= 10
+  ) {
+    score += 8
+  } else if (
     offer.installments >= 6
   ) {
     score += 5
+  } else if (
+    offer.installments >= 3
+  ) {
+    score += 2
   }
 
   if (
     offer.installmentInterest ===
     'no-interest'
   ) {
-    score += 5
+    score += 8
+  }
+
+  if (
+    offer.seller
+  ) {
+    score += 2
+  }
+
+  if (
+    offer.image
+  ) {
+    score += 2
   }
 
   return Math.min(
-    Math.round(score),
-    100
+    100,
+    Math.round(score)
   )
 }
 
-async function loadCatalogs() {
-  const results =
-    await Promise.all(
-      sections.map(
-        async (section) => {
-          const entries =
-            await section.repository.list()
-
-          return [
-            section.id,
-            entries
-          ]
-        }
-      )
-    )
-
-  catalogs =
-    Object.fromEntries(
-      results
-    )
-
-  catalogsLoaded = true
-}
-
-function getEntries(section) {
-  return catalogs[section.id] || []
-}
-
 function navigation() {
+  const navItems = [
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: '⌂'
+    },
+    {
+      id: 'buscar-ofertas',
+      label: 'Buscar ofertas',
+      icon: '⌕'
+    },
+    {
+      id: 'divulgacao',
+      label: 'Divulgação',
+      icon: '✦'
+    }
+  ]
+
+  const catalogItems =
+    sections.map(
+      (section) => ({
+        id: section.id,
+        label: section.label,
+        icon: '○'
+      })
+    )
+
   return `
-    <aside>
-      <button
-        class="brand"
-        data-page="dashboard"
-        aria-label="Ir ao dashboard"
-      >
-        <span>M</span>
-        <b>Mavuri</b>
-        <em>Affiliate Engine</em>
-      </button>
+    <aside class="sidebar">
 
-      <nav aria-label="Navegação principal">
+      <div class="brand">
 
-        <button
-          class="${
-            page === 'dashboard'
-              ? 'active'
-              : ''
-          }"
-          data-page="dashboard"
-        >
-          Visão geral
-        </button>
+        <div class="brand-mark">
+          M
+        </div>
 
-        <p>Divulgação</p>
+        <div>
 
-        <button
-          class="${
-            page === 'divulgacao'
-              ? 'active'
-              : ''
-          }"
-          data-page="divulgacao"
-        >
-          Nova divulgação
-        </button>
+          <strong>
+            MAVURI
+          </strong>
 
-        <button
-          class="${
-            page === 'buscar-ofertas'
-              ? 'active'
-              : ''
-          }"
-          data-page="buscar-ofertas"
-        >
-          🔥 Buscar ofertas
-        </button>
+          <span>
+            Affiliate Engine
+          </span>
 
-        <p>Administração</p>
+        </div>
 
-        ${sections.map((s) => `
-          <button
-            class="${
-              page === s.id
-                ? 'active'
-                : ''
-            }"
-            data-page="${s.id}"
-          >
-            ${s.label}
-          </button>
-        `).join('')}
+      </div>
+
+      <nav>
+
+        <div class="nav-group">
+
+          <p>
+            PRINCIPAL
+          </p>
+
+          ${navItems.map((item) => `
+            <button
+              class="nav-item ${
+                page === item.id
+                  ? 'active'
+                  : ''
+              }"
+              data-page="${item.id}"
+            >
+              <span>
+                ${item.icon}
+              </span>
+
+              ${item.label}
+            </button>
+          `).join('')}
+
+        </div>
+
+        <div class="nav-group">
+
+          <p>
+            CATÁLOGOS
+          </p>
+
+          ${catalogItems.map((item) => `
+            <button
+              class="nav-item ${
+                page === item.id
+                  ? 'active'
+                  : ''
+              }"
+              data-page="${item.id}"
+            >
+              <span>
+                ${item.icon}
+              </span>
+
+              ${item.label}
+            </button>
+          `).join('')}
+
+        </div>
 
       </nav>
 
-      <footer>
-        <strong>
-          ${session?.user?.email || ''}
-        </strong><br>
+      <div class="sidebar-footer">
 
-        Fundação MVP<br>
-        Dados no Supabase<br><br>
+        <span>
+          ${escapeHtml(
+            session?.user?.email ||
+            ''
+          )}
+        </span>
 
-        <button data-logout>
+        <button
+          data-logout
+        >
           Sair
         </button>
-      </footer>
+
+      </div>
+
     </aside>
   `
 }
 
 function loginPage() {
   return `
-    <div class="login-shell">
+    <main class="login-page">
 
-      <form
-        class="login-card"
-        data-login
-      >
+      <section class="login-card">
+
+        <div class="brand login-brand">
+
+          <div class="brand-mark">
+            M
+          </div>
+
+          <div>
+
+            <strong>
+              MAVURI
+            </strong>
+
+            <span>
+              Affiliate Engine
+            </span>
+
+          </div>
+
+        </div>
 
         <p class="eyebrow">
-          MAVURI
+          ACESSO
         </p>
 
         <h1>
-          Affiliate Engine
+          Entre na plataforma
         </h1>
 
         <p>
-          Acesse o ambiente administrativo.
+          Utilize suas credenciais para acessar o ambiente administrativo.
         </p>
 
-        <label>
-
-          <span>
-            E-mail
-          </span>
-
-          <input
-            type="email"
-            name="email"
-            required
-            autocomplete="email"
-            placeholder="seu@email.com"
-          />
-
-        </label>
-
-        <label>
-
-          <span>
-            Senha
-          </span>
-
-          <input
-            type="password"
-            name="password"
-            required
-            autocomplete="current-password"
-            placeholder="Sua senha"
-          />
-
-        </label>
-
-        <p
-          class="login-error"
-          hidden
-        ></p>
-
-        <button
-          class="primary"
-          type="submit"
+        <form
+          data-login
         >
-          Entrar
-        </button>
 
-      </form>
+          <label>
 
-    </div>
+            <span>
+              E-mail
+            </span>
+
+            <input
+              type="email"
+              name="email"
+              required
+              autocomplete="email"
+            />
+
+          </label>
+
+          <label>
+
+            <span>
+              Senha
+            </span>
+
+            <input
+              type="password"
+              name="password"
+              required
+              autocomplete="current-password"
+            />
+
+          </label>
+
+          <p
+            class="login-error"
+            hidden
+          ></p>
+
+          <button
+            type="submit"
+            class="primary"
+          >
+            Entrar
+          </button>
+
+        </form>
+
+      </section>
+
+    </main>
   `
 }
 
 function dashboard() {
+  const totals =
+    sections.map(
+      (section) => ({
+        label: section.label,
+        value:
+          getEntries(
+            section
+          ).length
+      })
+    )
+
   return `
     <header class="page-heading">
 
       <p class="eyebrow">
-        MVP · Supabase
+        VISÃO GERAL
       </p>
 
       <h1>
-        Fundação do Affiliate Engine
+        Painel Mavuri
       </h1>
 
       <p>
-        Uma visão navegável do domínio com persistência
-        dos dados no banco.
+        Acompanhe os cadastros, encontre ofertas e prepare divulgações.
       </p>
 
     </header>
 
-    <section class="status-card">
+    <section class="dashboard-grid">
 
-      <div>
+      ${totals.map((item) => `
+        <article class="metric-card">
 
-        <p class="eyebrow">
-          Estado atual
-        </p>
-
-        <h2>
-          Interface administrativa integrada ao Supabase
-        </h2>
-
-        <p>
-          Os cadastros são armazenados no banco de dados
-          e podem ser acessados posteriormente.
-        </p>
-
-      </div>
-
-      <span class="status-dot">
-        Integração com banco ativa
-      </span>
-
-    </section>
-
-    <section>
-
-      <div class="section-title">
-
-        <h2>
-          Áreas disponíveis
-        </h2>
-
-        <p>
-          Escolha uma área para consultar e administrar
-          os dados.
-        </p>
-
-      </div>
-
-      <div class="area-grid">
-
-        <button
-          class="area-card"
-          data-page="buscar-ofertas"
-        >
           <span>
-            OPORTUNIDADES
+            ${escapeHtml(
+              item.label
+            )}
           </span>
 
           <strong>
-            🔥 Buscar ofertas
+            ${item.value}
           </strong>
 
-          <small>
-            Encontre oportunidades para gerar novas divulgações.
-          </small>
-        </button>
-
-        ${sections.map((s) => `
-          <button
-            class="area-card"
-            data-page="${s.id}"
-          >
-
-            <span>
-              ${s.eyebrow}
-            </span>
-
-            <strong>
-              ${s.label}
-            </strong>
-
-            <small>
-              ${getEntries(s).length} registro(s)
-            </small>
-
-          </button>
-        `).join('')}
-
-      </div>
+        </article>
+      `).join('')}
 
     </section>
 
     <section class="next-steps">
 
       <h2>
-        Backup dos dados
+        Próximos passos
       </h2>
 
       <p>
-        Você pode exportar os cadastros atuais para um
-        arquivo JSON e importar novamente esse backup
-        quando necessário.
-      </p>
-            <div class="form-actions">
-
-        <button data-export>
-          Exportar backup
-        </button>
-
-        <button data-import>
-          Importar backup
-        </button>
-
-      </div>
-
-      <input
-        id="backup-file"
-        type="file"
-        accept="application/json,.json"
-        hidden
-      />
-
-    </section>
-
-    <section class="next-steps">
-
-      <h2>
-        Limites desta etapa
-      </h2>
-            <ul>
-
-        <li>
-          Os dados são armazenados no Supabase.
-        </li>
-
-        <li>
-          A autenticação e as permissões continuam sendo
-          tratadas separadamente.
-        </li>
-
-        <li>
-          Telegram continua apenas como canal conceitual,
-          sem credenciais ou chamadas de API.
-        </li>
-
-      </ul>
-
-    </section>
-  `
-}
-
-function sectionPage(s) {
-  const entries =
-    getEntries(s)
-
-  return `
-    <header class="page-heading">
-
-      <p class="eyebrow">
-        ${s.eyebrow}
+        Comece pesquisando produtos em Buscar ofertas ou organize os cadastros do catálogo.
       </p>
 
-      <div class="heading-row">
-
-        <div>
-
-          <h1>
-            ${s.title}
-          </h1>
-
-          <p>
-            ${s.intro}
-          </p>
-
-        </div>
+      <div class="form-actions">
 
         <button
           class="primary"
-          data-add="${s.id}"
+          data-page="buscar-ofertas"
         >
-          + Novo cadastro
+          Buscar ofertas
+        </button>
+
+        <button
+          data-page="produtos"
+        >
+          Gerenciar produtos
         </button>
 
       </div>
-
-    </header>
-
-    <section
-      class="catalog"
-      aria-label="${s.title}"
-    >
-
-      ${
-        entries.length
-          ? entries.map((entry) => `
-              <article class="entry">
-
-                <div>
-
-                  <h2>
-                    ${escapeHtml(entry.name)}
-                  </h2>
-
-                  <p>
-                    ${escapeHtml(
-                      entry.description
-                    )}
-                  </p>
-
-                </div>
-
-                <dl>
-
-                  ${s.fields.map((field) => `
-                    <div>
-
-                      <dt>
-                        ${labels[field]}
-                      </dt>
-
-                      <dd>
-                        ${escapeHtml(
-                          value(
-                            entry[field]
-                          )
-                        )}
-                      </dd>
-
-                    </div>
-                  `).join('')}
-
-                </dl>
-
-                <div class="entry-actions">
-
-                  <button
-                    data-edit="${entry.id}"
-                  >
-                    Editar
-                  </button>
-
-                  <button
-                    class="danger"
-                    data-remove="${entry.id}"
-                  >
-                    Excluir
-                  </button>
-
-                </div>
-
-              </article>
-            `).join('')
-
-          : `
-              <div class="empty">
-                Nenhum cadastro nesta área.
-              </div>
-            `
-      }
-
-    </section>
-
-    <p class="notice">
-      Os dados ficam armazenados no banco de dados.
-      Utilize o backup antes de fazer alterações
-      importantes.
-    </p>
-  `
-}
-
-function referenceOptions(
-  section,
-  field,
-  selected
-) {
-  const reference =
-    section.references?.[field]
-
-  if (!reference) {
-    return ''
-  }
-
-  const referenceSection =
-    sections.find(
-      (item) =>
-        item.id ===
-        reference.section
-    )
-
-  if (!referenceSection) {
-    return ''
-  }
-
-  const entries =
-    getEntries(
-      referenceSection
-    )
-
-  const selectedValues =
-    Array.isArray(selected)
-      ? selected.map(String)
-      : [
-          String(
-            selected ?? ''
-          )
-        ]
-
-  return `
-    <label>
-
-      <span>
-        ${labels[field]}
-      </span>
-
-      <select
-        name="${field}"
-        ${
-          reference.multiple
-            ? 'multiple'
-            : ''
-        }
-      >
-
-        ${
-          reference.multiple
-            ? ''
-            : `
-                <option value="">
-                  Selecione
-                </option>
-              `
-        }
-
-        ${entries.map((entry) => `
-          <option
-            value="${escapeHtml(entry.id)}"
-            ${
-              selectedValues.includes(
-                String(entry.id)
-              )
-                ? 'selected'
-                : ''
-            }
-          >
-            ${escapeHtml(
-              entry.name
-            )}
-          </option>
-        `).join('')}
-
-      </select>
-
-    </label>
-  `
-}
-
-function formPage(
-  section,
-  entry = null
-) {
-  const isEdit =
-    Boolean(entry)
-
-  return `
-    <header class="page-heading">
-
-      <p class="eyebrow">
-        ${section.eyebrow}
-      </p>
-
-      <h1>
-        ${
-          isEdit
-            ? `Editar ${section.label}`
-            : `Novo cadastro em ${section.label}`
-        }
-      </h1>
-
-      <p>
-        ${
-          isEdit
-            ? 'Atualize os dados deste cadastro.'
-            : 'Preencha as informações para criar um novo cadastro.'
-        }
-      </p>
-
-    </header>
-
-    <section class="form-card">
-
-      <form
-        data-entry-form="${section.id}"
-        ${
-          entry
-            ? `data-entry-id="${entry.id}"`
-            : ''
-        }
-      >
-
-        <label>
-
-          <span>
-            Nome
-          </span>
-
-          <input
-            type="text"
-            name="name"
-            required
-            value="${escapeHtml(
-              entry?.name || ''
-            )}"
-          />
-
-        </label>
-
-        <label>
-
-          <span>
-            Descrição
-          </span>
-
-          <textarea
-            name="description"
-            rows="4"
-          >${escapeHtml(
-            entry?.description || ''
-          )}</textarea>
-
-        </label>
-
-        ${section.fields.map((field) => {
-          const reference =
-            section.references?.[field]
-
-          if (reference) {
-            return referenceOptions(
-              section,
-              field,
-              entry?.[field]
-            )
-          }
-
-          return `
-            <label>
-
-              <span>
-                ${labels[field]}
-              </span>
-
-              <input
-                type="text"
-                name="${field}"
-                value="${escapeHtml(
-                  editable(
-                    entry || {},
-                    field
-                  )
-                )}"
-              />
-
-            </label>
-          `
-        }).join('')}
-
-        <div class="form-actions">
-
-          <button
-            type="button"
-            data-page="${section.id}"
-          >
-            Cancelar
-          </button>
-
-          <button
-            class="primary"
-            type="submit"
-          >
-            ${
-              isEdit
-                ? 'Salvar alterações'
-                : 'Salvar cadastro'
-            }
-          </button>
-
-        </div>
-
-      </form>
 
     </section>
   `
@@ -1282,8 +562,7 @@ function buscarOfertasPage() {
       </h1>
 
       <p>
-        Encontre oportunidades, aplique filtros e envie
-        os melhores produtos para a área de divulgação.
+        Encontre oportunidades, aplique filtros e envie os melhores produtos para a área de divulgação.
       </p>
 
     </header>
@@ -1441,9 +720,7 @@ function buscarOfertasPage() {
               </h2>
 
               <p>
-                Os resultados atuais utilizam dados demonstrativos
-                normalizados pelo motor do Mavuri. A mesma tela será
-                utilizada posteriormente com a API oficial.
+                Pesquise uma categoria ou produto para encontrar ofertas disponíveis.
               </p>
 
             </section>
@@ -1463,7 +740,8 @@ function buscarOfertasPage() {
               <p>
                 Aguarde enquanto o Mavuri consulta
                 ${escapeHtml(
-                  ofertasBuscaState.sourceLabel
+                  ofertasBuscaState.sourceLabel ||
+                  'as ofertas'
                 )}.
               </p>
 
@@ -1503,8 +781,7 @@ function buscarOfertasPage() {
               </h2>
 
               <p>
-                Tente diminuir o desconto mínimo, aumentar o preço
-                máximo ou usar outro termo de busca.
+                Tente alterar os filtros ou pesquisar outro produto.
               </p>
 
             </section>
@@ -1533,11 +810,17 @@ function buscarOfertasPage() {
 
                 </div>
 
-                <span class="status-dot">
-                  ${escapeHtml(
-                    ofertasBuscaState.sourceLabel
-                  )}
-                </span>
+                ${
+                  ofertasBuscaState.sourceLabel
+                    ? `
+                        <span class="status-dot">
+                          ${escapeHtml(
+                            ofertasBuscaState.sourceLabel
+                          )}
+                        </span>
+                      `
+                    : ''
+                }
 
               </div>
 
@@ -1567,8 +850,16 @@ function offerCard(offer) {
   const economy =
     Math.max(
       0,
-      offer.previousPrice -
-      offer.price
+      (
+        Number(
+          offer.previousPrice
+        ) || 0
+      ) -
+      (
+        Number(
+          offer.price
+        ) || 0
+      )
     )
 
   const score =
@@ -1653,7 +944,7 @@ function offerCard(offer) {
 
         <p>
           ${escapeHtml(
-            offer.description
+            offer.description || ''
           )}
         </p>
 
@@ -1662,8 +953,12 @@ function offerCard(offer) {
         >
 
           ${
-            offer.previousPrice >
-            offer.price
+            Number(
+              offer.previousPrice
+            ) >
+            Number(
+              offer.price
+            )
               ? `
                   <span
                     class="old-price"
@@ -1684,7 +979,7 @@ function offerCard(offer) {
           </strong>
 
           ${
-            discount
+            discount > 0
               ? `
                   <span
                     class="discount"
@@ -1715,17 +1010,21 @@ function offerCard(offer) {
         }
 
         ${
-          offer.installments > 0
+          Number(
+            offer.installments
+          ) > 0
             ? `
                 <p
                   class="offer-installments"
                 >
-                  ${
-                    offer.installments
-                  }x de aproximadamente
+                  ${offer.installments}x de aproximadamente
                   ${formatMoney(
-                    offer.price /
-                    offer.installments
+                    Number(
+                      offer.price
+                    ) /
+                    Number(
+                      offer.installments
+                    )
                   )}
 
                   ${
@@ -1789,8 +1088,7 @@ function divulgacaoPage() {
       </h1>
 
       <p>
-        Prepare uma mensagem pronta para divulgar a oferta
-        selecionada.
+        Prepare uma mensagem pronta para divulgar a oferta selecionada.
       </p>
 
     </header>
@@ -1799,7 +1097,9 @@ function divulgacaoPage() {
 
       <section class="form-card">
 
-        <form data-divulgacao>
+        <form
+          data-divulgacao
+        >
 
           <label>
 
@@ -1807,83 +1107,14 @@ function divulgacaoPage() {
               Produto
             </span>
 
-          <input
-            type="text"
-            name="productName"
-            value="${escapeHtml(
-              divulgacaoDraft.productName
-            )}"
-            placeholder="Nome do produto"
-            required
-          />
-
-        </label>
-
-        <label>
-
-          <span>
-            Descrição
-          </span>
-
-          <textarea
-            name="description"
-            rows="4"
-            placeholder="Descrição da oferta"
-          >${escapeHtml(
-            divulgacaoDraft.description || ''
-          )}</textarea>
-
-        </label>
-
-        <label>
-
-          <span>
-            Link do produto
-          </span>
-
-          <input
-            type="url"
-            name="productUrl"
-            value="${escapeHtml(
-              divulgacaoDraft.productUrl
-            )}"
-            placeholder="https://..."
-          />
-
-        </label>
-
-        <label>
-
-          <span>
-            Link de afiliado
-          </span>
-
-          <input
-            type="url"
-            name="affiliateUrl"
-            value="${escapeHtml(
-              divulgacaoDraft.affiliateUrl
-            )}"
-            placeholder="https://..."
-          />
-
-        </label>
-
-        <div class="form-grid">
-
-          <label>
-
-            <span>
-              Preço atual
-            </span>
-
             <input
               type="text"
-              name="price"
+              name="productName"
               value="${escapeHtml(
-                divulgacaoDraft.price
+                divulgacaoDraft.productName
               )}"
-              placeholder="0,00"
+              placeholder="Nome do produto"
+              required
             />
 
           </label>
@@ -1891,225 +1122,316 @@ function divulgacaoPage() {
           <label>
 
             <span>
-              Preço anterior
+              Descrição
+            </span>
+
+            <textarea
+              name="description"
+              rows="4"
+              placeholder="Descrição da oferta"
+            >${escapeHtml(
+              divulgacaoDraft.description || ''
+            )}</textarea>
+
+          </label>
+
+          <label>
+
+            <span>
+              Link do produto
             </span>
 
             <input
-              type="text"
-              name="previousPrice"
+              type="url"
+              name="productUrl"
               value="${escapeHtml(
-                divulgacaoDraft.previousPrice
+                divulgacaoDraft.productUrl
               )}"
-              placeholder="0,00"
+              placeholder="https://..."
             />
 
           </label>
 
-        </div>
-
-        <div class="form-grid">
-
           <label>
 
             <span>
-              Parcelas
+              Link de afiliado
             </span>
 
             <input
-              type="number"
-              name="installments"
-              min="1"
+              type="url"
+              name="affiliateUrl"
               value="${escapeHtml(
-                divulgacaoDraft.installments
+                divulgacaoDraft.affiliateUrl
               )}"
+              placeholder="https://..."
             />
 
           </label>
 
+          <div class="form-grid">
+
+            <label>
+
+              <span>
+                Preço atual
+              </span>
+
+              <input
+                type="text"
+                name="price"
+                value="${escapeHtml(
+                  divulgacaoDraft.price
+                )}"
+                placeholder="0,00"
+              />
+
+            </label>
+
+            <label>
+
+              <span>
+                Preço anterior
+              </span>
+
+              <input
+                type="text"
+                name="previousPrice"
+                value="${escapeHtml(
+                  divulgacaoDraft.previousPrice
+                )}"
+                placeholder="0,00"
+              />
+
+            </label>
+
+          </div>
+
+          <div class="form-grid">
+
+            <label>
+
+              <span>
+                Parcelas
+              </span>
+
+              <input
+                type="number"
+                name="installments"
+                min="1"
+                value="${escapeHtml(
+                  divulgacaoDraft.installments
+                )}"
+              />
+
+            </label>
+
+            <label>
+
+              <span>
+                Tipo
+              </span>
+
+              <select
+                name="installmentInterest"
+              >
+
+                <option
+                  value="no-interest"
+                  ${
+                    divulgacaoDraft.installmentInterest ===
+                    'no-interest'
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  Sem juros
+                </option>
+
+                <option
+                  value="with-interest"
+                  ${
+                    divulgacaoDraft.installmentInterest ===
+                    'with-interest'
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  Com juros
+                </option>
+
+              </select>
+
+            </label>
+
+          </div>
+
           <label>
 
             <span>
-              Tipo
+              Idioma
             </span>
 
             <select
-              name="installmentInterest"
+              name="language"
             >
 
               <option
-                value="no-interest"
+                value="pt"
                 ${
-                  divulgacaoDraft.installmentInterest ===
-                  'no-interest'
+                  divulgacaoDraft.language ===
+                  'pt'
                     ? 'selected'
                     : ''
                 }
               >
-                Sem juros
-              </option>
-
-              <option
-                value="with-interest"
-                ${
-                  divulgacaoDraft.installmentInterest ===
-                  'with-interest'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                Com juros
+                Português
               </option>
 
             </select>
 
           </label>
 
-        </div>
+          <div class="form-actions">
 
-        <label>
-
-          <span>
-            Idioma
-          </span>
-
-          <select name="language">
-
-            <option
-              value="pt"
-              ${
-                divulgacaoDraft.language === 'pt'
-                  ? 'selected'
-                  : ''
-              }
+            <button
+              type="submit"
+              class="primary"
             >
-              Português
-            </option>
+              Gerar prévia
+            </button>
 
-          </select>
+            <button
+              type="button"
+              data-clear-divulgacao
+            >
+              Limpar
+            </button>
 
-        </label>
+          </div>
 
-        <div class="form-actions">
+        </form>
 
-          <button
-            type="submit"
-            class="primary"
-          >
-            Gerar prévia
-          </button>
+      </section>
 
-          <button
-            type="button"
-            data-clear-divulgacao
-          >
-            Limpar
-          </button>
+      <section class="preview-card">
+
+        <div class="preview-header">
+
+          <div>
+
+            <p class="eyebrow">
+              PRÉVIA
+            </p>
+
+            <h2>
+              Mensagem de divulgação
+            </h2>
+
+          </div>
+
+          ${
+            divulgacaoPreview
+              ? `
+                  <button
+                    data-copy-divulgacao
+                  >
+                    Copiar
+                  </button>
+                `
+              : ''
+          }
 
         </div>
 
-      </form>
+        <div
+          id="promotion-preview"
+        >
 
-    </section>
+          ${
+            divulgacaoPreview
+              ? renderPromotionPreview()
+              : `
+                  <div class="empty-preview">
 
-    <section class="preview-card">
+                    <span>
+                      ✨
+                    </span>
 
-      <div class="preview-header">
+                    <p>
+                      Preencha os dados da oferta e clique em “Gerar prévia”.
+                    </p>
 
-        <div>
-
-          <p class="eyebrow">
-            PRÉVIA
-          </p>
-
-          <h2>
-            Mensagem de divulgação
-          </h2>
+                  </div>
+                `
+          }
 
         </div>
 
-        ${
-          divulgacaoPreview
-            ? `
-                <button
-                  data-copy-divulgacao
-                >
-                  Copiar
-                </button>
-              `
-            : ''
-        }
-
-      </div>
-
-      <div id="promotion-preview">
-
-        ${
-          divulgacaoPreview
-            ? renderPromotionPreview()
-            : `
-                <div class="empty-preview">
-
-                  <span>
-                    ✨
-                  </span>
-
-                  <p>
-                    Preencha os dados da oferta e clique
-                    em “Gerar prévia”.
-                  </p>
-
-                </div>
-              `
-        }
-
-      </div>
+      </section>
 
     </section>
-
-  </section>
-`
+  `
 }
 
-function updateDivulgacaoDraft(form) {
+function updateDivulgacaoDraft(
+  form
+) {
   const data =
-    new FormData(form)
+    new FormData(
+      form
+    )
 
   divulgacaoDraft = {
     ...divulgacaoDraft,
 
     productName:
       String(
-        data.get('productName') || ''
+        data.get(
+          'productName'
+        ) || ''
       ),
 
     description:
       String(
-        data.get('description') || ''
+        data.get(
+          'description'
+        ) || ''
       ),
 
     productUrl:
       String(
-        data.get('productUrl') || ''
+        data.get(
+          'productUrl'
+        ) || ''
       ),
 
     affiliateUrl:
       String(
-        data.get('affiliateUrl') || ''
+        data.get(
+          'affiliateUrl'
+        ) || ''
       ),
 
     price:
       String(
-        data.get('price') || ''
+        data.get(
+          'price'
+        ) || ''
       ),
 
     previousPrice:
       String(
-        data.get('previousPrice') || ''
+        data.get(
+          'previousPrice'
+        ) || ''
       ),
 
     installments:
       String(
-        data.get('installments') || ''
+        data.get(
+          'installments'
+        ) || ''
       ),
 
     installmentInterest:
@@ -2121,18 +1443,22 @@ function updateDivulgacaoDraft(form) {
 
     language:
       String(
-        data.get('language') || 'pt'
+        data.get(
+          'language'
+        ) || 'pt'
       )
   }
 }
 
 function generatePromotionText() {
   const name =
-    divulgacaoDraft.productName.trim()
+    divulgacaoDraft.productName
+      .trim()
 
   const description =
     (
-      divulgacaoDraft.description || ''
+      divulgacaoDraft.description ||
+      ''
     ).trim()
 
   const price =
@@ -2234,17 +1560,25 @@ function generatePromotionText() {
 
   if (link) {
     lines.push('')
+
     lines.push(
       '👉 Aproveite a oferta:'
     )
-    lines.push(link)
+
+    lines.push(
+      link
+    )
   }
 
-  return lines.join('\n')
+  return lines.join(
+    '\n'
+  )
 }
 
 function renderPromotionPreview() {
-  if (!divulgacaoPreview) {
+  if (
+    !divulgacaoPreview
+  ) {
     return ''
   }
 
@@ -2254,7 +1588,261 @@ function renderPromotionPreview() {
     )}</pre>
   `
 }
-async function persistOfferInSupabase(offer) {
+
+async function searchOffers() {
+  ofertasBuscaState = {
+    status: 'loading',
+    error: '',
+    sourceLabel:
+      'Mercado Livre'
+  }
+
+  await render()
+
+  try {
+    const result =
+      await fetchOffers(
+        ofertasBuscaDraft
+      )
+
+    ofertasEncontradas =
+      Array.isArray(
+        result
+      )
+        ? result
+        : []
+
+    ofertasBuscaState = {
+      status: 'success',
+      error: '',
+      sourceLabel:
+        'Mercado Livre'
+    }
+
+  } catch (error) {
+    console.error(error)
+
+    ofertasEncontradas = []
+
+    ofertasBuscaState = {
+      status: 'error',
+      error:
+        error.message ||
+        'Ocorreu um erro ao buscar as ofertas.',
+      sourceLabel: ''
+    }
+  }
+}
+async function fetchOffers(filters) {
+  const query =
+    String(
+      filters.query || ''
+    ).trim()
+
+  const limit =
+    Math.max(
+      1,
+      Number(
+        filters.limit
+      ) || 10
+    )
+
+  const discountMin =
+    Math.max(
+      0,
+      Number(
+        filters.discount
+      ) || 0
+    )
+
+  const priceMax =
+    parseMoney(
+      filters.priceMax
+    )
+
+  const searchQuery =
+    new URLSearchParams()
+
+  if (query) {
+    searchQuery.set(
+      'q',
+      query
+    )
+  }
+
+  searchQuery.set(
+    'limit',
+    String(limit)
+  )
+
+  const response =
+    await fetch(
+      `/api/offers?${searchQuery.toString()}`
+    )
+
+  if (!response.ok) {
+    throw new Error(
+      'Não foi possível consultar as ofertas.'
+    )
+  }
+
+  const payload =
+    await response.json()
+
+  const rawOffers =
+    Array.isArray(
+      payload
+    )
+      ? payload
+      : (
+          payload.results ||
+          payload.items ||
+          []
+        )
+
+  const normalized =
+    rawOffers.map(
+      (
+        item,
+        index
+      ) => normalizeOffer(
+        item,
+        index
+      )
+    )
+
+  return normalized
+    .filter(
+      (offer) => {
+        const discount =
+          calculateDiscount(
+            offer.price,
+            offer.previousPrice
+          )
+
+        if (
+          discount < discountMin
+        ) {
+          return false
+        }
+
+        if (
+          priceMax > 0 &&
+          offer.price > priceMax
+        ) {
+          return false
+        }
+
+        return true
+      }
+    )
+    .slice(
+      0,
+      limit
+    )
+}
+
+function normalizeOffer(
+  item,
+  index
+) {
+  const price =
+    parseMoney(
+      item.price ||
+      item.currentPrice ||
+      item.sale_price ||
+      item.salePrice
+    )
+
+  const previousPrice =
+    parseMoney(
+      item.previousPrice ||
+      item.originalPrice ||
+      item.original_price ||
+      item.listPrice
+    )
+
+  const installments =
+    Number(
+      item.installments ||
+      item.installmentQuantity ||
+      item.installments_count ||
+      0
+    ) || 0
+
+  return {
+    id:
+      item.id ||
+      item.item_id ||
+      item.sku ||
+      `offer-${Date.now()}-${index}`,
+
+    name:
+      item.name ||
+      item.title ||
+      item.productName ||
+      'Produto sem nome',
+
+    description:
+      item.description ||
+      '',
+
+    price,
+
+    previousPrice,
+
+    installments,
+
+    installmentInterest:
+      item.installmentInterest ||
+      item.installment_interest ||
+      (
+        item.freeInterest === true
+          ? 'no-interest'
+          : 'no-interest'
+      ),
+
+    image:
+      item.image ||
+      item.thumbnail ||
+      item.image_url ||
+      '',
+
+    seller:
+      item.seller ||
+      item.seller_name ||
+      '',
+
+    category:
+      item.category ||
+      item.category_name ||
+      '',
+
+    platform:
+      item.platform ||
+      ofertasBuscaDraft.platform ||
+      'mercadolivre',
+
+    productUrl:
+      item.productUrl ||
+      item.permalink ||
+      item.url ||
+      item.link ||
+      '',
+
+    affiliateUrl:
+      item.affiliateUrl ||
+      item.affiliate_link ||
+      item.productUrl ||
+      item.permalink ||
+      item.url ||
+      ''
+  }
+}
+
+async function persistOfferInSupabase(
+  offer
+) {
   const productRepository =
     developmentCatalogs.products
 
@@ -2271,11 +1859,11 @@ async function persistOfferInSupabase(offer) {
 
   if (!productName) {
     throw new Error(
-      'A oferta não possui um nome de produto válido.'
+      'A oferta não possui um nome válido.'
     )
   }
 
-  let products =
+  const products =
     await productRepository.list()
 
   let product =
@@ -2283,51 +1871,40 @@ async function persistOfferInSupabase(offer) {
       (item) =>
         String(
           item.name || ''
-        ).trim()
+        )
+          .trim()
           .toLowerCase() ===
         productName.toLowerCase()
     )
 
+  const productPayload = {
+    name: productName,
+    description:
+      offer.description || ''
+  }
+
+  if (
+    offer.platform
+  ) {
+    productPayload.platform =
+      offer.platform
+  }
+
+  if (
+    offer.category
+  ) {
+    productPayload.category =
+      offer.category
+  }
+
   if (!product) {
     product =
-      await productRepository.create({
-        name: productName,
-        description:
-          offer.description || '',
-        platform:
-          offer.platform || '',
-        category:
-          offer.category || ''
-      })
+      await productRepository.create(
+        productPayload
+      )
   }
 
-  const offerName =
-    productName
-
-  const offerDescription =
-    offer.description ||
-    `Oferta encontrada para ${productName}.`
-
-  const offerPayload = {
-    name: offerName,
-    description: offerDescription,
-    product: product.id,
-    status: 'active'
-  }
-
-  // Só envia o mercado se existir um valor real.
-  // Evita gravar explicitamente market: null.
-  if (
-    offer.market &&
-    String(
-      offer.market
-    ).trim()
-  ) {
-    offerPayload.market =
-      offer.market
-  }
-
-  let offers =
+  const offers =
     await offerRepository.list()
 
   let savedOffer =
@@ -2335,20 +1912,39 @@ async function persistOfferInSupabase(offer) {
       (item) =>
         String(
           item.name || ''
-        ).trim()
+        )
+          .trim()
           .toLowerCase() ===
-        offerName.toLowerCase()
+        productName.toLowerCase()
     )
 
-  if (!savedOffer) {
+  const offerPayload = {
+    name: productName,
+    description:
+      offer.description ||
+      '',
+    product:
+      product.id,
+    status:
+      'active'
+  }
+
+  if (
+    offer.market
+  ) {
+    offerPayload.market =
+      offer.market
+  }
+
+  if (savedOffer) {
     savedOffer =
-      await offerRepository.create(
+      await offerRepository.update(
+        savedOffer.id,
         offerPayload
       )
   } else {
     savedOffer =
-      await offerRepository.update(
-        savedOffer.id,
+      await offerRepository.create(
         offerPayload
       )
   }
@@ -2361,20 +1957,6 @@ async function persistOfferInSupabase(offer) {
     ).trim()
 
   if (destination) {
-    const linkName =
-      `Link - ${offerName}`
-
-    const linkPayload = {
-      name: linkName,
-      description:
-        `Link gerado automaticamente para ${offerName}.`,
-      offer:
-        savedOffer.id,
-      platform:
-        offer.platform || '',
-      destination
-    }
-
     const links =
       await affiliateRepository.list()
 
@@ -2386,6 +1968,22 @@ async function persistOfferInSupabase(offer) {
           ).trim() ===
           destination
       )
+
+    const linkPayload = {
+      name:
+        `Link - ${productName}`,
+
+      description:
+        `Link da oferta ${productName}`,
+
+      offer:
+        savedOffer.id,
+
+      platform:
+        offer.platform || '',
+
+      destination
+    }
 
     if (existingLink) {
       await affiliateRepository.update(
@@ -2407,15 +2005,15 @@ async function persistOfferInSupabase(offer) {
   }
 }
 
-async function sendOfferToDivulgacao(offer) {
+async function sendOfferToDivulgacao(
+  offer
+) {
   if (!offer) {
     throw new Error(
       'Oferta inválida.'
     )
   }
 
-  // A persistência precisa funcionar antes de seguir.
-  // Não mascaramos erro do Supabase.
   await persistOfferInSupabase(
     offer
   )
@@ -2425,7 +2023,7 @@ async function sendOfferToDivulgacao(offer) {
 
     platform:
       offer.platform ||
-      divulgacaoDraft.platform,
+      'mercadolivre',
 
     productName:
       offer.name || '',
@@ -2442,21 +2040,21 @@ async function sendOfferToDivulgacao(offer) {
       '',
 
     price:
-      offer.price
+      offer.price !== undefined
         ? String(
             offer.price
           )
         : '',
 
     previousPrice:
-      offer.previousPrice
+      offer.previousPrice !== undefined
         ? String(
             offer.previousPrice
           )
         : '',
 
     installments:
-      offer.installments
+      offer.installments !== undefined
         ? String(
             offer.installments
           )
@@ -2467,9 +2065,6 @@ async function sendOfferToDivulgacao(offer) {
       'no-interest'
   }
 
-  // Gera a prévia antes da troca de tela.
-  // Isso evita chegar em Divulgação com o layout
-  // vazio ou sem a mensagem formatada.
   divulgacaoPreview =
     generatePromotionText()
 
@@ -2479,56 +2074,89 @@ async function sendOfferToDivulgacao(offer) {
   await render()
 }
 
-function updateBuscaDraft(form) {
+function updateBuscaDraft(
+  form
+) {
   const data =
-    new FormData(form)
+    new FormData(
+      form
+    )
 
   ofertasBuscaDraft = {
     ...ofertasBuscaDraft,
 
     platform:
       String(
-        data.get('platform') ||
-        'mercadolivre'
+        data.get(
+          'platform'
+        ) || 'mercadolivre'
       ),
 
     query:
       String(
-        data.get('query') || ''
+        data.get(
+          'query'
+        ) || ''
       ),
 
     discount:
       String(
-        data.get('discount') || '0'
+        data.get(
+          'discount'
+        ) || '0'
       ),
 
     priceMax:
       String(
-        data.get('priceMax') || ''
+        data.get(
+          'priceMax'
+        ) || ''
       ),
 
     limit:
       String(
-        data.get('limit') || '10'
+        data.get(
+          'limit'
+        ) || '10'
       )
   }
 }
 
 function resetDivulgacao() {
   divulgacaoDraft = {
-    platform: 'mercadolivre',
-    productUrl: '',
-    affiliateUrl: '',
-    productName: '',
-    description: '',
-    price: '',
-    previousPrice: '',
-    installments: '',
-    installmentInterest: 'no-interest',
-    language: 'pt'
+    platform:
+      'mercadolivre',
+
+    productUrl:
+      '',
+
+    affiliateUrl:
+      '',
+
+    productName:
+      '',
+
+    description:
+      '',
+
+    price:
+      '',
+
+    previousPrice:
+      '',
+
+    installments:
+      '',
+
+    installmentInterest:
+      'no-interest',
+
+    language:
+      'pt'
   }
 
-  divulgacaoPreview = ''
+  divulgacaoPreview =
+    ''
 }
 
 function getReferenceLabel(
@@ -2562,8 +2190,10 @@ function getReferenceLabel(
         String(id)
     )
 
-  return entry?.name ||
+  return (
+    entry?.name ||
     String(id)
+  )
 }
 
 function resolveEntryField(
@@ -2572,7 +2202,9 @@ function resolveEntryField(
   entry
 ) {
   const reference =
-    section.references?.[field]
+    section.references?.[
+      field
+    ]
 
   const currentValue =
     entry[field]
@@ -2614,7 +2246,9 @@ function sectionPage(s) {
     <header class="page-heading">
 
       <p class="eyebrow">
-        ${s.eyebrow}
+        ${escapeHtml(
+          s.eyebrow
+        )}
       </p>
 
       <div class="heading-row">
@@ -2622,18 +2256,24 @@ function sectionPage(s) {
         <div>
 
           <h1>
-            ${s.title}
+            ${escapeHtml(
+              s.title
+            )}
           </h1>
 
           <p>
-            ${s.intro}
+            ${escapeHtml(
+              s.intro
+            )}
           </p>
 
         </div>
 
         <button
           class="primary"
-          data-add="${s.id}"
+          data-add="${escapeHtml(
+            s.id
+          )}"
         >
           + Novo cadastro
         </button>
@@ -2644,81 +2284,96 @@ function sectionPage(s) {
 
     <section
       class="catalog"
-      aria-label="${s.title}"
+      aria-label="${escapeHtml(
+        s.title
+      )}"
     >
 
       ${
         entries.length
-          ? entries.map((entry) => `
-              <article class="entry">
+          ? entries.map(
+              (entry) => `
+                <article
+                  class="entry"
+                >
 
-                <div>
+                  <div>
 
-                  <h2>
-                    ${escapeHtml(entry.name)}
-                  </h2>
+                    <h2>
+                      ${escapeHtml(
+                        entry.name
+                      )}
+                    </h2>
 
-                  ${
-                    entry.description
-                      ? `
-                          <p>
+                    ${
+                      entry.description
+                        ? `
+                            <p>
+                              ${escapeHtml(
+                                entry.description
+                              )}
+                            </p>
+                          `
+                        : ''
+                    }
+
+                  </div>
+
+                  <dl>
+
+                    ${s.fields.map(
+                      (field) => `
+                        <div>
+
+                          <dt>
                             ${escapeHtml(
-                              entry.description
+                              labels[field] ||
+                              field
                             )}
-                          </p>
-                        `
-                      : ''
-                  }
+                          </dt>
 
-                </div>
+                          <dd>
+                            ${escapeHtml(
+                              resolveEntryField(
+                                s,
+                                field,
+                                entry
+                              )
+                            )}
+                          </dd>
 
-                <dl>
+                        </div>
+                      `
+                    ).join('')}
 
-                  ${s.fields.map((field) => `
-                    <div>
+                  </dl>
 
-                      <dt>
-                        ${escapeHtml(
-                          labels[field] ||
-                          field
-                        )}
-                      </dt>
-
-                      <dd>
-                        ${escapeHtml(
-                          resolveEntryField(
-                            s,
-                            field,
-                            entry
-                          )
-                        ) || '—'}
-                      </dd>
-
-                    </div>
-                  `).join('')}
-
-                </dl>
-
-                <div class="entry-actions">
-
-                  <button
-                    data-edit="${entry.id}"
+                  <div
+                    class="entry-actions"
                   >
-                    Editar
-                  </button>
 
-                  <button
-                    class="danger"
-                    data-remove="${entry.id}"
-                  >
-                    Excluir
-                  </button>
+                    <button
+                      data-edit="${escapeHtml(
+                        entry.id
+                      )}"
+                    >
+                      Editar
+                    </button>
 
-                </div>
+                    <button
+                      class="danger"
+                      data-remove="${escapeHtml(
+                        entry.id
+                      )}"
+                    >
+                      Excluir
+                    </button>
 
-              </article>
-            `).join('')
+                  </div>
 
+                </article>
+              `
+            ).join('')
           : `
               <div class="empty">
                 Nenhum cadastro nesta área.
@@ -2727,22 +2382,17 @@ function sectionPage(s) {
       }
 
     </section>
-
-    <p class="notice">
-      Os dados ficam armazenados no banco de dados.
-      Utilize o backup antes de fazer alterações
-      importantes.
-    </p>
   `
 }
-
 function referenceOptions(
   section,
   field,
   selected
 ) {
   const reference =
-    section.references?.[field]
+    section.references?.[
+      field
+    ]
 
   if (!reference) {
     return ''
@@ -2766,7 +2416,9 @@ function referenceOptions(
 
   const selectedValues =
     Array.isArray(selected)
-      ? selected.map(String)
+      ? selected.map(
+          String
+        )
       : [
           String(
             selected ?? ''
@@ -2784,7 +2436,9 @@ function referenceOptions(
       </span>
 
       <select
-        name="${field}"
+        name="${escapeHtml(
+          field
+        )}"
         ${
           reference.multiple
             ? 'multiple'
@@ -2802,22 +2456,28 @@ function referenceOptions(
               `
         }
 
-        ${entries.map((entry) => `
-          <option
-            value="${escapeHtml(entry.id)}"
-            ${
-              selectedValues.includes(
-                String(entry.id)
-              )
-                ? 'selected'
-                : ''
-            }
-          >
-            ${escapeHtml(
-              entry.name
-            )}
-          </option>
-        `).join('')}
+        ${entries.map(
+          (entry) => `
+            <option
+              value="${escapeHtml(
+                entry.id
+              )}"
+              ${
+                selectedValues.includes(
+                  String(
+                    entry.id
+                  )
+                )
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${escapeHtml(
+                entry.name
+              )}
+            </option>
+          `
+        ).join('')}
 
       </select>
 
@@ -2836,14 +2496,20 @@ function formPage(
     <header class="page-heading">
 
       <p class="eyebrow">
-        ${section.eyebrow}
+        ${escapeHtml(
+          section.eyebrow
+        )}
       </p>
 
       <h1>
         ${
           isEdit
-            ? `Editar ${section.label}`
-            : `Novo cadastro em ${section.label}`
+            ? `Editar ${escapeHtml(
+                section.label
+              )}`
+            : `Novo cadastro em ${escapeHtml(
+                section.label
+              )}`
         }
       </h1>
 
@@ -2857,13 +2523,19 @@ function formPage(
 
     </header>
 
-    <section class="form-card">
+    <section
+      class="form-card"
+    >
 
       <form
-        data-entry-form="${section.id}"
+        data-entry-form="${escapeHtml(
+          section.id
+        )}"
         ${
           entry
-            ? `data-entry-id="${entry.id}"`
+            ? `data-entry-id="${escapeHtml(
+                entry.id
+              )}"`
             : ''
         }
       >
@@ -2900,48 +2572,58 @@ function formPage(
 
         </label>
 
-        ${section.fields.map((field) => {
-          const reference =
-            section.references?.[field]
+        ${section.fields.map(
+          (field) => {
+            const reference =
+              section.references?.[
+                field
+              ]
 
-          if (reference) {
-            return referenceOptions(
-              section,
-              field,
-              entry?.[field]
-            )
-          }
+            if (reference) {
+              return referenceOptions(
+                section,
+                field,
+                entry?.[field]
+              )
+            }
 
-          return `
-            <label>
+            return `
+              <label>
 
-              <span>
-                ${escapeHtml(
-                  labels[field] ||
-                  field
-                )}
-              </span>
-
-              <input
-                type="text"
-                name="${field}"
-                value="${escapeHtml(
-                  editable(
-                    entry || {},
+                <span>
+                  ${escapeHtml(
+                    labels[field] ||
                     field
-                  )
-                )}"
-              />
+                  )}
+                </span>
 
-            </label>
-          `
-        }).join('')}
+                <input
+                  type="text"
+                  name="${escapeHtml(
+                    field
+                  )}"
+                  value="${escapeHtml(
+                    editable(
+                      entry || {},
+                      field
+                    )
+                  )}"
+                />
 
-        <div class="form-actions">
+              </label>
+            `
+          }
+        ).join('')}
+
+        <div
+          class="form-actions"
+        >
 
           <button
             type="button"
-            data-page="${section.id}"
+            data-page="${escapeHtml(
+              section.id
+            )}"
           >
             Cancelar
           </button>
@@ -2971,8 +2653,12 @@ function getBackupData() {
   for (
     const section of sections
   ) {
-    data[section.id] =
-      getEntries(section)
+    data[
+      section.id
+    ] =
+      getEntries(
+        section
+      )
   }
 
   return data
@@ -2984,7 +2670,9 @@ async function saveEntry(
   entryId = null
 ) {
   const data =
-    new FormData(form)
+    new FormData(
+      form
+    )
 
   const entry = {
     name:
@@ -2995,8 +2683,9 @@ async function saveEntry(
 
     description:
       String(
-        data.get('description') ||
-        ''
+        data.get(
+          'description'
+        ) || ''
       ).trim()
   }
 
@@ -3004,7 +2693,9 @@ async function saveEntry(
     const field of section.fields
   ) {
     const reference =
-      section.references?.[field]
+      section.references?.[
+        field
+      ]
 
     if (reference) {
       if (
@@ -3034,7 +2725,9 @@ async function saveEntry(
       fieldValue !== ''
     ) {
       entry[field] =
-        String(fieldValue)
+        String(
+          fieldValue
+        )
     }
   }
 
@@ -3084,11 +2777,13 @@ async function removeEntry(
 
   await render()
 }
+
 async function exportBackup() {
   try {
     const backup = {
       exportedAt:
-        new Date().toISOString(),
+        new Date()
+          .toISOString(),
 
       application:
         'Mavuri Affiliate Engine',
@@ -3122,7 +2817,9 @@ async function exportBackup() {
       )
 
     const link =
-      document.createElement('a')
+      document.createElement(
+        'a'
+      )
 
     link.href =
       url
@@ -3134,7 +2831,7 @@ async function exportBackup() {
           .slice(0, 10)
       }.json`
 
-    document.body.append(
+    document.body.appendChild(
       link
     )
 
@@ -3167,7 +2864,9 @@ async function importBackup(
       await file.text()
 
     const backup =
-      JSON.parse(content)
+      JSON.parse(
+        content
+      )
 
     if (
       !backup ||
@@ -3201,7 +2900,9 @@ async function importBackup(
         ]
 
       if (
-        !Array.isArray(entries)
+        !Array.isArray(
+          entries
+        )
       ) {
         continue
       }
@@ -3335,7 +3036,6 @@ function currentPage() {
 
   return dashboard()
 }
-
 async function render() {
   if (!root) {
     return
@@ -3350,67 +3050,94 @@ async function render() {
     return
   }
 
-  if (
-    !catalogsLoaded
-  ) {
+  if (!catalogsLoaded) {
+    root.innerHTML = `
+      <main class="app-shell">
+        <section class="loading-page">
+          Carregando Mavuri...
+        </section>
+      </main>
+    `
+
     try {
       await loadCatalogs()
     } catch (error) {
       console.error(error)
 
       root.innerHTML = `
-        <main class="app-error">
-
-          <section class="form-card">
-
-            <p class="eyebrow">
-              ERRO
-            </p>
-
-            <h1>
-              Não foi possível carregar os dados
-            </h1>
-
-            <p>
-              Verifique a conexão com o Supabase e tente novamente.
-            </p>
-
-            <button
-              class="primary"
-              data-retry-load
-            >
-              Tentar novamente
-            </button>
-
+        <main class="app-shell">
+          <section class="loading-page">
+            Não foi possível carregar os dados.
           </section>
-
         </main>
       `
-
-      bindEvents()
 
       return
     }
   }
 
   root.innerHTML = `
-    <div class="app-shell">
+    <main class="app-shell">
 
       ${navigation()}
 
-      <main>
-        ${currentPage()}
-      </main>
+      <section class="content">
 
-    </div>
+        <div class="topbar">
+
+          <div>
+
+            <span class="topbar-label">
+              Mavuri Affiliate Engine
+            </span>
+
+          </div>
+
+          <div class="topbar-actions">
+
+            <button
+              data-export-backup
+              title="Exportar backup"
+            >
+              Exportar
+            </button>
+
+            <label
+              class="import-button"
+              title="Importar backup"
+            >
+              Importar
+
+              <input
+                type="file"
+                accept=".json,application/json"
+                data-import-backup
+                hidden
+              />
+
+            </label>
+
+          </div>
+
+        </div>
+
+        <div class="page-content">
+
+          ${currentPage()}
+
+        </div>
+
+      </section>
+
+    </main>
   `
 
   bindEvents()
 }
 
 function bindEvents() {
-  root
-    ?.querySelectorAll(
+  document
+    .querySelectorAll(
       '[data-page]'
     )
     .forEach(
@@ -3418,8 +3145,15 @@ function bindEvents() {
         button.addEventListener(
           'click',
           async () => {
-            page =
+            const nextPage =
               button.dataset.page
+
+            if (!nextPage) {
+              return
+            }
+
+            page =
+              nextPage
 
             await render()
           }
@@ -3427,11 +3161,13 @@ function bindEvents() {
       }
     )
 
-  root
-    ?.querySelector(
+  const logoutButton =
+    document.querySelector(
       '[data-logout]'
     )
-    ?.addEventListener(
+
+  if (logoutButton) {
+    logoutButton.addEventListener(
       'click',
       async () => {
         try {
@@ -3445,12 +3181,15 @@ function bindEvents() {
         }
       }
     )
+  }
 
-  root
-    ?.querySelector(
+  const loginForm =
+    document.querySelector(
       '[data-login]'
     )
-    ?.addEventListener(
+
+  if (loginForm) {
+    loginForm.addEventListener(
       'submit',
       async (event) => {
         event.preventDefault()
@@ -3458,72 +3197,60 @@ function bindEvents() {
         const form =
           event.currentTarget
 
-        const data =
-          new FormData(form)
-
         const errorElement =
           form.querySelector(
             '.login-error'
           )
 
-        const button =
-          form.querySelector(
-            'button[type="submit"]'
+        const data =
+          new FormData(
+            form
           )
 
-        if (errorElement) {
-          errorElement.hidden =
-            true
-
-          errorElement.textContent =
+        const email =
+          String(
+            data.get('email') ||
             ''
-        }
+          ).trim()
 
-        if (button) {
-          button.disabled =
-            true
-
-          button.textContent =
-            'Entrando...'
-        }
+        const password =
+          String(
+            data.get('password') ||
+            ''
+          )
 
         try {
+          if (errorElement) {
+            errorElement.hidden =
+              true
+
+            errorElement.textContent =
+              ''
+          }
+
           await signIn(
-            String(
-              data.get('email') ||
-              ''
-            ),
-            String(
-              data.get('password') ||
-              ''
-            )
+            email,
+            password
           )
 
         } catch (error) {
           console.error(error)
 
           if (errorElement) {
-            errorElement.hidden =
-              false
-
             errorElement.textContent =
               error.message ||
               'Não foi possível entrar.'
-          }
 
-          if (button) {
-            button.disabled =
+            errorElement.hidden =
               false
-
-            button.textContent =
-              'Entrar'
           }
         }
       }
     )
+  }
 
-  root
-    ?.querySelectorAll(
+  document
+    .querySelectorAll(
       '[data-add]'
     )
     .forEach(
@@ -3543,17 +3270,35 @@ function bindEvents() {
             }
 
             root.innerHTML = `
-              <div class="app-shell">
+              <main class="app-shell">
 
                 ${navigation()}
 
-                <main>
-                  ${formPage(
-                    section
-                  )}
-                </main>
+                <section class="content">
 
-              </div>
+                  <div class="topbar">
+
+                    <div>
+
+                      <span class="topbar-label">
+                        Mavuri Affiliate Engine
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  <div class="page-content">
+
+                    ${formPage(
+                      section
+                    )}
+
+                  </div>
+
+                </section>
+
+              </main>
             `
 
             bindEvents()
@@ -3562,15 +3307,15 @@ function bindEvents() {
       }
     )
 
-  root
-    ?.querySelectorAll(
+  document
+    .querySelectorAll(
       '[data-edit]'
     )
     .forEach(
       (button) => {
         button.addEventListener(
           'click',
-          () => {
+          async () => {
             const section =
               sections.find(
                 (item) =>
@@ -3586,7 +3331,9 @@ function bindEvents() {
                 section
               ).find(
                 (item) =>
-                  String(item.id) ===
+                  String(
+                    item.id
+                  ) ===
                   String(
                     button.dataset.edit
                   )
@@ -3597,18 +3344,36 @@ function bindEvents() {
             }
 
             root.innerHTML = `
-              <div class="app-shell">
+              <main class="app-shell">
 
                 ${navigation()}
 
-                <main>
-                  ${formPage(
-                    section,
-                    entry
-                  )}
-                </main>
+                <section class="content">
 
-              </div>
+                  <div class="topbar">
+
+                    <div>
+
+                      <span class="topbar-label">
+                        Mavuri Affiliate Engine
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  <div class="page-content">
+
+                    ${formPage(
+                      section,
+                      entry
+                    )}
+
+                  </div>
+
+                </section>
+
+              </main>
             `
 
             bindEvents()
@@ -3617,8 +3382,8 @@ function bindEvents() {
       }
     )
 
-  root
-    ?.querySelectorAll(
+  document
+    .querySelectorAll(
       '[data-remove]'
     )
     .forEach(
@@ -3645,6 +3410,7 @@ function bindEvents() {
               console.error(error)
 
               window.alert(
+                error.message ||
                 'Não foi possível excluir o cadastro.'
               )
             }
@@ -3653,8 +3419,8 @@ function bindEvents() {
       }
     )
 
-  root
-    ?.querySelectorAll(
+  document
+    .querySelectorAll(
       '[data-entry-form]'
     )
     .forEach(
@@ -3675,16 +3441,6 @@ function bindEvents() {
               return
             }
 
-            const button =
-              form.querySelector(
-                'button[type="submit"]'
-              )
-
-            if (button) {
-              button.disabled =
-                true
-            }
-
             try {
               await saveEntry(
                 section,
@@ -3692,7 +3448,6 @@ function bindEvents() {
                 form.dataset.entryId ||
                 null
               )
-
             } catch (error) {
               console.error(error)
 
@@ -3700,28 +3455,25 @@ function bindEvents() {
                 error.message ||
                 'Não foi possível salvar o cadastro.'
               )
-
-              if (button) {
-                button.disabled =
-                  false
-              }
             }
           }
         )
       }
     )
 
-  root
-    ?.querySelector(
+  const buscarOfertasForm =
+    document.querySelector(
       '[data-buscar-ofertas]'
     )
-    ?.addEventListener(
+
+  if (buscarOfertasForm) {
+    buscarOfertasForm.addEventListener(
       'submit',
       async (event) => {
         event.preventDefault()
 
         updateBuscaDraft(
-          event.currentTarget
+          buscarOfertasForm
         )
 
         await searchOffers()
@@ -3729,9 +3481,10 @@ function bindEvents() {
         await render()
       }
     )
+  }
 
-  root
-    ?.querySelectorAll(
+  document
+    .querySelectorAll(
       '[data-gerar-divulgacao]'
     )
     .forEach(
@@ -3742,7 +3495,9 @@ function bindEvents() {
             const offer =
               ofertasEncontradas.find(
                 (item) =>
-                  String(item.id) ===
+                  String(
+                    item.id
+                  ) ===
                   String(
                     button.dataset
                       .gerarDivulgacao
@@ -3751,7 +3506,7 @@ function bindEvents() {
 
             if (!offer) {
               window.alert(
-                'Oferta não encontrada.'
+                'Não foi possível localizar a oferta selecionada.'
               )
 
               return
@@ -3764,7 +3519,7 @@ function bindEvents() {
               true
 
             button.textContent =
-              'Salvando...'
+              'Preparando...'
 
             try {
               await sendOfferToDivulgacao(
@@ -3789,17 +3544,19 @@ function bindEvents() {
       }
     )
 
-  root
-    ?.querySelector(
+  const divulgacaoForm =
+    document.querySelector(
       '[data-divulgacao]'
     )
-    ?.addEventListener(
+
+  if (divulgacaoForm) {
+    divulgacaoForm.addEventListener(
       'submit',
       async (event) => {
         event.preventDefault()
 
         updateDivulgacaoDraft(
-          event.currentTarget
+          divulgacaoForm
         )
 
         divulgacaoPreview =
@@ -3808,12 +3565,15 @@ function bindEvents() {
         await render()
       }
     )
+  }
 
-  root
-    ?.querySelector(
+  const clearDivulgacaoButton =
+    document.querySelector(
       '[data-clear-divulgacao]'
     )
-    ?.addEventListener(
+
+  if (clearDivulgacaoButton) {
+    clearDivulgacaoButton.addEventListener(
       'click',
       async () => {
         resetDivulgacao()
@@ -3821,53 +3581,43 @@ function bindEvents() {
         await render()
       }
     )
+  }
 
-  root
-    ?.querySelector(
+  const copyDivulgacaoButton =
+    document.querySelector(
       '[data-copy-divulgacao]'
     )
-    ?.addEventListener(
+
+  if (copyDivulgacaoButton) {
+    copyDivulgacaoButton.addEventListener(
       'click',
       copyPromotionText
     )
+  }
 
-  root
-    ?.querySelector(
-      '[data-export]'
+  const exportButton =
+    document.querySelector(
+      '[data-export-backup]'
     )
-    ?.addEventListener(
+
+  if (exportButton) {
+    exportButton.addEventListener(
       'click',
       exportBackup
     )
+  }
 
-  root
-    ?.querySelector(
-      '[data-import]'
-    )
-    ?.addEventListener(
-      'click',
-      () => {
-        root
-          .querySelector(
-            '#backup-file'
-          )
-          ?.click()
-      }
+  const importInput =
+    document.querySelector(
+      '[data-import-backup]'
     )
 
-  root
-    ?.querySelector(
-      '#backup-file'
-    )
-    ?.addEventListener(
+  if (importInput) {
+    importInput.addEventListener(
       'change',
       async (event) => {
         const file =
           event.target.files?.[0]
-
-        if (!file) {
-          return
-        }
 
         await importBackup(
           file
@@ -3877,47 +3627,66 @@ function bindEvents() {
           ''
       }
     )
-
-  root
-    ?.querySelector(
-      '[data-retry-load]'
-    )
-    ?.addEventListener(
-      'click',
-      async () => {
-        catalogsLoaded =
-          false
-
-        await render()
-      }
-    )
+  }
 }
 
-async function initialize() {
+async function bootstrap() {
   try {
     session =
       await getSession()
 
     await render()
 
-  } catch (error) {
-    console.error(
-      'Erro ao iniciar aplicação:',
-      error
+    onAuthChange(
+      async (
+        nextSession
+      ) => {
+        session =
+          nextSession
+
+        if (!session) {
+          page =
+            'dashboard'
+
+          catalogsLoaded =
+            false
+
+          ofertasEncontradas =
+            []
+
+          ofertasBuscaState = {
+            status: 'idle',
+            error: '',
+            sourceLabel: ''
+          }
+
+          resetDivulgacao()
+        }
+
+        await render()
+      }
     )
+
+  } catch (error) {
+    console.error(error)
 
     if (root) {
       root.innerHTML = `
-        <main class="app-error">
+        <main class="login-page">
 
-          <section class="form-card">
+          <section class="login-card">
 
             <h1>
-              Não foi possível iniciar o Mavuri
+              Erro ao iniciar o Mavuri
             </h1>
 
             <p>
-              Verifique a configuração da aplicação e tente novamente.
+              ${
+                escapeHtml(
+                  error.message ||
+                  'Verifique a configuração da aplicação.'
+                )
+              }
             </p>
 
           </section>
@@ -3928,21 +3697,4 @@ async function initialize() {
   }
 }
 
-onAuthChange(
-  async (nextSession) => {
-    session =
-      nextSession
-
-    catalogsLoaded =
-      false
-
-    if (!session) {
-      page =
-        'dashboard'
-    }
-
-    await render()
-  }
-)
-
-initialize()
+bootstrap()
