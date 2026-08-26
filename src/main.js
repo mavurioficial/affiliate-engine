@@ -32,6 +32,7 @@ let divulgacaoDraft = {
   productUrl: '',
   affiliateUrl: '',
   productName: '',
+  description: '',
   price: '',
   previousPrice: '',
   installments: '',
@@ -875,8 +876,7 @@ function dashboard() {
         arquivo JSON e importar novamente esse backup
         quando necessário.
       </p>
-
-      <div class="form-actions">
+            <div class="form-actions">
 
         <button data-export>
           Exportar backup
@@ -1775,6 +1775,7 @@ function offerCard(offer) {
     </article>
   `
 }
+
 function divulgacaoPage() {
   return `
     <header class="page-heading">
@@ -1806,14 +1807,83 @@ function divulgacaoPage() {
               Produto
             </span>
 
+          <input
+            type="text"
+            name="productName"
+            value="${escapeHtml(
+              divulgacaoDraft.productName
+            )}"
+            placeholder="Nome do produto"
+            required
+          />
+
+        </label>
+
+        <label>
+
+          <span>
+            Descrição
+          </span>
+
+          <textarea
+            name="description"
+            rows="4"
+            placeholder="Descrição da oferta"
+          >${escapeHtml(
+            divulgacaoDraft.description || ''
+          )}</textarea>
+
+        </label>
+
+        <label>
+
+          <span>
+            Link do produto
+          </span>
+
+          <input
+            type="url"
+            name="productUrl"
+            value="${escapeHtml(
+              divulgacaoDraft.productUrl
+            )}"
+            placeholder="https://..."
+          />
+
+        </label>
+
+        <label>
+
+          <span>
+            Link de afiliado
+          </span>
+
+          <input
+            type="url"
+            name="affiliateUrl"
+            value="${escapeHtml(
+              divulgacaoDraft.affiliateUrl
+            )}"
+            placeholder="https://..."
+          />
+
+        </label>
+
+        <div class="form-grid">
+
+          <label>
+
+            <span>
+              Preço atual
+            </span>
+
             <input
               type="text"
-              name="productName"
+              name="price"
               value="${escapeHtml(
-                divulgacaoDraft.productName
+                divulgacaoDraft.price
               )}"
-              placeholder="Nome do produto"
-              required
+              placeholder="0,00"
             />
 
           </label>
@@ -1821,252 +1891,183 @@ function divulgacaoPage() {
           <label>
 
             <span>
-              Descrição
-            </span>
-
-            <textarea
-              name="description"
-              rows="4"
-              placeholder="Descrição da oferta"
-            >${escapeHtml(
-              divulgacaoDraft.description || ''
-            )}</textarea>
-
-          </label>
-
-          <label>
-
-            <span>
-              Link do produto
+              Preço anterior
             </span>
 
             <input
-              type="url"
-              name="productUrl"
+              type="text"
+              name="previousPrice"
               value="${escapeHtml(
-                divulgacaoDraft.productUrl
+                divulgacaoDraft.previousPrice
               )}"
-              placeholder="https://..."
+              placeholder="0,00"
             />
 
           </label>
 
+        </div>
+
+        <div class="form-grid">
+
           <label>
 
             <span>
-              Link de afiliado
+              Parcelas
             </span>
 
             <input
-              type="url"
-              name="affiliateUrl"
+              type="number"
+              name="installments"
+              min="1"
               value="${escapeHtml(
-                divulgacaoDraft.affiliateUrl
+                divulgacaoDraft.installments
               )}"
-              placeholder="https://..."
             />
 
           </label>
 
-          <div class="form-grid">
-
-            <label>
-
-              <span>
-                Preço atual
-              </span>
-
-              <input
-                type="text"
-                name="price"
-                value="${escapeHtml(
-                  divulgacaoDraft.price
-                )}"
-                placeholder="0,00"
-              />
-
-            </label>
-
-            <label>
-
-              <span>
-                Preço anterior
-              </span>
-
-              <input
-                type="text"
-                name="previousPrice"
-                value="${escapeHtml(
-                  divulgacaoDraft.previousPrice
-                )}"
-                placeholder="0,00"
-              />
-
-            </label>
-
-          </div>
-
-          <div class="form-grid">
-
-            <label>
-
-              <span>
-                Parcelas
-              </span>
-
-              <input
-                type="number"
-                name="installments"
-                min="1"
-                value="${escapeHtml(
-                  divulgacaoDraft.installments
-                )}"
-              />
-
-            </label>
-
-            <label>
-
-              <span>
-                Tipo
-              </span>
-
-              <select
-                name="installmentInterest"
-              >
-
-                <option
-                  value="no-interest"
-                  ${
-                    divulgacaoDraft.installmentInterest ===
-                    'no-interest'
-                      ? 'selected'
-                      : ''
-                  }
-                >
-                  Sem juros
-                </option>
-
-                <option
-                  value="with-interest"
-                  ${
-                    divulgacaoDraft.installmentInterest ===
-                    'with-interest'
-                      ? 'selected'
-                      : ''
-                  }
-                >
-                  Com juros
-                </option>
-
-              </select>
-
-            </label>
-
-          </div>
-
           <label>
 
             <span>
-              Idioma
+              Tipo
             </span>
 
-            <select name="language">
+            <select
+              name="installmentInterest"
+            >
 
               <option
-                value="pt"
+                value="no-interest"
                 ${
-                  divulgacaoDraft.language === 'pt'
+                  divulgacaoDraft.installmentInterest ===
+                  'no-interest'
                     ? 'selected'
                     : ''
                 }
               >
-                Português
+                Sem juros
+              </option>
+
+              <option
+                value="with-interest"
+                ${
+                  divulgacaoDraft.installmentInterest ===
+                  'with-interest'
+                    ? 'selected'
+                    : ''
+                }
+              >
+                Com juros
               </option>
 
             </select>
 
           </label>
 
-          <div class="form-actions">
+        </div>
 
-            <button
-              type="submit"
-              class="primary"
+        <label>
+
+          <span>
+            Idioma
+          </span>
+
+          <select name="language">
+
+            <option
+              value="pt"
+              ${
+                divulgacaoDraft.language === 'pt'
+                  ? 'selected'
+                  : ''
+              }
             >
-              Gerar prévia
-            </button>
+              Português
+            </option>
 
-            <button
-              type="button"
-              data-clear-divulgacao
-            >
-              Limpar
-            </button>
+          </select>
 
-          </div>
+        </label>
 
-        </form>
+        <div class="form-actions">
 
-      </section>
+          <button
+            type="submit"
+            class="primary"
+          >
+            Gerar prévia
+          </button>
 
-      <section class="preview-card">
-
-        <div class="preview-header">
-
-          <div>
-
-            <p class="eyebrow">
-              PRÉVIA
-            </p>
-
-            <h2>
-              Mensagem de divulgação
-            </h2>
-
-          </div>
-
-          ${
-            divulgacaoPreview
-              ? `
-                  <button
-                    data-copy-divulgacao
-                  >
-                    Copiar
-                  </button>
-                `
-              : ''
-          }
+          <button
+            type="button"
+            data-clear-divulgacao
+          >
+            Limpar
+          </button>
 
         </div>
 
-        <div id="promotion-preview">
-
-          ${
-            divulgacaoPreview
-              ? renderPromotionPreview()
-              : `
-                  <div class="empty-preview">
-
-                    <span>
-                      ✨
-                    </span>
-
-                    <p>
-                      Preencha os dados da oferta e clique
-                      em “Gerar prévia”.
-                    </p>
-
-                  </div>
-                `
-          }
-
-        </div>
-
-      </section>
+      </form>
 
     </section>
-  `
+
+    <section class="preview-card">
+
+      <div class="preview-header">
+
+        <div>
+
+          <p class="eyebrow">
+            PRÉVIA
+          </p>
+
+          <h2>
+            Mensagem de divulgação
+          </h2>
+
+        </div>
+
+        ${
+          divulgacaoPreview
+            ? `
+                <button
+                  data-copy-divulgacao
+                >
+                  Copiar
+                </button>
+              `
+            : ''
+        }
+
+      </div>
+
+      <div id="promotion-preview">
+
+        ${
+          divulgacaoPreview
+            ? renderPromotionPreview()
+            : `
+                <div class="empty-preview">
+
+                  <span>
+                    ✨
+                  </span>
+
+                  <p>
+                    Preencha os dados da oferta e clique
+                    em “Gerar prévia”.
+                  </p>
+
+                </div>
+              `
+        }
+
+      </div>
+
+    </section>
+
+  </section>
+`
 }
 
 function updateDivulgacaoDraft(form) {
@@ -2253,230 +2254,222 @@ function renderPromotionPreview() {
     )}</pre>
   `
 }
-
 async function persistOfferInSupabase(offer) {
-  try {
-    const productRepository =
-      developmentCatalogs.products
+  const productRepository =
+    developmentCatalogs.products
 
-    const offerRepository =
-      developmentCatalogs.offers
+  const offerRepository =
+    developmentCatalogs.offers
 
-    const linkRepository =
-      developmentCatalogs.affiliateLinks
+  const affiliateRepository =
+    developmentCatalogs.affiliateLinks
 
-    const productUrl =
+  const productName =
+    String(
+      offer.name || ''
+    ).trim()
+
+  if (!productName) {
+    throw new Error(
+      'A oferta não possui um nome de produto válido.'
+    )
+  }
+
+  let products =
+    await productRepository.list()
+
+  let product =
+    products.find(
+      (item) =>
+        String(
+          item.name || ''
+        ).trim()
+          .toLowerCase() ===
+        productName.toLowerCase()
+    )
+
+  if (!product) {
+    product =
+      await productRepository.create({
+        name: productName,
+        description:
+          offer.description || '',
+        platform:
+          offer.platform || '',
+        category:
+          offer.category || ''
+      })
+  }
+
+  const offerName =
+    productName
+
+  const offerDescription =
+    offer.description ||
+    `Oferta encontrada para ${productName}.`
+
+  const offerPayload = {
+    name: offerName,
+    description: offerDescription,
+    product: product.id,
+    status: 'active'
+  }
+
+  // Só envia o mercado se existir um valor real.
+  // Evita gravar explicitamente market: null.
+  if (
+    offer.market &&
+    String(
+      offer.market
+    ).trim()
+  ) {
+    offerPayload.market =
+      offer.market
+  }
+
+  let offers =
+    await offerRepository.list()
+
+  let savedOffer =
+    offers.find(
+      (item) =>
+        String(
+          item.name || ''
+        ).trim()
+          .toLowerCase() ===
+        offerName.toLowerCase()
+    )
+
+  if (!savedOffer) {
+    savedOffer =
+      await offerRepository.create(
+        offerPayload
+      )
+  } else {
+    savedOffer =
+      await offerRepository.update(
+        savedOffer.id,
+        offerPayload
+      )
+  }
+
+  const destination =
+    String(
+      offer.affiliateUrl ||
       offer.productUrl ||
       ''
+    ).trim()
 
-    const productName =
-      offer.name ||
-      offer.productName ||
-      'Produto sem nome'
+  if (destination) {
+    const linkName =
+      `Link - ${offerName}`
 
-    const products =
-      await productRepository.list()
-
-    let product =
-      products.find(
-        (item) =>
-          item.name === productName
-      )
-
-    if (!product) {
-      product =
-        await productRepository.create({
-          name: productName,
-
-          description:
-            offer.description ||
-            '',
-
-          platform:
-            offer.platform ||
-            'mercadolivre',
-
-          category:
-            offer.category ||
-            ''
-        })
-    } else {
-      product =
-        await productRepository.update(
-          product.id,
-          {
-            name: productName,
-
-            description:
-              offer.description ||
-              product.description ||
-              '',
-
-            platform:
-              offer.platform ||
-              product.platform ||
-              'mercadolivre',
-
-            category:
-              offer.category ||
-              product.category ||
-              ''
-          }
-        )
-    }
-
-    const offers =
-      await offerRepository.list()
-
-    let savedOffer =
-      offers.find(
-        (item) =>
-          String(
-            item.product
-          ) ===
-          String(
-            product.id
-          )
-      )
-
-    const offerData = {
-      product:
-        product.id,
-
-      market:
-        offer.market ||
-        null,
-
-      status:
-        'active'
-    }
-
-    if (savedOffer) {
-      savedOffer =
-        await offerRepository.update(
-          savedOffer.id,
-          offerData
-        )
-    } else {
-      savedOffer =
-        await offerRepository.create(
-          offerData
-        )
-    }
-
-    const links =
-      await linkRepository.list()
-
-    const destination =
-      offer.affiliateUrl ||
-      productUrl ||
-      ''
-
-    let savedLink =
-      links.find(
-        (item) =>
-          String(
-            item.offer
-          ) ===
-          String(
-            savedOffer.id
-          )
-      )
-
-    const linkData = {
+    const linkPayload = {
+      name: linkName,
+      description:
+        `Link gerado automaticamente para ${offerName}.`,
       offer:
         savedOffer.id,
-
       platform:
-        offer.platform ||
-        'mercadolivre',
-
+        offer.platform || '',
       destination
     }
 
-    if (savedLink) {
-      savedLink =
-        await linkRepository.update(
-          savedLink.id,
-          linkData
-        )
+    const links =
+      await affiliateRepository.list()
+
+    const existingLink =
+      links.find(
+        (item) =>
+          String(
+            item.destination || ''
+          ).trim() ===
+          destination
+      )
+
+    if (existingLink) {
+      await affiliateRepository.update(
+        existingLink.id,
+        linkPayload
+      )
     } else {
-      savedLink =
-        await linkRepository.create(
-          linkData
-        )
+      await affiliateRepository.create(
+        linkPayload
+      )
     }
+  }
 
-    await loadCatalogs()
+  await loadCatalogs()
 
-    return {
-      product,
-      offer: savedOffer,
-      affiliateLink: savedLink
-    }
-
-  } catch (error) {
-    console.error(
-      'Erro ao salvar oferta no Supabase:',
-      error
-    )
-
-    throw error
+  return {
+    product,
+    offer: savedOffer
   }
 }
 
 async function sendOfferToDivulgacao(offer) {
-  try {
-    await persistOfferInSupabase(
-      offer
+  if (!offer) {
+    throw new Error(
+      'Oferta inválida.'
     )
-  } catch (error) {
-    console.error(error)
   }
+
+  // A persistência precisa funcionar antes de seguir.
+  // Não mascaramos erro do Supabase.
+  await persistOfferInSupabase(
+    offer
+  )
 
   divulgacaoDraft = {
     ...divulgacaoDraft,
 
     platform:
       offer.platform ||
-      'mercadolivre',
+      divulgacaoDraft.platform,
+
+    productName:
+      offer.name || '',
+
+    description:
+      offer.description || '',
 
     productUrl:
-      offer.productUrl ||
-      '',
+      offer.productUrl || '',
 
     affiliateUrl:
       offer.affiliateUrl ||
-      '',
-
-    productName:
-      offer.name ||
-      '',
-
-    description:
-      offer.description ||
+      offer.productUrl ||
       '',
 
     price:
-      String(
-        offer.price || ''
-      ),
+      offer.price
+        ? String(
+            offer.price
+          )
+        : '',
 
     previousPrice:
-      String(
-        offer.previousPrice || ''
-      ),
+      offer.previousPrice
+        ? String(
+            offer.previousPrice
+          )
+        : '',
 
     installments:
-      String(
-        offer.installments || ''
-      ),
+      offer.installments
+        ? String(
+            offer.installments
+          )
+        : '',
 
     installmentInterest:
       offer.installmentInterest ||
       'no-interest'
   }
 
+  // Gera a prévia antes da troca de tela.
+  // Isso evita chegar em Divulgação com o layout
+  // vazio ou sem a mensagem formatada.
   divulgacaoPreview =
     generatePromotionText()
 
@@ -2484,6 +2477,41 @@ async function sendOfferToDivulgacao(offer) {
     'divulgacao'
 
   await render()
+}
+
+function updateBuscaDraft(form) {
+  const data =
+    new FormData(form)
+
+  ofertasBuscaDraft = {
+    ...ofertasBuscaDraft,
+
+    platform:
+      String(
+        data.get('platform') ||
+        'mercadolivre'
+      ),
+
+    query:
+      String(
+        data.get('query') || ''
+      ),
+
+    discount:
+      String(
+        data.get('discount') || '0'
+      ),
+
+    priceMax:
+      String(
+        data.get('priceMax') || ''
+      ),
+
+    limit:
+      String(
+        data.get('limit') || '10'
+      )
+  }
 }
 
 function resetDivulgacao() {
@@ -2503,42 +2531,453 @@ function resetDivulgacao() {
   divulgacaoPreview = ''
 }
 
-function updateBuscaDraft(form) {
-  const data =
-    new FormData(form)
-
-  ofertasBuscaDraft = {
-    platform:
-      String(
-        data.get('platform') ||
-        'mercadolivre'
-      ),
-
-    query:
-      String(
-        data.get('query') ||
-        ''
-      ),
-
-    discount:
-      String(
-        data.get('discount') ||
-        '0'
-      ),
-
-    priceMax:
-      String(
-        data.get('priceMax') ||
-        ''
-      ),
-
-    limit:
-      String(
-        data.get('limit') ||
-        '10'
-      )
+function getReferenceLabel(
+  sectionId,
+  id
+) {
+  if (
+    id === null ||
+    id === undefined ||
+    id === ''
+  ) {
+    return ''
   }
+
+  const section =
+    sections.find(
+      (item) =>
+        item.id === sectionId
+    )
+
+  if (!section) {
+    return String(id)
+  }
+
+  const entry =
+    getEntries(
+      section
+    ).find(
+      (item) =>
+        String(item.id) ===
+        String(id)
+    )
+
+  return entry?.name ||
+    String(id)
 }
+
+function resolveEntryField(
+  section,
+  field,
+  entry
+) {
+  const reference =
+    section.references?.[field]
+
+  const currentValue =
+    entry[field]
+
+  if (!reference) {
+    return value(
+      currentValue
+    )
+  }
+
+  if (
+    Array.isArray(
+      currentValue
+    )
+  ) {
+    return currentValue
+      .map(
+        (id) =>
+          getReferenceLabel(
+            reference.section,
+            id
+          )
+      )
+      .filter(Boolean)
+      .join(' · ')
+  }
+
+  return getReferenceLabel(
+    reference.section,
+    currentValue
+  )
+}
+
+function sectionPage(s) {
+  const entries =
+    getEntries(s)
+
+  return `
+    <header class="page-heading">
+
+      <p class="eyebrow">
+        ${s.eyebrow}
+      </p>
+
+      <div class="heading-row">
+
+        <div>
+
+          <h1>
+            ${s.title}
+          </h1>
+
+          <p>
+            ${s.intro}
+          </p>
+
+        </div>
+
+        <button
+          class="primary"
+          data-add="${s.id}"
+        >
+          + Novo cadastro
+        </button>
+
+      </div>
+
+    </header>
+
+    <section
+      class="catalog"
+      aria-label="${s.title}"
+    >
+
+      ${
+        entries.length
+          ? entries.map((entry) => `
+              <article class="entry">
+
+                <div>
+
+                  <h2>
+                    ${escapeHtml(entry.name)}
+                  </h2>
+
+                  ${
+                    entry.description
+                      ? `
+                          <p>
+                            ${escapeHtml(
+                              entry.description
+                            )}
+                          </p>
+                        `
+                      : ''
+                  }
+
+                </div>
+
+                <dl>
+
+                  ${s.fields.map((field) => `
+                    <div>
+
+                      <dt>
+                        ${escapeHtml(
+                          labels[field] ||
+                          field
+                        )}
+                      </dt>
+
+                      <dd>
+                        ${escapeHtml(
+                          resolveEntryField(
+                            s,
+                            field,
+                            entry
+                          )
+                        ) || '—'}
+                      </dd>
+
+                    </div>
+                  `).join('')}
+
+                </dl>
+
+                <div class="entry-actions">
+
+                  <button
+                    data-edit="${entry.id}"
+                  >
+                    Editar
+                  </button>
+
+                  <button
+                    class="danger"
+                    data-remove="${entry.id}"
+                  >
+                    Excluir
+                  </button>
+
+                </div>
+
+              </article>
+            `).join('')
+
+          : `
+              <div class="empty">
+                Nenhum cadastro nesta área.
+              </div>
+            `
+      }
+
+    </section>
+
+    <p class="notice">
+      Os dados ficam armazenados no banco de dados.
+      Utilize o backup antes de fazer alterações
+      importantes.
+    </p>
+  `
+}
+
+function referenceOptions(
+  section,
+  field,
+  selected
+) {
+  const reference =
+    section.references?.[field]
+
+  if (!reference) {
+    return ''
+  }
+
+  const referenceSection =
+    sections.find(
+      (item) =>
+        item.id ===
+        reference.section
+    )
+
+  if (!referenceSection) {
+    return ''
+  }
+
+  const entries =
+    getEntries(
+      referenceSection
+    )
+
+  const selectedValues =
+    Array.isArray(selected)
+      ? selected.map(String)
+      : [
+          String(
+            selected ?? ''
+          )
+        ]
+
+  return `
+    <label>
+
+      <span>
+        ${escapeHtml(
+          labels[field] ||
+          field
+        )}
+      </span>
+
+      <select
+        name="${field}"
+        ${
+          reference.multiple
+            ? 'multiple'
+            : ''
+        }
+      >
+
+        ${
+          reference.multiple
+            ? ''
+            : `
+                <option value="">
+                  Selecione
+                </option>
+              `
+        }
+
+        ${entries.map((entry) => `
+          <option
+            value="${escapeHtml(entry.id)}"
+            ${
+              selectedValues.includes(
+                String(entry.id)
+              )
+                ? 'selected'
+                : ''
+            }
+          >
+            ${escapeHtml(
+              entry.name
+            )}
+          </option>
+        `).join('')}
+
+      </select>
+
+    </label>
+  `
+}
+
+function formPage(
+  section,
+  entry = null
+) {
+  const isEdit =
+    Boolean(entry)
+
+  return `
+    <header class="page-heading">
+
+      <p class="eyebrow">
+        ${section.eyebrow}
+      </p>
+
+      <h1>
+        ${
+          isEdit
+            ? `Editar ${section.label}`
+            : `Novo cadastro em ${section.label}`
+        }
+      </h1>
+
+      <p>
+        ${
+          isEdit
+            ? 'Atualize os dados deste cadastro.'
+            : 'Preencha as informações para criar um novo cadastro.'
+        }
+      </p>
+
+    </header>
+
+    <section class="form-card">
+
+      <form
+        data-entry-form="${section.id}"
+        ${
+          entry
+            ? `data-entry-id="${entry.id}"`
+            : ''
+        }
+      >
+
+        <label>
+
+          <span>
+            Nome
+          </span>
+
+          <input
+            type="text"
+            name="name"
+            required
+            value="${escapeHtml(
+              entry?.name || ''
+            )}"
+          />
+
+        </label>
+
+        <label>
+
+          <span>
+            Descrição
+          </span>
+
+          <textarea
+            name="description"
+            rows="4"
+          >${escapeHtml(
+            entry?.description || ''
+          )}</textarea>
+
+        </label>
+
+        ${section.fields.map((field) => {
+          const reference =
+            section.references?.[field]
+
+          if (reference) {
+            return referenceOptions(
+              section,
+              field,
+              entry?.[field]
+            )
+          }
+
+          return `
+            <label>
+
+              <span>
+                ${escapeHtml(
+                  labels[field] ||
+                  field
+                )}
+              </span>
+
+              <input
+                type="text"
+                name="${field}"
+                value="${escapeHtml(
+                  editable(
+                    entry || {},
+                    field
+                  )
+                )}"
+              />
+
+            </label>
+          `
+        }).join('')}
+
+        <div class="form-actions">
+
+          <button
+            type="button"
+            data-page="${section.id}"
+          >
+            Cancelar
+          </button>
+
+          <button
+            class="primary"
+            type="submit"
+          >
+            ${
+              isEdit
+                ? 'Salvar alterações'
+                : 'Salvar cadastro'
+            }
+          </button>
+
+        </div>
+
+      </form>
+
+    </section>
+  `
+}
+
+function getBackupData() {
+  const data = {}
+
+  for (
+    const section of sections
+  ) {
+    data[section.id] =
+      getEntries(section)
+  }
+
+  return data
+}
+
 async function saveEntry(
   section,
   form,
@@ -2645,7 +3084,6 @@ async function removeEntry(
 
   await render()
 }
-
 async function exportBackup() {
   try {
     const backup = {
@@ -2658,7 +3096,8 @@ async function exportBackup() {
       version:
         '1.0',
 
-      catalogs
+      catalogs:
+        getBackupData()
     }
 
     const content =
@@ -3335,6 +3774,7 @@ function bindEvents() {
               console.error(error)
 
               window.alert(
+                error.message ||
                 'Não foi possível preparar a divulgação.'
               )
 
