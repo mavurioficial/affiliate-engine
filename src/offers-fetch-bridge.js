@@ -1,7 +1,8 @@
 // Ponte de compatibilidade para o fluxo existente do main.js.
-// O GitHub Pages não possui rota /api/offers; interceptamos apenas essa chamada
-// e a encaminhamos para a Edge Function pública do Supabase.
-const OFFERS_ENDPOINT = 'https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/offers'
+// No GitHub Pages não existe /api/offers. Para a busca pública de produtos,
+// consultamos diretamente a API pública de busca do Mercado Livre, evitando
+// depender de proxy, Edge Function ou credenciais apenas para pesquisar ofertas.
+const MERCADO_LIVRE_SEARCH = 'https://api.mercadolibre.com/sites/MLB/search'
 const nativeFetch = window.fetch.bind(window)
 
 function isOffersRequest(input) {
@@ -28,12 +29,13 @@ window.fetch = async function (input, init) {
     window.location.origin
   )
 
-  const target = new URL(OFFERS_ENDPOINT)
-  target.search = requestUrl.search
+  const target = new URL(MERCADO_LIVRE_SEARCH)
+  const query = requestUrl.searchParams.get('q') || ''
+  const limit = requestUrl.searchParams.get('limit') || '10'
 
-  // A função offers está configurada como pública (verify_jwt=false).
-  // Não enviamos apikey/authorization para evitar preflight e rejeição
-  // no gateway antes da execução da função.
+  target.searchParams.set('q', query)
+  target.searchParams.set('limit', limit)
+
   return nativeFetch(target.toString(), {
     method: 'GET',
     headers: {
