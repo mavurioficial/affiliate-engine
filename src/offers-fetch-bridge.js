@@ -1,8 +1,7 @@
-// Ponte de compatibilidade para o fluxo existente do main.js.
-// No GitHub Pages não existe /api/offers. Para a busca pública de produtos,
-// consultamos diretamente a API pública de busca do Mercado Livre, evitando
-// depender de proxy, Edge Function ou credenciais apenas para pesquisar ofertas.
-const MERCADO_LIVRE_SEARCH = 'https://api.mercadolibre.com/sites/MLB/search'
+// Ponte para o fluxo legado do main.js.
+// A busca precisa passar por um backend porque o browser/GitHub Pages
+// não consegue consultar diretamente a API do Mercado Livre com segurança.
+const OFFERS_ENDPOINT = 'https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/offers'
 const nativeFetch = window.fetch.bind(window)
 
 function isOffersRequest(input) {
@@ -29,12 +28,8 @@ window.fetch = async function (input, init) {
     window.location.origin
   )
 
-  const target = new URL(MERCADO_LIVRE_SEARCH)
-  const query = requestUrl.searchParams.get('q') || ''
-  const limit = requestUrl.searchParams.get('limit') || '10'
-
-  target.searchParams.set('q', query)
-  target.searchParams.set('limit', limit)
+  const target = new URL(OFFERS_ENDPOINT)
+  target.search = requestUrl.search
 
   return nativeFetch(target.toString(), {
     method: 'GET',
