@@ -1,4 +1,5 @@
 import { sections } from './app/catalog.js'
+import { developmentCatalogs } from './infrastructure/development/catalog.js'
 import { getSession, signIn, signOut, onAuthChange } from './app/auth.js'
 
 const root = document.querySelector('#root')
@@ -901,8 +902,7 @@ function dashboard() {
       <h2>
         Limites desta etapa
       </h2>
-
-      <ul>
+            <ul>
 
         <li>
           Os dados são armazenados no Supabase.
@@ -923,6 +923,7 @@ function dashboard() {
     </section>
   `
 }
+
 function sectionPage(s) {
   const entries =
     getEntries(s)
@@ -1775,30 +1776,6 @@ function offerCard(offer) {
   `
 }
 function divulgacaoPage() {
-  const previewHtml =
-    divulgacaoPreview
-      ? renderPromotionPreview(
-          divulgacaoPreview
-        )
-      : `
-          <div class="preview-empty">
-
-            <span>
-              🚀
-            </span>
-
-            <h2>
-              Sua divulgação aparecerá aqui
-            </h2>
-
-            <p>
-              Preencha os dados do produto e gere uma
-              prévia da publicação.
-            </p>
-
-          </div>
-        `
-
   return `
     <header class="page-heading">
 
@@ -1811,8 +1788,8 @@ function divulgacaoPage() {
       </h1>
 
       <p>
-        Prepare a mensagem promocional e valide a
-        publicação antes de enviar para os canais.
+        Prepare uma mensagem pronta para divulgar a oferta
+        selecionada.
       </p>
 
     </header>
@@ -1823,74 +1800,10 @@ function divulgacaoPage() {
 
         <form data-divulgacao>
 
-          <div class="form-grid">
-
-            <label>
-
-              <span>
-                Plataforma
-              </span>
-
-              <select name="platform">
-
-                <option
-                  value="mercadolivre"
-                  ${
-                    divulgacaoDraft.platform ===
-                    'mercadolivre'
-                      ? 'selected'
-                      : ''
-                  }
-                >
-                  Mercado Livre
-                </option>
-
-              </select>
-
-            </label>
-
-            <label>
-
-              <span>
-                Idioma
-              </span>
-
-              <select name="language">
-
-                <option
-                  value="pt"
-                  ${
-                    divulgacaoDraft.language ===
-                    'pt'
-                      ? 'selected'
-                      : ''
-                  }
-                >
-                  Português
-                </option>
-
-                <option
-                  value="en"
-                  ${
-                    divulgacaoDraft.language ===
-                    'en'
-                      ? 'selected'
-                      : ''
-                  }
-                >
-                  English
-                </option>
-
-              </select>
-
-            </label>
-
-          </div>
-
           <label>
 
             <span>
-              Nome do produto
+              Produto
             </span>
 
             <input
@@ -1899,8 +1812,58 @@ function divulgacaoPage() {
               value="${escapeHtml(
                 divulgacaoDraft.productName
               )}"
-              placeholder="Ex.: Tênis Asics Gel"
+              placeholder="Nome do produto"
               required
+            />
+
+          </label>
+
+          <label>
+
+            <span>
+              Descrição
+            </span>
+
+            <textarea
+              name="description"
+              rows="4"
+              placeholder="Descrição da oferta"
+            >${escapeHtml(
+              divulgacaoDraft.description || ''
+            )}</textarea>
+
+          </label>
+
+          <label>
+
+            <span>
+              Link do produto
+            </span>
+
+            <input
+              type="url"
+              name="productUrl"
+              value="${escapeHtml(
+                divulgacaoDraft.productUrl
+              )}"
+              placeholder="https://..."
+            />
+
+          </label>
+
+          <label>
+
+            <span>
+              Link de afiliado
+            </span>
+
+            <input
+              type="url"
+              name="affiliateUrl"
+              value="${escapeHtml(
+                divulgacaoDraft.affiliateUrl
+              )}"
+              placeholder="https://..."
             />
 
           </label>
@@ -1919,8 +1882,7 @@ function divulgacaoPage() {
                 value="${escapeHtml(
                   divulgacaoDraft.price
                 )}"
-                placeholder="285,00"
-                required
+                placeholder="0,00"
               />
 
             </label>
@@ -1937,7 +1899,7 @@ function divulgacaoPage() {
                 value="${escapeHtml(
                   divulgacaoDraft.previousPrice
                 )}"
-                placeholder="459,00"
+                placeholder="0,00"
               />
 
             </label>
@@ -1949,17 +1911,16 @@ function divulgacaoPage() {
             <label>
 
               <span>
-                Número de parcelas
+                Parcelas
               </span>
 
               <input
                 type="number"
                 name="installments"
-                min="0"
+                min="1"
                 value="${escapeHtml(
                   divulgacaoDraft.installments
                 )}"
-                placeholder="10"
               />
 
             </label>
@@ -1967,7 +1928,7 @@ function divulgacaoPage() {
             <label>
 
               <span>
-                Juros
+                Tipo
               </span>
 
               <select
@@ -2007,44 +1968,40 @@ function divulgacaoPage() {
           <label>
 
             <span>
-              Link original do produto
+              Idioma
             </span>
 
-            <input
-              type="url"
-              name="productUrl"
-              value="${escapeHtml(
-                divulgacaoDraft.productUrl
-              )}"
-              placeholder="https://..."
-            />
+            <select name="language">
 
-          </label>
+              <option
+                value="pt"
+                ${
+                  divulgacaoDraft.language === 'pt'
+                    ? 'selected'
+                    : ''
+                }
+              >
+                Português
+              </option>
 
-          <label>
-
-            <span>
-              Link de afiliado
-            </span>
-
-            <input
-              type="url"
-              name="affiliateUrl"
-              value="${escapeHtml(
-                divulgacaoDraft.affiliateUrl
-              )}"
-              placeholder="https://..."
-            />
+            </select>
 
           </label>
 
           <div class="form-actions">
 
             <button
-              class="primary"
               type="submit"
+              class="primary"
             >
               Gerar prévia
+            </button>
+
+            <button
+              type="button"
+              data-clear-divulgacao
+            >
+              Limpar
             </button>
 
           </div>
@@ -2053,31 +2010,57 @@ function divulgacaoPage() {
 
       </section>
 
-      <section
-        class="promotion-preview-section"
-      >
+      <section class="preview-card">
 
-        <div class="section-title">
+        <div class="preview-header">
 
           <div>
 
-            <h2>
-              Prévia da divulgação
-            </h2>
-
-            <p>
-              Visualização da mensagem promocional.
+            <p class="eyebrow">
+              PRÉVIA
             </p>
+
+            <h2>
+              Mensagem de divulgação
+            </h2>
 
           </div>
 
+          ${
+            divulgacaoPreview
+              ? `
+                  <button
+                    data-copy-divulgacao
+                  >
+                    Copiar
+                  </button>
+                `
+              : ''
+          }
+
         </div>
 
-        <div
-          class="promotion-preview"
-          data-promotion-preview
-        >
-          ${previewHtml}
+        <div id="promotion-preview">
+
+          ${
+            divulgacaoPreview
+              ? renderPromotionPreview()
+              : `
+                  <div class="empty-preview">
+
+                    <span>
+                      ✨
+                    </span>
+
+                    <p>
+                      Preencha os dados da oferta e clique
+                      em “Gerar prévia”.
+                    </p>
+
+                  </div>
+                `
+          }
+
         </div>
 
       </section>
@@ -2086,76 +2069,85 @@ function divulgacaoPage() {
   `
 }
 
-function updateDivulgacaoDraft(
-  form
-) {
+function updateDivulgacaoDraft(form) {
   const data =
     new FormData(form)
 
   divulgacaoDraft = {
-    platform:
-      data.get('platform') ||
-      'mercadolivre',
-
-    productUrl:
-      String(
-        data.get('productUrl') || ''
-      ).trim(),
-
-    affiliateUrl:
-      String(
-        data.get('affiliateUrl') || ''
-      ).trim(),
+    ...divulgacaoDraft,
 
     productName:
       String(
         data.get('productName') || ''
-      ).trim(),
+      ),
+
+    description:
+      String(
+        data.get('description') || ''
+      ),
+
+    productUrl:
+      String(
+        data.get('productUrl') || ''
+      ),
+
+    affiliateUrl:
+      String(
+        data.get('affiliateUrl') || ''
+      ),
 
     price:
       String(
         data.get('price') || ''
-      ).trim(),
+      ),
 
     previousPrice:
       String(
         data.get('previousPrice') || ''
-      ).trim(),
+      ),
 
     installments:
       String(
         data.get('installments') || ''
-      ).trim(),
+      ),
 
     installmentInterest:
-      data.get(
-        'installmentInterest'
-      ) ||
-      'no-interest',
+      String(
+        data.get(
+          'installmentInterest'
+        ) || 'no-interest'
+      ),
 
     language:
-      data.get('language') ||
-      'pt'
+      String(
+        data.get('language') || 'pt'
+      )
   }
 }
 
-function generatePromotionText(
-  draft
-) {
-  const productName =
-    String(
-      draft.productName || ''
+function generatePromotionText() {
+  const name =
+    divulgacaoDraft.productName.trim()
+
+  const description =
+    (
+      divulgacaoDraft.description || ''
     ).trim()
 
   const price =
     parseMoney(
-      draft.price
+      divulgacaoDraft.price
     )
 
   const previousPrice =
     parseMoney(
-      draft.previousPrice
+      divulgacaoDraft.previousPrice
     )
+
+  const installments =
+    Number(
+      divulgacaoDraft.installments
+    ) || 0
 
   const discount =
     calculateDiscount(
@@ -2163,296 +2155,288 @@ function generatePromotionText(
       previousPrice
     )
 
-  const economy =
-    previousPrice > price
-      ? previousPrice - price
-      : 0
+  const link =
+    divulgacaoDraft.affiliateUrl.trim() ||
+    divulgacaoDraft.productUrl.trim()
 
-  const installments =
-    Number(
-      draft.installments
-    ) || 0
-
-  const installmentValue =
-    installments > 0 && price > 0
-      ? price / installments
-      : 0
-
-  const url =
-    String(
-      draft.affiliateUrl ||
-      draft.productUrl ||
-      ''
-    ).trim()
-
-  if (
-    draft.language === 'en'
-  ) {
-    const lines = [
-      '🔥 **DEAL FOUND!**',
-      '',
-      `🛍️ **${productName}**`
-    ]
-
-    if (
-      previousPrice > price
-    ) {
-      lines.push(
-        `📉 From ~~${formatMoney(previousPrice)}~~`
-      )
-    }
-
-    lines.push(
-      `💰 **Now ${formatMoney(price)}**${
-        discount
-          ? ` — **${discount}% OFF**`
-          : ''
-      }`
-    )
-
-    if (economy > 0) {
-      lines.push(
-        `💸 Save **${formatMoney(economy)}**`
-      )
-    }
-
-    if (
-      installments > 0
-    ) {
-      lines.push(
-        `💳 ${installments}x of approximately ${formatMoney(
-          installmentValue
-        )}${
-          draft.installmentInterest ===
-          'no-interest'
-            ? ' interest-free'
-            : ''
-        }`
-      )
-    }
-
-    if (url) {
-      lines.push(
-        '',
-        '👉 Check out this deal:',
-        url
-      )
-    }
-
-    return lines.join('\n')
-  }
-
-  const lines = [
-    '🔥 **OFERTA ENCONTRADA!**',
-    '',
-    `🛍️ **${productName}**`
-  ]
-
-  if (
-    previousPrice > price
-  ) {
-    lines.push(
-      `📉 De ~~${formatMoney(
-        previousPrice
-      )}~~`
-    )
-  }
+  const lines = []
 
   lines.push(
-    `Por 💰 **${formatMoney(
-      price
-    )}**${
-      discount
-        ? ` — **${discount}% OFF**`
-        : ''
-    }`
+    '🔥 OFERTA ENCONTRADA!'
   )
 
-  if (economy > 0) {
+  lines.push('')
+
+  if (name) {
     lines.push(
-      `💸 Economia de **${formatMoney(
-        economy
-      )}**`
+      `🛍️ ${name}`
+    )
+  }
+
+  if (description) {
+    lines.push(
+      description
+    )
+  }
+
+  lines.push('')
+
+  if (
+    previousPrice > 0 &&
+    previousPrice > price
+  ) {
+    lines.push(
+      `❌ De: ${formatMoney(
+        previousPrice
+      )}`
+    )
+  }
+
+  if (price > 0) {
+    lines.push(
+      `🔥 Por: ${formatMoney(
+        price
+      )}`
+    )
+  }
+
+  if (discount > 0) {
+    lines.push(
+      `💥 ${discount}% OFF`
     )
   }
 
   if (
-    installments > 0
+    installments > 1 &&
+    price > 0
   ) {
-    lines.push(
-      `💳 Em até ${installments}x de aproximadamente ${formatMoney(
+    const installmentValue =
+      price / installments
+
+    let installmentText =
+      `💳 ${installments}x de ${formatMoney(
         installmentValue
-      )}${
-        draft.installmentInterest ===
-        'no-interest'
-          ? ' sem juros'
-          : ''
-      }`
+      )}`
+
+    if (
+      divulgacaoDraft.installmentInterest ===
+      'no-interest'
+    ) {
+      installmentText +=
+        ' sem juros'
+    }
+
+    lines.push(
+      installmentText
     )
   }
 
-  if (url) {
+  if (link) {
+    lines.push('')
     lines.push(
-      '',
-      '👉 Aproveite a oferta:',
-      url
+      '👉 Aproveite a oferta:'
     )
+    lines.push(link)
   }
 
   return lines.join('\n')
 }
 
-function renderPromotionPreview(
-  text
-) {
-  if (!text) {
+function renderPromotionPreview() {
+  if (!divulgacaoPreview) {
     return ''
   }
 
-  const lines =
-    String(text).split('\n')
-
-  const html = lines
-    .map((line) => {
-      const escaped =
-        escapeHtml(line)
-
-      if (!escaped.trim()) {
-        return '<div class="promotion-space"></div>'
-      }
-
-      const formatted =
-        escaped
-          .replace(
-            /\*\*(.*?)\*\*/g,
-            '<strong>$1</strong>'
-          )
-          .replace(
-            /~~(.*?)~~/g,
-            '<del>$1</del>'
-          )
-
-      if (
-        formatted.includes(
-          'OFERTA ENCONTRADA'
-        ) ||
-        formatted.includes(
-          'DEAL FOUND'
-        )
-      ) {
-        return `
-          <div class="promotion-title">
-            ${formatted}
-          </div>
-        `
-      }
-
-      if (
-        formatted.startsWith(
-          '👉 '
-        )
-      ) {
-        return `
-          <div class="promotion-cta">
-            ${formatted}
-          </div>
-        `
-      }
-
-      if (
-        /^https?:\/\//i.test(
-          line.trim()
-        )
-      ) {
-        const safeUrl =
-          escapeHtml(
-            line.trim()
-          )
-
-        return `
-          <div class="promotion-link">
-            <a
-              href="${safeUrl}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              ${safeUrl}
-            </a>
-          </div>
-        `
-      }
-
-      if (
-        formatted.startsWith(
-          'Por 💰'
-        ) ||
-        formatted.startsWith(
-          '💰 '
-        )
-      ) {
-        return `
-          <div class="promotion-price">
-            ${formatted}
-          </div>
-        `
-      }
-
-      if (
-        formatted.startsWith(
-          '📉 '
-        )
-      ) {
-        return `
-          <div class="promotion-old-price">
-            ${formatted}
-          </div>
-        `
-      }
-
-      return `
-        <div class="promotion-line">
-          ${formatted}
-        </div>
-      `
-    })
-    .join('')
-
   return `
-    <article
-      class="promotion-card"
-    >
-
-      <div
-        class="promotion-body"
-      >
-        ${html}
-      </div>
-
-      <div
-        class="promotion-actions"
-      >
-
-        <button
-          type="button"
-          data-copy-preview
-        >
-          Copiar texto
-        </button>
-
-      </div>
-
-    </article>
+    <pre class="promotion-preview">${escapeHtml(
+      divulgacaoPreview
+    )}</pre>
   `
 }
 
-function sendOfferToDivulgacao(
-  offer
-) {
-  if (!offer) {
-    return
+async function persistOfferInSupabase(offer) {
+  try {
+    const productRepository =
+      developmentCatalogs.products
+
+    const offerRepository =
+      developmentCatalogs.offers
+
+    const linkRepository =
+      developmentCatalogs.affiliateLinks
+
+    const productUrl =
+      offer.productUrl ||
+      ''
+
+    const productName =
+      offer.name ||
+      offer.productName ||
+      'Produto sem nome'
+
+    const products =
+      await productRepository.list()
+
+    let product =
+      products.find(
+        (item) =>
+          item.name === productName
+      )
+
+    if (!product) {
+      product =
+        await productRepository.create({
+          name: productName,
+
+          description:
+            offer.description ||
+            '',
+
+          platform:
+            offer.platform ||
+            'mercadolivre',
+
+          category:
+            offer.category ||
+            ''
+        })
+    } else {
+      product =
+        await productRepository.update(
+          product.id,
+          {
+            name: productName,
+
+            description:
+              offer.description ||
+              product.description ||
+              '',
+
+            platform:
+              offer.platform ||
+              product.platform ||
+              'mercadolivre',
+
+            category:
+              offer.category ||
+              product.category ||
+              ''
+          }
+        )
+    }
+
+    const offers =
+      await offerRepository.list()
+
+    let savedOffer =
+      offers.find(
+        (item) =>
+          String(
+            item.product
+          ) ===
+          String(
+            product.id
+          )
+      )
+
+    const offerData = {
+      product:
+        product.id,
+
+      market:
+        offer.market ||
+        null,
+
+      status:
+        'active'
+    }
+
+    if (savedOffer) {
+      savedOffer =
+        await offerRepository.update(
+          savedOffer.id,
+          offerData
+        )
+    } else {
+      savedOffer =
+        await offerRepository.create(
+          offerData
+        )
+    }
+
+    const links =
+      await linkRepository.list()
+
+    const destination =
+      offer.affiliateUrl ||
+      productUrl ||
+      ''
+
+    let savedLink =
+      links.find(
+        (item) =>
+          String(
+            item.offer
+          ) ===
+          String(
+            savedOffer.id
+          )
+      )
+
+    const linkData = {
+      offer:
+        savedOffer.id,
+
+      platform:
+        offer.platform ||
+        'mercadolivre',
+
+      destination
+    }
+
+    if (savedLink) {
+      savedLink =
+        await linkRepository.update(
+          savedLink.id,
+          linkData
+        )
+    } else {
+      savedLink =
+        await linkRepository.create(
+          linkData
+        )
+    }
+
+    await loadCatalogs()
+
+    return {
+      product,
+      offer: savedOffer,
+      affiliateLink: savedLink
+    }
+
+  } catch (error) {
+    console.error(
+      'Erro ao salvar oferta no Supabase:',
+      error
+    )
+
+    throw error
+  }
+}
+
+async function sendOfferToDivulgacao(offer) {
+  try {
+    await persistOfferInSupabase(
+      offer
+    )
+  } catch (error) {
+    console.error(error)
   }
 
   divulgacaoDraft = {
+    ...divulgacaoDraft,
+
     platform:
       offer.platform ||
       'mercadolivre',
@@ -2463,11 +2447,14 @@ function sendOfferToDivulgacao(
 
     affiliateUrl:
       offer.affiliateUrl ||
-      offer.productUrl ||
       '',
 
     productName:
       offer.name ||
+      '',
+
+    description:
+      offer.description ||
       '',
 
     price:
@@ -2487,113 +2474,145 @@ function sendOfferToDivulgacao(
 
     installmentInterest:
       offer.installmentInterest ||
-      'no-interest',
-
-    language:
-      'pt'
+      'no-interest'
   }
 
   divulgacaoPreview =
-    generatePromotionText(
-      divulgacaoDraft
-    )
+    generatePromotionText()
 
-  page = 'divulgacao'
+  page =
+    'divulgacao'
 
-  render()
+  await render()
 }
 
-function updateBuscaDraft(
-  form
-) {
+function resetDivulgacao() {
+  divulgacaoDraft = {
+    platform: 'mercadolivre',
+    productUrl: '',
+    affiliateUrl: '',
+    productName: '',
+    description: '',
+    price: '',
+    previousPrice: '',
+    installments: '',
+    installmentInterest: 'no-interest',
+    language: 'pt'
+  }
+
+  divulgacaoPreview = ''
+}
+
+function updateBuscaDraft(form) {
   const data =
     new FormData(form)
 
   ofertasBuscaDraft = {
     platform:
-      data.get('platform') ||
-      'mercadolivre',
+      String(
+        data.get('platform') ||
+        'mercadolivre'
+      ),
 
     query:
-      data.get('query') ||
-      '',
+      String(
+        data.get('query') ||
+        ''
+      ),
 
     discount:
-      data.get('discount') ||
-      '0',
+      String(
+        data.get('discount') ||
+        '0'
+      ),
 
     priceMax:
-      data.get('priceMax') ||
-      '',
+      String(
+        data.get('priceMax') ||
+        ''
+      ),
 
     limit:
-      data.get('limit') ||
-      '10'
+      String(
+        data.get('limit') ||
+        '10'
+      )
   }
 }
 async function saveEntry(
-  sectionId,
+  section,
   form,
   entryId = null
 ) {
-  const section =
-    sections.find(
-      (item) =>
-        item.id === sectionId
-    )
-
-  if (!section) {
-    return
-  }
-
   const data =
     new FormData(form)
 
-  const payload = {
+  const entry = {
     name:
       String(
-        data.get('name') || ''
+        data.get('name') ||
+        ''
       ).trim(),
 
     description:
       String(
-        data.get('description') || ''
+        data.get('description') ||
+        ''
       ).trim()
   }
 
-  section.fields.forEach(
-    (field) => {
-      const reference =
-        section.references?.[field]
+  for (
+    const field of section.fields
+  ) {
+    const reference =
+      section.references?.[field]
 
+    if (reference) {
       if (
-        reference?.multiple
+        reference.multiple
       ) {
-        payload[field] =
+        entry[field] =
           data
             .getAll(field)
             .filter(Boolean)
-
-        return
+      } else {
+        entry[field] =
+          String(
+            data.get(field) ||
+            ''
+          )
       }
 
-      payload[field] =
-        String(
-          data.get(field) || ''
-        ).trim()
+      continue
     }
-  )
 
-  if (
-    entryId
-  ) {
+    const fieldValue =
+      data.get(field)
+
+    if (
+      fieldValue !== null &&
+      fieldValue !== undefined &&
+      fieldValue !== ''
+    ) {
+      entry[field] =
+        String(fieldValue)
+    }
+  }
+
+  if (!entry.name) {
+    throw new Error(
+      'Informe o nome do cadastro.'
+    )
+  }
+
+  if (entryId) {
     await section.repository.update(
       entryId,
-      payload
+      entry
     )
   } else {
     await section.repository.create(
-      payload
+      entry
     )
   }
 
@@ -2602,23 +2621,13 @@ async function saveEntry(
   page =
     section.id
 
-  render()
+  await render()
 }
 
 async function removeEntry(
-  sectionId,
-  entryId
+  section,
+  id
 ) {
-  const section =
-    sections.find(
-      (item) =>
-        item.id === sectionId
-    )
-
-  if (!section) {
-    return
-  }
-
   const confirmed =
     window.confirm(
       'Deseja realmente excluir este cadastro?'
@@ -2629,69 +2638,82 @@ async function removeEntry(
   }
 
   await section.repository.remove(
-    entryId
+    id
   )
 
   await loadCatalogs()
 
-  render()
+  await render()
 }
 
-function exportBackup() {
-  const backup = {
-    version: 1,
+async function exportBackup() {
+  try {
+    const backup = {
+      exportedAt:
+        new Date().toISOString(),
 
-    exportedAt:
-      new Date().toISOString(),
+      application:
+        'Mavuri Affiliate Engine',
 
-    catalogs
+      version:
+        '1.0',
+
+      catalogs
+    }
+
+    const content =
+      JSON.stringify(
+        backup,
+        null,
+        2
+      )
+
+    const blob =
+      new Blob(
+        [content],
+        {
+          type:
+            'application/json'
+        }
+      )
+
+    const url =
+      URL.createObjectURL(
+        blob
+      )
+
+    const link =
+      document.createElement('a')
+
+    link.href =
+      url
+
+    link.download =
+      `mavuri-backup-${
+        new Date()
+          .toISOString()
+          .slice(0, 10)
+      }.json`
+
+    document.body.append(
+      link
+    )
+
+    link.click()
+
+    link.remove()
+
+    URL.revokeObjectURL(
+      url
+    )
+
+  } catch (error) {
+    console.error(error)
+
+    window.alert(
+      'Não foi possível exportar o backup.'
+    )
   }
-
-  const blob =
-    new Blob(
-      [
-        JSON.stringify(
-          backup,
-          null,
-          2
-        )
-      ],
-      {
-        type:
-          'application/json'
-      }
-    )
-
-  const url =
-    URL.createObjectURL(
-      blob
-    )
-
-  const link =
-    document.createElement(
-      'a'
-    )
-
-  link.href = url
-
-  link.download =
-    `mavuri-backup-${
-      new Date()
-        .toISOString()
-        .slice(0, 10)
-    }.json`
-
-  document.body.appendChild(
-    link
-  )
-
-  link.click()
-
-  link.remove()
-
-  URL.revokeObjectURL(
-    url
-  )
 }
 
 async function importBackup(
@@ -2701,573 +2723,151 @@ async function importBackup(
     return
   }
 
-  const confirmed =
-    window.confirm(
-      'A importação adicionará os dados do backup ao sistema. Deseja continuar?'
-    )
-
-  if (!confirmed) {
-    return
-  }
-
   try {
-    const text =
+    const content =
       await file.text()
 
     const backup =
-      JSON.parse(
-        text
-      )
-
-    const backupCatalogs =
-      backup.catalogs
+      JSON.parse(content)
 
     if (
-      !backupCatalogs ||
-      typeof backupCatalogs !==
+      !backup ||
+      typeof backup !==
       'object'
     ) {
       throw new Error(
-        'Arquivo de backup inválido.'
+        'Arquivo inválido.'
       )
+    }
+
+    const source =
+      backup.catalogs ||
+      backup
+
+    const confirmed =
+      window.confirm(
+        'Os dados do backup serão adicionados aos cadastros atuais. Deseja continuar?'
+      )
+
+    if (!confirmed) {
+      return
     }
 
     for (
       const section of sections
     ) {
       const entries =
-        backupCatalogs[
+        source[
           section.id
         ]
 
       if (
-        !Array.isArray(
-          entries
-        )
+        !Array.isArray(entries)
       ) {
         continue
       }
 
+      const currentEntries =
+        await section.repository.list()
+
       for (
-        const entry of entries
+        const importedEntry of entries
       ) {
-        const payload = {
+        const {
+          id,
+          created_at,
+          updated_at,
           ...entry
+        } =
+          importedEntry
+
+        const existing =
+          currentEntries.find(
+            (item) =>
+              item.name ===
+              entry.name
+          )
+
+        if (existing) {
+          await section.repository.update(
+            existing.id,
+            entry
+          )
+        } else {
+          await section.repository.create(
+            entry
+          )
         }
-
-        delete payload.id
-        delete payload.created_at
-        delete payload.updated_at
-
-        if (
-          !payload.name
-        ) {
-          continue
-        }
-
-        await section.repository.create(
-          payload
-        )
       }
     }
 
     await loadCatalogs()
 
-    alert(
+    await render()
+
+    window.alert(
       'Backup importado com sucesso.'
     )
 
-    page =
-      'dashboard'
-
-    render()
   } catch (error) {
     console.error(error)
 
-    alert(
-      error?.message ||
-      'Não foi possível importar o backup.'
+    window.alert(
+      `Não foi possível importar o backup: ${
+        error.message ||
+        'arquivo inválido'
+      }`
     )
   }
 }
 
-function bindEvents() {
-  root
-    .querySelectorAll(
-      '[data-page]'
-    )
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          'click',
-          async () => {
-            const nextPage =
-              button.dataset.page
-
-            page =
-              nextPage
-
-            await render()
-          }
-        )
-      }
-    )
-
-  const logoutButton =
-    root.querySelector(
-      '[data-logout]'
-    )
-
+async function copyPromotionText() {
   if (
-    logoutButton
+    !divulgacaoPreview
   ) {
-    logoutButton.addEventListener(
-      'click',
-      async () => {
-        await signOut()
-
-        session = null
-
-        page =
-          'dashboard'
-
-        render()
-      }
-    )
+    return
   }
 
-  const loginForm =
-    root.querySelector(
-      '[data-login]'
+  try {
+    await navigator.clipboard.writeText(
+      divulgacaoPreview
     )
 
-  if (
-    loginForm
-  ) {
-    loginForm.addEventListener(
-      'submit',
-      async (event) => {
-        event.preventDefault()
+    const button =
+      document.querySelector(
+        '[data-copy-divulgacao]'
+      )
 
-        const errorElement =
-          loginForm.querySelector(
-            '.login-error'
-          )
+    if (button) {
+      const originalText =
+        button.textContent
 
-        const submitButton =
-          loginForm.querySelector(
-            'button[type="submit"]'
-          )
+      button.textContent =
+        'Copiado!'
 
-        const data =
-          new FormData(
-            loginForm
-          )
+      setTimeout(
+        () => {
+          button.textContent =
+            originalText
+        },
+        1500
+      )
+    }
 
-        try {
-          if (
-            errorElement
-          ) {
-            errorElement.hidden =
-              true
+  } catch (error) {
+    console.error(error)
 
-            errorElement.textContent =
-              ''
-          }
-
-          submitButton.disabled =
-            true
-
-          submitButton.textContent =
-            'Entrando...'
-
-          await signIn(
-            String(
-              data.get('email')
-            ).trim(),
-
-            String(
-              data.get('password')
-            )
-          )
-        } catch (error) {
-          console.error(error)
-
-          if (
-            errorElement
-          ) {
-            errorElement.hidden =
-              false
-
-            errorElement.textContent =
-              error?.message ||
-              'Não foi possível entrar.'
-          }
-
-          submitButton.disabled =
-            false
-
-          submitButton.textContent =
-            'Entrar'
-        }
-      }
-    )
-  }
-
-  root
-    .querySelectorAll(
-      '[data-add]'
-    )
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          'click',
-          async () => {
-            page =
-              `new:${button.dataset.add}`
-
-            await render()
-          }
-        )
-      }
-    )
-
-  root
-    .querySelectorAll(
-      '[data-edit]'
-    )
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          'click',
-          async () => {
-            const entryId =
-              button.dataset.edit
-
-            const section =
-              sections.find(
-                (item) =>
-                  getEntries(item)
-                    .some(
-                      (entry) =>
-                        String(entry.id) ===
-                        String(entryId)
-                    )
-              )
-
-            if (!section) {
-              return
-            }
-
-            page =
-              `edit:${section.id}:${entryId}`
-
-            await render()
-          }
-        )
-      }
-    )
-
-  root
-    .querySelectorAll(
-      '[data-remove]'
-    )
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          'click',
-          async () => {
-            const entryId =
-              button.dataset.remove
-
-            const section =
-              sections.find(
-                (item) =>
-                  getEntries(item)
-                    .some(
-                      (entry) =>
-                        String(entry.id) ===
-                        String(entryId)
-                    )
-              )
-
-            if (!section) {
-              return
-            }
-
-            await removeEntry(
-              section.id,
-              entryId
-            )
-          }
-        )
-      }
-    )
-
-  root
-    .querySelectorAll(
-      '[data-entry-form]'
-    )
-    .forEach(
-      (form) => {
-        form.addEventListener(
-          'submit',
-          async (event) => {
-            event.preventDefault()
-
-            const submitButton =
-              form.querySelector(
-                'button[type="submit"]'
-              )
-
-            const originalText =
-              submitButton.textContent
-
-            try {
-              submitButton.disabled =
-                true
-
-              submitButton.textContent =
-                'Salvando...'
-
-              await saveEntry(
-                form.dataset.entryForm,
-                form,
-                form.dataset.entryId ||
-                  null
-              )
-            } catch (error) {
-              console.error(error)
-
-              alert(
-                error?.message ||
-                'Não foi possível salvar.'
-              )
-
-              submitButton.disabled =
-                false
-
-              submitButton.textContent =
-                originalText
-            }
-          }
-        )
-      }
-    )
-
-  const searchForm =
-    root.querySelector(
-      '[data-buscar-ofertas]'
-    )
-
-  if (
-    searchForm
-  ) {
-    searchForm.addEventListener(
-      'submit',
-      async (event) => {
-        event.preventDefault()
-
-        updateBuscaDraft(
-          searchForm
-        )
-
-        await searchOffers()
-
-        await render()
-      }
-    )
-  }
-
-  root
-    .querySelectorAll(
-      '[data-gerar-divulgacao]'
-    )
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          'click',
-          () => {
-            const offer =
-              ofertasEncontradas.find(
-                (item) =>
-                  String(item.id) ===
-                  String(
-                    button.dataset
-                      .gerarDivulgacao
-                  )
-              )
-
-            sendOfferToDivulgacao(
-              offer
-            )
-          }
-        )
-      }
-    )
-
-  const divulgacaoForm =
-    root.querySelector(
-      '[data-divulgacao]'
-    )
-
-  if (
-    divulgacaoForm
-  ) {
-    divulgacaoForm.addEventListener(
-      'input',
-      () => {
-        updateDivulgacaoDraft(
-          divulgacaoForm
-        )
-      }
-    )
-
-    divulgacaoForm.addEventListener(
-      'change',
-      () => {
-        updateDivulgacaoDraft(
-          divulgacaoForm
-        )
-      }
-    )
-
-    divulgacaoForm.addEventListener(
-      'submit',
-      (event) => {
-        event.preventDefault()
-
-        updateDivulgacaoDraft(
-          divulgacaoForm
-        )
-
-        divulgacaoPreview =
-          generatePromotionText(
-            divulgacaoDraft
-          )
-
-        const preview =
-          root.querySelector(
-            '[data-promotion-preview]'
-          )
-
-        if (
-          preview
-        ) {
-          preview.innerHTML =
-            renderPromotionPreview(
-              divulgacaoPreview
-            )
-
-          bindEvents()
-        }
-      }
-    )
-  }
-
-  const copyPreviewButton =
-    root.querySelector(
-      '[data-copy-preview]'
-    )
-
-  if (
-    copyPreviewButton
-  ) {
-    copyPreviewButton.addEventListener(
-      'click',
-      async () => {
-        try {
-          await navigator.clipboard.writeText(
-            divulgacaoPreview
-          )
-
-          const originalText =
-            copyPreviewButton.textContent
-
-          copyPreviewButton.textContent =
-            'Copiado!'
-
-          setTimeout(
-            () => {
-              copyPreviewButton.textContent =
-                originalText
-            },
-            1500
-          )
-        } catch (error) {
-          console.error(error)
-
-          alert(
-            'Não foi possível copiar o texto.'
-          )
-        }
-      }
-    )
-  }
-
-  const exportButton =
-    root.querySelector(
-      '[data-export]'
-    )
-
-  if (
-    exportButton
-  ) {
-    exportButton.addEventListener(
-      'click',
-      exportBackup
-    )
-  }
-
-  const importButton =
-    root.querySelector(
-      '[data-import]'
-    )
-
-  const backupFile =
-    root.querySelector(
-      '#backup-file'
-    )
-
-  if (
-    importButton &&
-    backupFile
-  ) {
-    importButton.addEventListener(
-      'click',
-      () => {
-        backupFile.click()
-      }
-    )
-
-    backupFile.addEventListener(
-      'change',
-      async () => {
-        const file =
-          backupFile.files?.[0]
-
-        await importBackup(
-          file
-        )
-
-        backupFile.value =
-          ''
-      }
+    window.alert(
+      'Não foi possível copiar a mensagem.'
     )
   }
 }
 
-function currentContent() {
+function currentPage() {
   if (
     page === 'dashboard'
   ) {
     return dashboard()
-  }
-
-  if (
-    page === 'buscar-ofertas'
-  ) {
-    return buscarOfertasPage()
   }
 
   if (
@@ -3277,77 +2877,9 @@ function currentContent() {
   }
 
   if (
-    page.startsWith(
-      'new:'
-    )
+    page === 'buscar-ofertas'
   ) {
-    const sectionId =
-      page.replace(
-        'new:',
-        ''
-      )
-
-    const section =
-      sections.find(
-        (item) =>
-          item.id ===
-          sectionId
-      )
-
-    if (
-      section
-    ) {
-      return formPage(
-        section
-      )
-    }
-  }
-
-  if (
-    page.startsWith(
-      'edit:'
-    )
-  ) {
-    const [
-      ,
-      sectionId,
-      entryId
-    ] =
-      page.split(':')
-
-    const section =
-      sections.find(
-        (item) =>
-          item.id ===
-          sectionId
-      )
-
-    const entry =
-      section
-        ? getEntries(
-            section
-          ).find(
-            (item) =>
-              String(item.id) ===
-              String(entryId)
-          )
-        : null
-
-    if (
-      section &&
-      entry
-    ) {
-      return formPage(
-        section,
-        entry
-      )
-    }
-
-    page =
-      sectionId ||
-      'dashboard'
-
-    return currentContent()
+    return buscarOfertasPage()
   }
 
   const section =
@@ -3356,16 +2888,11 @@ function currentContent() {
         item.id === page
     )
 
-  if (
-    section
-  ) {
+  if (section) {
     return sectionPage(
       section
     )
   }
-
-  page =
-    'dashboard'
 
   return dashboard()
 }
@@ -3388,21 +2915,40 @@ async function render() {
     !catalogsLoaded
   ) {
     try {
-      root.innerHTML = `
-        <main class="app-loading">
-          Carregando dados...
-        </main>
-      `
-
       await loadCatalogs()
     } catch (error) {
       console.error(error)
 
       root.innerHTML = `
-        <main class="app-loading">
-          Não foi possível carregar os dados.
+        <main class="app-error">
+
+          <section class="form-card">
+
+            <p class="eyebrow">
+              ERRO
+            </p>
+
+            <h1>
+              Não foi possível carregar os dados
+            </h1>
+
+            <p>
+              Verifique a conexão com o Supabase e tente novamente.
+            </p>
+
+            <button
+              class="primary"
+              data-retry-load
+            >
+              Tentar novamente
+            </button>
+
+          </section>
+
         </main>
       `
+
+      bindEvents()
 
       return
     }
@@ -3410,15 +2956,501 @@ async function render() {
 
   root.innerHTML = `
     <div class="app-shell">
+
       ${navigation()}
 
       <main>
-        ${currentContent()}
+        ${currentPage()}
       </main>
+
     </div>
   `
 
   bindEvents()
+}
+
+function bindEvents() {
+  root
+    ?.querySelectorAll(
+      '[data-page]'
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          async () => {
+            page =
+              button.dataset.page
+
+            await render()
+          }
+        )
+      }
+    )
+
+  root
+    ?.querySelector(
+      '[data-logout]'
+    )
+    ?.addEventListener(
+      'click',
+      async () => {
+        try {
+          await signOut()
+        } catch (error) {
+          console.error(error)
+
+          window.alert(
+            'Não foi possível encerrar a sessão.'
+          )
+        }
+      }
+    )
+
+  root
+    ?.querySelector(
+      '[data-login]'
+    )
+    ?.addEventListener(
+      'submit',
+      async (event) => {
+        event.preventDefault()
+
+        const form =
+          event.currentTarget
+
+        const data =
+          new FormData(form)
+
+        const errorElement =
+          form.querySelector(
+            '.login-error'
+          )
+
+        const button =
+          form.querySelector(
+            'button[type="submit"]'
+          )
+
+        if (errorElement) {
+          errorElement.hidden =
+            true
+
+          errorElement.textContent =
+            ''
+        }
+
+        if (button) {
+          button.disabled =
+            true
+
+          button.textContent =
+            'Entrando...'
+        }
+
+        try {
+          await signIn(
+            String(
+              data.get('email') ||
+              ''
+            ),
+            String(
+              data.get('password') ||
+              ''
+            )
+          )
+
+        } catch (error) {
+          console.error(error)
+
+          if (errorElement) {
+            errorElement.hidden =
+              false
+
+            errorElement.textContent =
+              error.message ||
+              'Não foi possível entrar.'
+          }
+
+          if (button) {
+            button.disabled =
+              false
+
+            button.textContent =
+              'Entrar'
+          }
+        }
+      }
+    )
+
+  root
+    ?.querySelectorAll(
+      '[data-add]'
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          async () => {
+            const section =
+              sections.find(
+                (item) =>
+                  item.id ===
+                  button.dataset.add
+              )
+
+            if (!section) {
+              return
+            }
+
+            root.innerHTML = `
+              <div class="app-shell">
+
+                ${navigation()}
+
+                <main>
+                  ${formPage(
+                    section
+                  )}
+                </main>
+
+              </div>
+            `
+
+            bindEvents()
+          }
+        )
+      }
+    )
+
+  root
+    ?.querySelectorAll(
+      '[data-edit]'
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          () => {
+            const section =
+              sections.find(
+                (item) =>
+                  item.id === page
+              )
+
+            if (!section) {
+              return
+            }
+
+            const entry =
+              getEntries(
+                section
+              ).find(
+                (item) =>
+                  String(item.id) ===
+                  String(
+                    button.dataset.edit
+                  )
+              )
+
+            if (!entry) {
+              return
+            }
+
+            root.innerHTML = `
+              <div class="app-shell">
+
+                ${navigation()}
+
+                <main>
+                  ${formPage(
+                    section,
+                    entry
+                  )}
+                </main>
+
+              </div>
+            `
+
+            bindEvents()
+          }
+        )
+      }
+    )
+
+  root
+    ?.querySelectorAll(
+      '[data-remove]'
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          async () => {
+            const section =
+              sections.find(
+                (item) =>
+                  item.id === page
+              )
+
+            if (!section) {
+              return
+            }
+
+            try {
+              await removeEntry(
+                section,
+                button.dataset.remove
+              )
+            } catch (error) {
+              console.error(error)
+
+              window.alert(
+                'Não foi possível excluir o cadastro.'
+              )
+            }
+          }
+        )
+      }
+    )
+
+  root
+    ?.querySelectorAll(
+      '[data-entry-form]'
+    )
+    .forEach(
+      (form) => {
+        form.addEventListener(
+          'submit',
+          async (event) => {
+            event.preventDefault()
+
+            const section =
+              sections.find(
+                (item) =>
+                  item.id ===
+                  form.dataset.entryForm
+              )
+
+            if (!section) {
+              return
+            }
+
+            const button =
+              form.querySelector(
+                'button[type="submit"]'
+              )
+
+            if (button) {
+              button.disabled =
+                true
+            }
+
+            try {
+              await saveEntry(
+                section,
+                form,
+                form.dataset.entryId ||
+                null
+              )
+
+            } catch (error) {
+              console.error(error)
+
+              window.alert(
+                error.message ||
+                'Não foi possível salvar o cadastro.'
+              )
+
+              if (button) {
+                button.disabled =
+                  false
+              }
+            }
+          }
+        )
+      }
+    )
+
+  root
+    ?.querySelector(
+      '[data-buscar-ofertas]'
+    )
+    ?.addEventListener(
+      'submit',
+      async (event) => {
+        event.preventDefault()
+
+        updateBuscaDraft(
+          event.currentTarget
+        )
+
+        await searchOffers()
+
+        await render()
+      }
+    )
+
+  root
+    ?.querySelectorAll(
+      '[data-gerar-divulgacao]'
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          async () => {
+            const offer =
+              ofertasEncontradas.find(
+                (item) =>
+                  String(item.id) ===
+                  String(
+                    button.dataset
+                      .gerarDivulgacao
+                  )
+              )
+
+            if (!offer) {
+              window.alert(
+                'Oferta não encontrada.'
+              )
+
+              return
+            }
+
+            const originalText =
+              button.textContent
+
+            button.disabled =
+              true
+
+            button.textContent =
+              'Salvando...'
+
+            try {
+              await sendOfferToDivulgacao(
+                offer
+              )
+            } catch (error) {
+              console.error(error)
+
+              window.alert(
+                'Não foi possível preparar a divulgação.'
+              )
+
+              button.disabled =
+                false
+
+              button.textContent =
+                originalText
+            }
+          }
+        )
+      }
+    )
+
+  root
+    ?.querySelector(
+      '[data-divulgacao]'
+    )
+    ?.addEventListener(
+      'submit',
+      async (event) => {
+        event.preventDefault()
+
+        updateDivulgacaoDraft(
+          event.currentTarget
+        )
+
+        divulgacaoPreview =
+          generatePromotionText()
+
+        await render()
+      }
+    )
+
+  root
+    ?.querySelector(
+      '[data-clear-divulgacao]'
+    )
+    ?.addEventListener(
+      'click',
+      async () => {
+        resetDivulgacao()
+
+        await render()
+      }
+    )
+
+  root
+    ?.querySelector(
+      '[data-copy-divulgacao]'
+    )
+    ?.addEventListener(
+      'click',
+      copyPromotionText
+    )
+
+  root
+    ?.querySelector(
+      '[data-export]'
+    )
+    ?.addEventListener(
+      'click',
+      exportBackup
+    )
+
+  root
+    ?.querySelector(
+      '[data-import]'
+    )
+    ?.addEventListener(
+      'click',
+      () => {
+        root
+          .querySelector(
+            '#backup-file'
+          )
+          ?.click()
+      }
+    )
+
+  root
+    ?.querySelector(
+      '#backup-file'
+    )
+    ?.addEventListener(
+      'change',
+      async (event) => {
+        const file =
+          event.target.files?.[0]
+
+        if (!file) {
+          return
+        }
+
+        await importBackup(
+          file
+        )
+
+        event.target.value =
+          ''
+      }
+    )
+
+  root
+    ?.querySelector(
+      '[data-retry-load]'
+    )
+    ?.addEventListener(
+      'click',
+      async () => {
+        catalogsLoaded =
+          false
+
+        await render()
+      }
+    )
 }
 
 async function initialize() {
@@ -3426,34 +3458,51 @@ async function initialize() {
     session =
       await getSession()
 
-    onAuthChange(
-      async (nextSession) => {
-        session =
-          nextSession
-
-        if (
-          session &&
-          !catalogsLoaded
-        ) {
-          await loadCatalogs()
-        }
-
-        await render()
-      }
-    )
-
     await render()
+
   } catch (error) {
-    console.error(error)
+    console.error(
+      'Erro ao iniciar aplicação:',
+      error
+    )
 
     if (root) {
       root.innerHTML = `
-        <main class="app-loading">
-          Não foi possível iniciar o Mavuri.
+        <main class="app-error">
+
+          <section class="form-card">
+
+            <h1>
+              Não foi possível iniciar o Mavuri
+            </h1>
+
+            <p>
+              Verifique a configuração da aplicação e tente novamente.
+            </p>
+
+          </section>
+
         </main>
       `
     }
   }
 }
+
+onAuthChange(
+  async (nextSession) => {
+    session =
+      nextSession
+
+    catalogsLoaded =
+      false
+
+    if (!session) {
+      page =
+        'dashboard'
+    }
+
+    await render()
+  }
+)
 
 initialize()
