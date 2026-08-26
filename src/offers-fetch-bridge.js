@@ -27,7 +27,8 @@ window.fetch = async function (input, init) {
     method: 'GET',
     headers: {
       accept: 'application/json',
-      apikey: SUPABASE_PUBLISHABLE_KEY
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+      authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
     },
     cache: 'no-store'
   })
