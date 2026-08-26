@@ -41,12 +41,27 @@ let divulgacaoDraft = {
 let divulgacaoPreview = ''
 
 // --------------------------------------------------
-// BUSCA DE OFERTAS
+// MOTOR DE BUSCA DE OFERTAS
 // --------------------------------------------------
+// A interface nunca consulta diretamente uma plataforma.
+// Ela conversa com um provider. Hoje usamos demo; depois o
+// backend seguro poderá habilitar Mercado Livre e outras APIs.
+const ofertaSource = {
+  mode: 'demo',
 
-// Nesta primeira etapa os resultados são simulados.
-// Depois este ponto será substituído pela integração
-// oficial com o backend/API do Mavuri.
+  providers: {
+    demo: {
+      enabled: true,
+      label: 'Dados demonstrativos'
+    },
+
+    mercadolivre: {
+      enabled: false,
+      label: 'Mercado Livre'
+    }
+  }
+}
+
 let ofertasBuscaDraft = {
   platform: 'mercadolivre',
   query: '',
@@ -55,75 +70,395 @@ let ofertasBuscaDraft = {
   limit: '10'
 }
 
+let ofertasBuscaState = {
+  status: 'idle',
+  error: '',
+  sourceLabel: 'Dados demonstrativos'
+}
+
 let ofertasEncontradas = []
+
+// Contrato interno do Mavuri. Qualquer provider deve ser
+// normalizado para este formato antes de chegar à interface.
+function normalizeOffer(raw = {}) {
+  const price =
+    parseMoney(raw.price)
+
+  const previousPrice =
+    parseMoney(raw.previousPrice)
+
+  return {
+    id: String(
+      raw.id || crypto.randomUUID()
+    ),
+
+    platform:
+      raw.platform ||
+      'mercadolivre',
+
+    name:
+      raw.name ||
+      'Produto sem nome',
+
+    description:
+      raw.description ||
+      '',
+
+    productUrl:
+      raw.productUrl ||
+      raw.permalink ||
+      '',
+
+    affiliateUrl:
+      raw.affiliateUrl ||
+      '',
+
+    price,
+
+    previousPrice,
+
+    installments:
+      Number(raw.installments) ||
+      0,
+
+    installmentInterest:
+      raw.installmentInterest ||
+      'no-interest',
+
+    image:
+      raw.image ||
+      '',
+
+    category:
+      raw.category ||
+      '',
+
+    seller:
+      raw.seller ||
+      raw.store ||
+      '',
+
+    sellerRating:
+      raw.sellerRating ||
+      '',
+
+    capturedAt:
+      raw.capturedAt ||
+      new Date().toISOString()
+  }
+}
 
 const ofertasDemo = [
   {
     id: 'MLB-DEMO-001',
     platform: 'mercadolivre',
-    name: 'Tênis Asics Gel Shogun',
-    description: 'Oferta demonstrativa para validar o fluxo automático.',
-    productUrl: 'https://www.mercadolivre.com.br/',
+
+    name:
+      'Tênis Asics Gel Shogun',
+
+    description:
+      'Oferta demonstrativa para validar o fluxo automático.',
+
+    productUrl:
+      'https://www.mercadolivre.com.br/',
+
     price: 285,
     previousPrice: 459,
+
     installments: 10,
-    installmentInterest: 'no-interest',
-    image: '',
-    category: 'Calçados'
+
+    installmentInterest:
+      'no-interest',
+
+    image:
+      'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80',
+
+    category:
+      'Calçados',
+
+    seller:
+      'Loja oficial demonstrativa'
   },
+
   {
     id: 'MLB-DEMO-002',
     platform: 'mercadolivre',
-    name: 'Smart TV 50 polegadas 4K',
-    description: 'Produto demonstrativo com desconto para testar a seleção.',
-    productUrl: 'https://www.mercadolivre.com.br/',
+
+    name:
+      'Smart TV 50 polegadas 4K',
+
+    description:
+      'Produto demonstrativo com desconto para testar a seleção.',
+
+    productUrl:
+      'https://www.mercadolivre.com.br/',
+
     price: 2199,
     previousPrice: 2999,
+
     installments: 10,
-    installmentInterest: 'no-interest',
-    image: '',
-    category: 'Eletrônicos'
+
+    installmentInterest:
+      'no-interest',
+
+    image:
+      'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=800&q=80',
+
+    category:
+      'Eletrônicos',
+
+    seller:
+      'Eletrônicos demonstrativo'
   },
+
   {
     id: 'MLB-DEMO-003',
     platform: 'mercadolivre',
-    name: 'Fone de Ouvido Bluetooth Premium',
-    description: 'Produto demonstrativo para validar filtros e geração.',
-    productUrl: 'https://www.mercadolivre.com.br/',
+
+    name:
+      'Fone de Ouvido Bluetooth Premium',
+
+    description:
+      'Produto demonstrativo para validar filtros e geração.',
+
+    productUrl:
+      'https://www.mercadolivre.com.br/',
+
     price: 179,
     previousPrice: 299,
+
     installments: 6,
-    installmentInterest: 'no-interest',
-    image: '',
-    category: 'Tecnologia'
+
+    installmentInterest:
+      'no-interest',
+
+    image:
+      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80',
+
+    category:
+      'Tecnologia',
+
+    seller:
+      'Tech demonstrativo'
   },
+
   {
     id: 'MLB-DEMO-004',
     platform: 'mercadolivre',
-    name: 'Air Fryer 5 Litros',
-    description: 'Produto demonstrativo para a primeira versão do motor.',
-    productUrl: 'https://www.mercadolivre.com.br/',
+
+    name:
+      'Air Fryer 5 Litros',
+
+    description:
+      'Produto demonstrativo para a primeira versão do motor.',
+
+    productUrl:
+      'https://www.mercadolivre.com.br/',
+
     price: 349,
     previousPrice: 499,
+
     installments: 8,
-    installmentInterest: 'no-interest',
-    image: '',
-    category: 'Casa'
+
+    installmentInterest:
+      'no-interest',
+
+    image:
+      'https://images.unsplash.com/photo-1648478635091-1b9f64b3b0f1?auto=format&fit=crop&w=800&q=80',
+
+    category:
+      'Casa',
+
+    seller:
+      'Casa demonstrativo'
   },
+
   {
     id: 'MLB-DEMO-005',
     platform: 'mercadolivre',
-    name: 'Notebook 15,6 polegadas',
-    description: 'Oferta demonstrativa com maior valor e desconto.',
-    productUrl: 'https://www.mercadolivre.com.br/',
+
+    name:
+      'Notebook 15,6 polegadas',
+
+    description:
+      'Oferta demonstrativa com maior valor e desconto.',
+
+    productUrl:
+      'https://www.mercadolivre.com.br/',
+
     price: 2899,
     previousPrice: 3799,
+
     installments: 12,
-    installmentInterest: 'with-interest',
-    image: '',
-    category: 'Informática'
+
+    installmentInterest:
+      'with-interest',
+
+    image:
+      'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=80',
+
+    category:
+      'Informática',
+
+    seller:
+      'Informática demonstrativo'
   }
 ]
+
+async function fetchDemoOffers() {
+  // Mantém a mesma interface assíncrona que será usada
+  // posteriormente pelas APIs reais.
+  await new Promise(
+    (resolve) =>
+      setTimeout(
+        resolve,
+        350
+      )
+  )
+
+  return ofertasDemo.map(
+    normalizeOffer
+  )
+}
+
+async function fetchMercadoLivreOffers() {
+  // Nunca coloque token ou segredo aqui.
+  //
+  // A futura integração deve chamar um backend do Mavuri,
+  // que por sua vez conversa com a API oficial.
+  throw new Error(
+    'A integração oficial do Mercado Livre ainda não foi habilitada.'
+  )
+}
+
+async function fetchOffersFromSource() {
+  if (
+    ofertaSource.mode ===
+    'mercadolivre'
+  ) {
+    return fetchMercadoLivreOffers()
+  }
+
+  return fetchDemoOffers()
+}
+
+function filterOffers(offers) {
+  const query =
+    String(
+      ofertasBuscaDraft.query || ''
+    )
+      .trim()
+      .toLowerCase()
+
+  const minimumDiscount =
+    Number(
+      ofertasBuscaDraft.discount
+    ) || 0
+
+  const maximumPrice =
+    Number(
+      ofertasBuscaDraft.priceMax
+    ) || 0
+
+  const limit =
+    Number(
+      ofertasBuscaDraft.limit
+    ) || 10
+
+  return offers
+    .filter((offer) => {
+      if (
+        offer.platform !==
+        ofertasBuscaDraft.platform
+      ) {
+        return false
+      }
+
+      const discount =
+        calculateDiscount(
+          offer.price,
+          offer.previousPrice
+        )
+
+      if (
+        discount <
+        minimumDiscount
+      ) {
+        return false
+      }
+
+      if (
+        maximumPrice > 0 &&
+        offer.price > maximumPrice
+      ) {
+        return false
+      }
+
+      if (!query) {
+        return true
+      }
+
+      const searchable = [
+        offer.name,
+        offer.description,
+        offer.category,
+        offer.seller
+      ]
+        .join(' ')
+        .toLowerCase()
+
+      return searchable.includes(
+        query
+      )
+    })
+    .sort((a, b) =>
+      calculateMavuriScore(b) -
+      calculateMavuriScore(a)
+    )
+    .slice(0, limit)
+}
+
+async function searchOffers() {
+  ofertasBuscaState = {
+    status: 'loading',
+
+    error: '',
+
+    sourceLabel:
+      ofertaSource.providers[
+        ofertaSource.mode
+      ]?.label ||
+      'Fonte de ofertas'
+  }
+
+  await render()
+
+  try {
+    const rawOffers =
+      await fetchOffersFromSource()
+
+    ofertasEncontradas =
+      filterOffers(
+        rawOffers.map(
+          normalizeOffer
+        )
+      )
+
+    ofertasBuscaState.status =
+      'success'
+  } catch (error) {
+    console.error(error)
+
+    ofertasEncontradas = []
+
+    ofertasBuscaState.status =
+      'error'
+
+    ofertasBuscaState.error =
+      error?.message ||
+      'Não foi possível buscar ofertas.'
+  }
+}
 
 const value = (item) =>
   Array.isArray(item)
@@ -152,7 +487,9 @@ function parseMoney(value) {
     return 0
   }
 
-  if (typeof value === 'number') {
+  if (
+    typeof value === 'number'
+  ) {
     return Number.isFinite(value)
       ? value
       : 0
@@ -242,20 +579,25 @@ function calculateMavuriScore(offer) {
 }
 
 async function loadCatalogs() {
-  const results = await Promise.all(
-    sections.map(async (section) => {
-      const entries =
-        await section.repository.list()
+  const results =
+    await Promise.all(
+      sections.map(
+        async (section) => {
+          const entries =
+            await section.repository.list()
 
-      return [
-        section.id,
-        entries
-      ]
-    })
-  )
+          return [
+            section.id,
+            entries
+          ]
+        }
+      )
+    )
 
   catalogs =
-    Object.fromEntries(results)
+    Object.fromEntries(
+      results
+    )
 
   catalogsLoaded = true
 }
@@ -581,787 +923,9 @@ function dashboard() {
     </section>
   `
 }
-
-function buscarOfertasPage() {
-  const hasResults =
-    ofertasEncontradas.length > 0
-
-  return `
-    <header class="page-heading">
-
-      <p class="eyebrow">
-        OPORTUNIDADES
-      </p>
-
-      <h1>
-        🔥 Buscar ofertas
-      </h1>
-
-      <p>
-        Encontre oportunidades e envie os melhores produtos
-        diretamente para a criação da divulgação.
-      </p>
-
-    </header>
-
-    <section class="next-steps">
-
-      <h2>
-        Critérios da busca
-      </h2>
-
-      <p>
-        Nesta primeira versão os resultados são simulados
-        para validarmos o fluxo completo do Mavuri.
-        Depois esta tela será conectada à API oficial.
-      </p>
-
-      <form
-        class="entry-form"
-        data-buscar-ofertas
-      >
-
-        <div class="form-grid">
-
-          <label>
-
-            <span>
-              Plataforma
-            </span>
-
-            <select
-              name="platform"
-            >
-
-              <option
-                value="mercadolivre"
-                ${
-                  ofertasBuscaDraft.platform ===
-                  'mercadolivre'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                Mercado Livre
-              </option>
-
-              <option
-                value="shopee"
-                disabled
-              >
-                Shopee — em breve
-              </option>
-
-              <option
-                value="amazon"
-                disabled
-              >
-                Amazon — em breve
-              </option>
-
-            </select>
-
-          </label>
-
-          <label>
-
-            <span>
-              Buscar produto
-            </span>
-
-            <input
-              name="query"
-              value="${escapeHtml(
-                ofertasBuscaDraft.query
-              )}"
-              placeholder="Ex.: tênis, TV, notebook..."
-            />
-
-          </label>
-
-        </div>
-
-        <div class="form-grid">
-
-          <label>
-
-            <span>
-              Desconto mínimo
-            </span>
-
-            <select name="discount">
-
-              <option
-                value="0"
-                ${
-                  ofertasBuscaDraft.discount ===
-                  '0'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                Qualquer desconto
-              </option>
-
-              <option
-                value="10"
-                ${
-                  ofertasBuscaDraft.discount ===
-                  '10'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                10% ou mais
-              </option>
-
-              <option
-                value="20"
-                ${
-                  ofertasBuscaDraft.discount ===
-                  '20'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                20% ou mais
-              </option>
-
-              <option
-                value="30"
-                ${
-                  ofertasBuscaDraft.discount ===
-                  '30'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                30% ou mais
-              </option>
-
-              <option
-                value="40"
-                ${
-                  ofertasBuscaDraft.discount ===
-                  '40'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                40% ou mais
-              </option>
-
-            </select>
-
-          </label>
-
-          <label>
-
-            <span>
-              Preço máximo
-            </span>
-
-            <input
-              type="number"
-              min="0"
-              name="priceMax"
-              value="${escapeHtml(
-                ofertasBuscaDraft.priceMax
-              )}"
-              placeholder="Ex.: 1000"
-            />
-
-          </label>
-
-        </div>
-
-        <div class="form-grid">
-
-          <label>
-
-            <span>
-              Quantidade máxima
-            </span>
-
-            <select name="limit">
-
-              <option
-                value="5"
-                ${
-                  ofertasBuscaDraft.limit ===
-                  '5'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                5 ofertas
-              </option>
-
-              <option
-                value="10"
-                ${
-                  ofertasBuscaDraft.limit ===
-                  '10'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                10 ofertas
-              </option>
-
-              <option
-                value="20"
-                ${
-                  ofertasBuscaDraft.limit ===
-                  '20'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                20 ofertas
-              </option>
-
-            </select>
-
-          </label>
-
-        </div>
-
-        <div class="form-actions">
-
-          <button
-            class="primary"
-            type="submit"
-          >
-            🔎 Buscar ofertas
-          </button>
-
-        </div>
-
-      </form>
-
-    </section>
-
-    ${
-      hasResults
-        ? `
-          <section class="catalog">
-
-            <div class="section-title">
-
-              <div>
-
-                <h2>
-                  Ofertas encontradas
-                </h2>
-
-                <p>
-                  ${ofertasEncontradas.length}
-                  oportunidade(s) encontradas para os
-                  critérios selecionados.
-                </p>
-
-              </div>
-
-            </div>
-
-            ${ofertasEncontradas.map((offer) => {
-              const discount =
-                calculateDiscount(
-                  offer.price,
-                  offer.previousPrice
-                )
-
-              const savings =
-                parseMoney(
-                  offer.previousPrice
-                ) -
-                parseMoney(
-                  offer.price
-                )
-
-              const score =
-                calculateMavuriScore(
-                  offer
-                )
-
-              return `
-                <article
-                  class="entry"
-                >
-
-                  <div>
-
-                    <p class="eyebrow">
-                      ${escapeHtml(
-                        offer.platform ===
-                        'mercadolivre'
-                          ? 'MERCADO LIVRE'
-                          : offer.platform
-                      )}
-                    </p>
-
-                    <h2>
-                      ${escapeHtml(
-                        offer.name
-                      )}
-                    </h2>
-
-                    <p>
-                      ${escapeHtml(
-                        offer.description
-                      )}
-                    </p>
-
-                  </div>
-
-                  <dl>
-
-                    <div>
-
-                      <dt>
-                        Preço anterior
-                      </dt>
-
-                      <dd>
-                        ${
-                          offer.previousPrice
-                            ? `
-                              <s>
-                                ${formatMoney(
-                                  offer.previousPrice
-                                )}
-                              </s>
-                            `
-                            : '—'
-                        }
-                      </dd>
-
-                    </div>
-
-                    <div>
-
-                      <dt>
-                        Preço atual
-                      </dt>
-
-                      <dd>
-                        <strong>
-                          ${formatMoney(
-                            offer.price
-                          )}
-                        </strong>
-                      </dd>
-
-                    </div>
-
-                    <div>
-
-                      <dt>
-                        Desconto
-                      </dt>
-
-                      <dd>
-                        ${discount}% OFF
-                      </dd>
-
-                    </div>
-
-                    <div>
-
-                      <dt>
-                        Economia
-                      </dt>
-
-                      <dd>
-                        ${
-                          savings > 0
-                            ? formatMoney(
-                                savings
-                              )
-                            : '—'
-                        }
-                      </dd>
-
-                    </div>
-
-                    <div>
-
-                      <dt>
-                        Score Mavuri
-                      </dt>
-
-                      <dd>
-                        ⭐ ${score}/100
-                      </dd>
-
-                    </div>
-
-                  </dl>
-
-                  <div class="entry-actions">
-
-                    <button
-                      class="primary"
-                      data-gerar-divulgacao="${escapeHtml(
-                        offer.id
-                      )}"
-                    >
-                      Gerar divulgação
-                    </button>
-
-                  </div>
-
-                </article>
-              `
-            }).join('')}
-
-          </section>
-        `
-        : `
-          <section class="next-steps">
-
-            <h2>
-              Pronto para buscar
-            </h2>
-
-            <p>
-              Configure os critérios e clique em
-              <strong>Buscar ofertas</strong>.
-            </p>
-
-            <p>
-              Na próxima etapa, estes resultados serão
-              fornecidos pelo motor de integração do Mavuri.
-            </p>
-
-          </section>
-        `
-    }
-  `
-}
-
-function divulgacaoPage() {
-  return `
-    <header class="page-heading">
-
-      <p class="eyebrow">
-        DIVULGAÇÃO
-      </p>
-
-      <h1>
-        Nova divulgação
-      </h1>
-
-      <p>
-        Prepare uma nova oferta utilizando os links oficiais
-        das plataformas de afiliados.
-      </p>
-
-    </header>
-
-    <section class="divulgacao-layout">
-
-      <form
-        class="divulgacao-form"
-        data-divulgacao
-      >
-
-        <label>
-
-          <span>
-            Plataforma
-          </span>
-
-          <select
-            name="platform"
-            required
-          >
-
-            <option
-              value="mercadolivre"
-              ${
-                divulgacaoDraft.platform ===
-                'mercadolivre'
-                  ? 'selected'
-                  : ''
-              }
-            >
-              Mercado Livre
-            </option>
-
-            <option
-              value="shopee"
-              disabled
-            >
-              Shopee — em breve
-            </option>
-
-            <option
-              value="amazon"
-              disabled
-            >
-              Amazon — em breve
-            </option>
-
-            <option
-              value="aliexpress"
-              disabled
-            >
-              AliExpress — em breve
-            </option>
-
-          </select>
-
-        </label>
-
-        <label>
-
-          <span>
-            URL original do produto
-          </span>
-
-          <input
-            type="url"
-            name="productUrl"
-            value="${escapeHtml(
-              divulgacaoDraft.productUrl
-            )}"
-            placeholder="https://produto.mercadolivre.com.br/..."
-          />
-
-        </label>
-
-        <label>
-
-          <span>
-            Link oficial de afiliado
-          </span>
-
-          <input
-            type="url"
-            name="affiliateUrl"
-            value="${escapeHtml(
-              divulgacaoDraft.affiliateUrl
-            )}"
-            placeholder="https://meli.la/..."
-            required
-          />
-
-          <small>
-            Utilize o link gerado oficialmente
-            pela plataforma de afiliados.
-          </small>
-
-        </label>
-
-        <label>
-
-          <span>
-            Nome do produto
-          </span>
-
-          <input
-            name="productName"
-            value="${escapeHtml(
-              divulgacaoDraft.productName
-            )}"
-            placeholder="Ex.: Tênis Asics Gel Shogun"
-            required
-          />
-
-        </label>
-
-        <div class="form-grid">
-
-          <label>
-
-            <span>
-              Preço atual
-            </span>
-
-            <input
-              name="price"
-              value="${escapeHtml(
-                divulgacaoDraft.price
-              )}"
-              placeholder="Ex.: 285"
-            />
-
-          </label>
-
-          <label>
-
-            <span>
-              Preço anterior
-            </span>
-
-            <input
-              name="previousPrice"
-              value="${escapeHtml(
-                divulgacaoDraft.previousPrice
-              )}"
-              placeholder="Ex.: 459"
-            />
-
-          </label>
-
-        </div>
-
-        <div class="form-grid">
-
-          <label>
-
-            <span>
-              Número de parcelas
-            </span>
-
-            <input
-              type="number"
-              name="installments"
-              min="2"
-              value="${escapeHtml(
-                divulgacaoDraft.installments
-              )}"
-              placeholder="Ex.: 10"
-            />
-
-          </label>
-
-          <label>
-
-            <span>
-              Parcelamento
-            </span>
-
-            <select
-              name="installmentInterest"
-            >
-
-              <option
-                value="no-interest"
-                ${
-                  divulgacaoDraft.installmentInterest ===
-                  'no-interest'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                Sem juros
-              </option>
-
-              <option
-                value="with-interest"
-                ${
-                  divulgacaoDraft.installmentInterest ===
-                  'with-interest'
-                    ? 'selected'
-                    : ''
-                }
-              >
-                Com juros
-              </option>
-
-            </select>
-
-          </label>
-
-        </div>
-
-        <label>
-
-          <span>
-            Idioma
-          </span>
-
-          <select name="language">
-
-            <option
-              value="pt"
-              ${
-                divulgacaoDraft.language ===
-                'pt'
-                  ? 'selected'
-                  : ''
-              }
-            >
-              Português
-            </option>
-
-            <option
-              value="en"
-              ${
-                divulgacaoDraft.language ===
-                'en'
-                  ? 'selected'
-                  : ''
-              }
-            >
-              Inglês
-            </option>
-
-            <option
-              value="both"
-              ${
-                divulgacaoDraft.language ===
-                'both'
-                  ? 'selected'
-                  : ''
-              }
-            >
-              Português e Inglês
-            </option>
-
-          </select>
-
-        </label>
-
-        <button
-          class="primary"
-          type="submit"
-        >
-          Gerar prévia
-        </button>
-
-      </form>
-
-      <section
-        class="promotion-preview"
-        data-promotion-preview
-      >
-
-        ${
-  divulgacaoPreview
-    ? renderPromotionPreview(
-        divulgacaoPreview
-      )
-    : `
-      <div class="preview-empty">
-
-        <span>
-          🚀
-        </span>
-
-        <h2>
-          Sua divulgação aparecerá aqui
-        </h2>
-
-        <p>
-          Preencha os dados do produto e gere uma
-          prévia da publicação.
-        </p>
-
-      </div>
-    `
-}
-
-      </section>
-
-    </section>
-  `
-}
 function sectionPage(s) {
-  const entries = getEntries(s)
+  const entries =
+    getEntries(s)
 
   return `
     <header class="page-heading">
@@ -1408,9 +972,7 @@ function sectionPage(s) {
                 <div>
 
                   <h2>
-                    ${escapeHtml(
-                      entry.name
-                    )}
+                    ${escapeHtml(entry.name)}
                   </h2>
 
                   <p>
@@ -1432,7 +994,9 @@ function sectionPage(s) {
 
                       <dd>
                         ${escapeHtml(
-                          value(entry[field])
+                          value(
+                            entry[field]
+                          )
                         )}
                       </dd>
 
@@ -1460,6 +1024,7 @@ function sectionPage(s) {
 
               </article>
             `).join('')
+
           : `
               <div class="empty">
                 Nenhum cadastro nesta área.
@@ -1470,117 +1035,49 @@ function sectionPage(s) {
     </section>
 
     <p class="notice">
-      Os dados são armazenados no Supabase.
+      Os dados ficam armazenados no banco de dados.
+      Utilize o backup antes de fazer alterações
+      importantes.
     </p>
   `
 }
 
-function fieldControl(
-  s,
+function referenceOptions(
+  section,
   field,
-  entry = {}
+  selected
 ) {
   const reference =
-    s.references?.[field]
+    section.references?.[field]
 
-  if (reference) {
-    const referencedSection =
-      sections.find(
-        (section) =>
-          section.id ===
-          reference.section
-      )
-
-    const options =
-      referencedSection
-        ? getEntries(
-            referencedSection
-          )
-        : []
-
-    const selected =
-      reference.multiple
-        ? (
-            Array.isArray(
-              entry[field]
-            )
-              ? entry[field]
-              : String(
-                  entry[field] || ''
-                )
-                  .split(',')
-                  .map(
-                    (item) =>
-                      item.trim()
-                  )
-                  .filter(Boolean)
-          )
-        : entry[field] || ''
-
-    return `
-      <label>
-
-        <span>
-          ${labels[field]}
-        </span>
-
-        <select
-          name="${field}"
-          ${
-            reference.multiple
-              ? 'multiple'
-              : ''
-          }
-        >
-
-          ${
-            reference.multiple
-              ? ''
-              : `
-                  <option value="">
-                    Selecione...
-                  </option>
-                `
-          }
-
-          ${options.map((option) => {
-            const isSelected =
-              reference.multiple
-                ? selected.includes(
-                    option.id
-                  )
-                : selected ===
-                  option.id
-
-            return `
-              <option
-                value="${escapeHtml(
-                  option.id
-                )}"
-                ${
-                  isSelected
-                    ? 'selected'
-                    : ''
-                }
-              >
-                ${escapeHtml(
-                  option.name
-                )}
-              </option>
-            `
-          }).join('')}
-
-        </select>
-
-      </label>
-    `
+  if (!reference) {
+    return ''
   }
 
-  const currentValue =
-    editable(
-      entry,
-      field
+  const referenceSection =
+    sections.find(
+      (item) =>
+        item.id ===
+        reference.section
     )
+
+  if (!referenceSection) {
+    return ''
+  }
+
+  const entries =
+    getEntries(
+      referenceSection
+    )
+
+  const selectedValues =
+    Array.isArray(selected)
+      ? selected.map(String)
+      : [
+          String(
+            selected ?? ''
+          )
+        ]
 
   return `
     <label>
@@ -1589,19 +1086,50 @@ function fieldControl(
         ${labels[field]}
       </span>
 
-      <input
+      <select
         name="${field}"
-        value="${escapeHtml(
-          currentValue
-        )}"
-      />
+        ${
+          reference.multiple
+            ? 'multiple'
+            : ''
+        }
+      >
+
+        ${
+          reference.multiple
+            ? ''
+            : `
+                <option value="">
+                  Selecione
+                </option>
+              `
+        }
+
+        ${entries.map((entry) => `
+          <option
+            value="${escapeHtml(entry.id)}"
+            ${
+              selectedValues.includes(
+                String(entry.id)
+              )
+                ? 'selected'
+                : ''
+            }
+          >
+            ${escapeHtml(
+              entry.name
+            )}
+          </option>
+        `).join('')}
+
+      </select>
 
     </label>
   `
 }
 
 function formPage(
-  s,
+  section,
   entry = null
 ) {
   const isEdit =
@@ -1611,34 +1139,33 @@ function formPage(
     <header class="page-heading">
 
       <p class="eyebrow">
-        ${s.eyebrow}
+        ${section.eyebrow}
       </p>
 
       <h1>
         ${
           isEdit
-            ? `Editar ${s.label}`
-            : `Novo cadastro · ${s.label}`
+            ? `Editar ${section.label}`
+            : `Novo cadastro em ${section.label}`
         }
       </h1>
 
       <p>
         ${
           isEdit
-            ? 'Atualize os dados do cadastro selecionado.'
-            : 'Preencha os dados para criar um novo cadastro.'
+            ? 'Atualize os dados deste cadastro.'
+            : 'Preencha as informações para criar um novo cadastro.'
         }
       </p>
 
     </header>
 
-    <section class="next-steps">
+    <section class="form-card">
 
       <form
-        class="entry-form"
-        data-entry-form="${s.id}"
+        data-entry-form="${section.id}"
         ${
-          isEdit
+          entry
             ? `data-entry-id="${entry.id}"`
             : ''
         }
@@ -1651,6 +1178,7 @@ function formPage(
           </span>
 
           <input
+            type="text"
             name="name"
             required
             value="${escapeHtml(
@@ -1675,19 +1203,48 @@ function formPage(
 
         </label>
 
-        <div class="form-grid">
+        ${section.fields.map((field) => {
+          const reference =
+            section.references?.[field]
 
-          ${s.fields.map((field) =>
-            fieldControl(
-              s,
+          if (reference) {
+            return referenceOptions(
+              section,
               field,
-              entry || {}
+              entry?.[field]
             )
-          ).join('')}
+          }
 
-        </div>
+          return `
+            <label>
+
+              <span>
+                ${labels[field]}
+              </span>
+
+              <input
+                type="text"
+                name="${field}"
+                value="${escapeHtml(
+                  editable(
+                    entry || {},
+                    field
+                  )
+                )}"
+              />
+
+            </label>
+          `
+        }).join('')}
 
         <div class="form-actions">
+
+          <button
+            type="button"
+            data-page="${section.id}"
+          >
+            Cancelar
+          </button>
 
           <button
             class="primary"
@@ -1700,16 +1257,830 @@ function formPage(
             }
           </button>
 
+        </div>
+
+      </form>
+
+    </section>
+  `
+}
+
+function buscarOfertasPage() {
+  const state =
+    ofertasBuscaState.status
+
+  return `
+    <header class="page-heading">
+
+      <p class="eyebrow">
+        OPORTUNIDADES
+      </p>
+
+      <h1>
+        Buscar ofertas
+      </h1>
+
+      <p>
+        Encontre oportunidades, aplique filtros e envie
+        os melhores produtos para a área de divulgação.
+      </p>
+
+    </header>
+
+    <section class="form-card">
+
+      <form
+        data-buscar-ofertas
+      >
+
+        <div class="form-grid">
+
+          <label>
+
+            <span>
+              Plataforma
+            </span>
+
+            <select
+              name="platform"
+            >
+
+              <option
+                value="mercadolivre"
+                ${
+                  ofertasBuscaDraft.platform ===
+                  'mercadolivre'
+                    ? 'selected'
+                    : ''
+                }
+              >
+                Mercado Livre
+              </option>
+
+            </select>
+
+          </label>
+
+          <label>
+
+            <span>
+              Buscar produto
+            </span>
+
+            <input
+              type="text"
+              name="query"
+              value="${escapeHtml(
+                ofertasBuscaDraft.query
+              )}"
+              placeholder="Ex.: tênis, TV, notebook..."
+            />
+
+          </label>
+
+          <label>
+
+            <span>
+              Desconto mínimo
+            </span>
+
+            <input
+              type="number"
+              name="discount"
+              min="0"
+              max="100"
+              value="${escapeHtml(
+                ofertasBuscaDraft.discount
+              )}"
+            />
+
+          </label>
+
+          <label>
+
+            <span>
+              Preço máximo
+            </span>
+
+            <input
+              type="number"
+              name="priceMax"
+              min="0"
+              step="0.01"
+              value="${escapeHtml(
+                ofertasBuscaDraft.priceMax
+              )}"
+              placeholder="Sem limite"
+            />
+
+          </label>
+
+          <label>
+
+            <span>
+              Máximo de resultados
+            </span>
+
+            <select
+              name="limit"
+            >
+
+              ${[5, 10, 20, 50].map((number) => `
+                <option
+                  value="${number}"
+                  ${
+                    Number(
+                      ofertasBuscaDraft.limit
+                    ) === number
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  ${number}
+                </option>
+              `).join('')}
+
+            </select>
+
+          </label>
+
+        </div>
+
+        <div class="form-actions">
+
           <button
-            type="button"
-            data-page="${s.id}"
+            class="primary"
+            type="submit"
+            ${
+              state === 'loading'
+                ? 'disabled'
+                : ''
+            }
           >
-            Cancelar
+            ${
+              state === 'loading'
+                ? 'Buscando ofertas...'
+                : '🔎 Buscar ofertas'
+            }
           </button>
 
         </div>
 
       </form>
+
+    </section>
+
+    ${
+      state === 'idle'
+        ? `
+            <section class="next-steps">
+
+              <h2>
+                Pronto para buscar
+              </h2>
+
+              <p>
+                Os resultados atuais utilizam dados demonstrativos
+                normalizados pelo motor do Mavuri. A mesma tela será
+                utilizada posteriormente com a API oficial.
+              </p>
+
+            </section>
+          `
+        : ''
+    }
+
+    ${
+      state === 'loading'
+        ? `
+            <section class="next-steps">
+
+              <h2>
+                Consultando ofertas
+              </h2>
+
+              <p>
+                Aguarde enquanto o Mavuri consulta
+                ${escapeHtml(
+                  ofertasBuscaState.sourceLabel
+                )}.
+              </p>
+
+            </section>
+          `
+        : ''
+    }
+
+    ${
+      state === 'error'
+        ? `
+            <section class="next-steps">
+
+              <h2>
+                Não foi possível buscar ofertas
+              </h2>
+
+              <p>
+                ${escapeHtml(
+                  ofertasBuscaState.error
+                )}
+              </p>
+
+            </section>
+          `
+        : ''
+    }
+
+    ${
+      state === 'success' &&
+      !ofertasEncontradas.length
+        ? `
+            <section class="next-steps">
+
+              <h2>
+                Nenhuma oferta encontrada
+              </h2>
+
+              <p>
+                Tente diminuir o desconto mínimo, aumentar o preço
+                máximo ou usar outro termo de busca.
+              </p>
+
+            </section>
+          `
+        : ''
+    }
+
+    ${
+      state === 'success' &&
+      ofertasEncontradas.length
+        ? `
+            <section class="offers-results">
+
+              <div class="section-title">
+
+                <div>
+
+                  <h2>
+                    Ofertas encontradas
+                  </h2>
+
+                  <p>
+                    ${ofertasEncontradas.length}
+                    oportunidade(s) encontradas.
+                  </p>
+
+                </div>
+
+                <span class="status-dot">
+                  ${escapeHtml(
+                    ofertasBuscaState.sourceLabel
+                  )}
+                </span>
+
+              </div>
+
+              <div class="offers-grid">
+
+                ${ofertasEncontradas.map(
+                  (offer) =>
+                    offerCard(offer)
+                ).join('')}
+
+              </div>
+
+            </section>
+          `
+        : ''
+    }
+  `
+}
+
+function offerCard(offer) {
+  const discount =
+    calculateDiscount(
+      offer.price,
+      offer.previousPrice
+    )
+
+  const economy =
+    Math.max(
+      0,
+      offer.previousPrice -
+      offer.price
+    )
+
+  const score =
+    calculateMavuriScore(
+      offer
+    )
+
+  return `
+    <article
+      class="offer-card"
+    >
+
+      <div
+        class="offer-image"
+      >
+
+        ${
+          offer.image
+            ? `
+                <img
+                  src="${escapeHtml(
+                    offer.image
+                  )}"
+                  alt="${escapeHtml(
+                    offer.name
+                  )}"
+                  loading="lazy"
+                />
+              `
+            : `
+                <span>
+                  🛍️
+                </span>
+              `
+        }
+
+        <span class="offer-score">
+          Mavuri ${score}
+        </span>
+
+      </div>
+
+      <div
+        class="offer-content"
+      >
+
+        <div
+          class="offer-meta"
+        >
+
+          ${
+            offer.category
+              ? `
+                  <span>
+                    ${escapeHtml(
+                      offer.category
+                    )}
+                  </span>
+                `
+              : ''
+          }
+
+          ${
+            offer.seller
+              ? `
+                  <span>
+                    ${escapeHtml(
+                      offer.seller
+                    )}
+                  </span>
+                `
+              : ''
+          }
+
+        </div>
+
+        <h2>
+          ${escapeHtml(
+            offer.name
+          )}
+        </h2>
+
+        <p>
+          ${escapeHtml(
+            offer.description
+          )}
+        </p>
+
+        <div
+          class="offer-prices"
+        >
+
+          ${
+            offer.previousPrice >
+            offer.price
+              ? `
+                  <span
+                    class="old-price"
+                  >
+                    De
+                    ${formatMoney(
+                      offer.previousPrice
+                    )}
+                  </span>
+                `
+              : ''
+          }
+
+          <strong>
+            ${formatMoney(
+              offer.price
+            )}
+          </strong>
+
+          ${
+            discount
+              ? `
+                  <span
+                    class="discount"
+                  >
+                    ${discount}% OFF
+                  </span>
+                `
+              : ''
+          }
+
+        </div>
+
+        ${
+          economy > 0
+            ? `
+                <p
+                  class="offer-economy"
+                >
+                  Economia de
+                  <strong>
+                    ${formatMoney(
+                      economy
+                    )}
+                  </strong>
+                </p>
+              `
+            : ''
+        }
+
+        ${
+          offer.installments > 0
+            ? `
+                <p
+                  class="offer-installments"
+                >
+                  ${
+                    offer.installments
+                  }x de aproximadamente
+                  ${formatMoney(
+                    offer.price /
+                    offer.installments
+                  )}
+
+                  ${
+                    offer.installmentInterest ===
+                    'no-interest'
+                      ? ' sem juros'
+                      : ''
+                  }
+                </p>
+              `
+            : ''
+        }
+
+        <div
+          class="offer-actions"
+        >
+
+          <button
+            class="primary"
+            data-gerar-divulgacao="${escapeHtml(
+              offer.id
+            )}"
+          >
+            Gerar divulgação
+          </button>
+
+          ${
+            offer.productUrl
+              ? `
+                  <a
+                    href="${escapeHtml(
+                      offer.productUrl
+                    )}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Ver produto
+                  </a>
+                `
+              : ''
+          }
+
+        </div>
+
+      </div>
+
+    </article>
+  `
+}
+function divulgacaoPage() {
+  const previewHtml =
+    divulgacaoPreview
+      ? renderPromotionPreview(
+          divulgacaoPreview
+        )
+      : `
+          <div class="preview-empty">
+
+            <span>
+              🚀
+            </span>
+
+            <h2>
+              Sua divulgação aparecerá aqui
+            </h2>
+
+            <p>
+              Preencha os dados do produto e gere uma
+              prévia da publicação.
+            </p>
+
+          </div>
+        `
+
+  return `
+    <header class="page-heading">
+
+      <p class="eyebrow">
+        DIVULGAÇÃO
+      </p>
+
+      <h1>
+        Nova divulgação
+      </h1>
+
+      <p>
+        Prepare a mensagem promocional e valide a
+        publicação antes de enviar para os canais.
+      </p>
+
+    </header>
+
+    <section class="divulgacao-layout">
+
+      <section class="form-card">
+
+        <form data-divulgacao>
+
+          <div class="form-grid">
+
+            <label>
+
+              <span>
+                Plataforma
+              </span>
+
+              <select name="platform">
+
+                <option
+                  value="mercadolivre"
+                  ${
+                    divulgacaoDraft.platform ===
+                    'mercadolivre'
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  Mercado Livre
+                </option>
+
+              </select>
+
+            </label>
+
+            <label>
+
+              <span>
+                Idioma
+              </span>
+
+              <select name="language">
+
+                <option
+                  value="pt"
+                  ${
+                    divulgacaoDraft.language ===
+                    'pt'
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  Português
+                </option>
+
+                <option
+                  value="en"
+                  ${
+                    divulgacaoDraft.language ===
+                    'en'
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  English
+                </option>
+
+              </select>
+
+            </label>
+
+          </div>
+
+          <label>
+
+            <span>
+              Nome do produto
+            </span>
+
+            <input
+              type="text"
+              name="productName"
+              value="${escapeHtml(
+                divulgacaoDraft.productName
+              )}"
+              placeholder="Ex.: Tênis Asics Gel"
+              required
+            />
+
+          </label>
+
+          <div class="form-grid">
+
+            <label>
+
+              <span>
+                Preço atual
+              </span>
+
+              <input
+                type="text"
+                name="price"
+                value="${escapeHtml(
+                  divulgacaoDraft.price
+                )}"
+                placeholder="285,00"
+                required
+              />
+
+            </label>
+
+            <label>
+
+              <span>
+                Preço anterior
+              </span>
+
+              <input
+                type="text"
+                name="previousPrice"
+                value="${escapeHtml(
+                  divulgacaoDraft.previousPrice
+                )}"
+                placeholder="459,00"
+              />
+
+            </label>
+
+          </div>
+
+          <div class="form-grid">
+
+            <label>
+
+              <span>
+                Número de parcelas
+              </span>
+
+              <input
+                type="number"
+                name="installments"
+                min="0"
+                value="${escapeHtml(
+                  divulgacaoDraft.installments
+                )}"
+                placeholder="10"
+              />
+
+            </label>
+
+            <label>
+
+              <span>
+                Juros
+              </span>
+
+              <select
+                name="installmentInterest"
+              >
+
+                <option
+                  value="no-interest"
+                  ${
+                    divulgacaoDraft.installmentInterest ===
+                    'no-interest'
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  Sem juros
+                </option>
+
+                <option
+                  value="with-interest"
+                  ${
+                    divulgacaoDraft.installmentInterest ===
+                    'with-interest'
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  Com juros
+                </option>
+
+              </select>
+
+            </label>
+
+          </div>
+
+          <label>
+
+            <span>
+              Link original do produto
+            </span>
+
+            <input
+              type="url"
+              name="productUrl"
+              value="${escapeHtml(
+                divulgacaoDraft.productUrl
+              )}"
+              placeholder="https://..."
+            />
+
+          </label>
+
+          <label>
+
+            <span>
+              Link de afiliado
+            </span>
+
+            <input
+              type="url"
+              name="affiliateUrl"
+              value="${escapeHtml(
+                divulgacaoDraft.affiliateUrl
+              )}"
+              placeholder="https://..."
+            />
+
+          </label>
+
+          <div class="form-actions">
+
+            <button
+              class="primary"
+              type="submit"
+            >
+              Gerar prévia
+            </button>
+
+          </div>
+
+        </form>
+
+      </section>
+
+      <section
+        class="promotion-preview-section"
+      >
+
+        <div class="section-title">
+
+          <div>
+
+            <h2>
+              Prévia da divulgação
+            </h2>
+
+            <p>
+              Visualização da mensagem promocional.
+            </p>
+
+          </div>
+
+        </div>
+
+        <div
+          class="promotion-preview"
+          data-promotion-preview
+        >
+          ${previewHtml}
+        </div>
+
+      </section>
 
     </section>
   `
@@ -1727,33 +2098,40 @@ function updateDivulgacaoDraft(
       'mercadolivre',
 
     productUrl:
-      data.get('productUrl') ||
-      '',
+      String(
+        data.get('productUrl') || ''
+      ).trim(),
 
     affiliateUrl:
-      data.get('affiliateUrl') ||
-      '',
+      String(
+        data.get('affiliateUrl') || ''
+      ).trim(),
 
     productName:
-      data.get('productName') ||
-      '',
+      String(
+        data.get('productName') || ''
+      ).trim(),
 
     price:
-      data.get('price') ||
-      '',
+      String(
+        data.get('price') || ''
+      ).trim(),
 
     previousPrice:
-      data.get('previousPrice') ||
-      '',
+      String(
+        data.get('previousPrice') || ''
+      ).trim(),
 
     installments:
-      data.get('installments') ||
-      '',
+      String(
+        data.get('installments') || ''
+      ).trim(),
 
     installmentInterest:
       data.get(
         'installmentInterest'
-      ) || 'no-interest',
+      ) ||
+      'no-interest',
 
     language:
       data.get('language') ||
@@ -1764,7 +2142,7 @@ function updateDivulgacaoDraft(
 function generatePromotionText(
   draft
 ) {
-  const name =
+  const productName =
     String(
       draft.productName || ''
     ).trim()
@@ -1785,7 +2163,7 @@ function generatePromotionText(
       previousPrice
     )
 
-  const savings =
+  const economy =
     previousPrice > price
       ? previousPrice - price
       : 0
@@ -1800,20 +2178,21 @@ function generatePromotionText(
       ? price / installments
       : 0
 
-  const link =
-    draft.affiliateUrl ||
-    draft.productUrl
-
-  const lines = []
+  const url =
+    String(
+      draft.affiliateUrl ||
+      draft.productUrl ||
+      ''
+    ).trim()
 
   if (
     draft.language === 'en'
   ) {
-    lines.push(
+    const lines = [
       '🔥 **DEAL FOUND!**',
       '',
-      `🛍 ${name || 'Product'}`
-    )
+      `🛍️ **${productName}**`
+    ]
 
     if (
       previousPrice > price
@@ -1823,27 +2202,25 @@ function generatePromotionText(
       )
     }
 
-    if (price) {
-      let current =
-        `Now 💰 **${formatMoney(price)}**`
+    lines.push(
+      `💰 **Now ${formatMoney(price)}**${
+        discount
+          ? ` — **${discount}% OFF**`
+          : ''
+      }`
+    )
 
-      if (discount) {
-        current +=
-          ` — **${discount}% OFF**`
-      }
-
-      lines.push(current)
-    }
-
-    if (savings > 0) {
+    if (economy > 0) {
       lines.push(
-        `💸 Save ${formatMoney(savings)}`
+        `💸 Save **${formatMoney(economy)}**`
       )
     }
 
-    if (installments > 1) {
+    if (
+      installments > 0
+    ) {
       lines.push(
-        `💳 ${installments}x of ${formatMoney(
+        `💳 ${installments}x of approximately ${formatMoney(
           installmentValue
         )}${
           draft.installmentInterest ===
@@ -1854,22 +2231,22 @@ function generatePromotionText(
       )
     }
 
-    if (link) {
+    if (url) {
       lines.push(
         '',
-        '👉 Get the deal:',
-        link
+        '👉 Check out this deal:',
+        url
       )
     }
 
     return lines.join('\n')
   }
 
-  lines.push(
+  const lines = [
     '🔥 **OFERTA ENCONTRADA!**',
     '',
-    `🛍 ${name || 'Produto'}`
-  )
+    `🛍️ **${productName}**`
+  ]
 
   if (
     previousPrice > price
@@ -1881,31 +2258,29 @@ function generatePromotionText(
     )
   }
 
-  if (price) {
-    let current =
-      `Por 💰 **${formatMoney(
-        price
-      )}**`
+  lines.push(
+    `Por 💰 **${formatMoney(
+      price
+    )}**${
+      discount
+        ? ` — **${discount}% OFF**`
+        : ''
+    }`
+  )
 
-    if (discount) {
-      current +=
-        ` — **${discount}% OFF**`
-    }
-
-    lines.push(current)
-  }
-
-  if (savings > 0) {
+  if (economy > 0) {
     lines.push(
-      `💸 Economize ${formatMoney(
-        savings
-      )}`
+      `💸 Economia de **${formatMoney(
+        economy
+      )}**`
     )
   }
 
-  if (installments > 1) {
+  if (
+    installments > 0
+  ) {
     lines.push(
-      `💳 ${installments}x de ${formatMoney(
+      `💳 Em até ${installments}x de aproximadamente ${formatMoney(
         installmentValue
       )}${
         draft.installmentInterest ===
@@ -1916,110 +2291,146 @@ function generatePromotionText(
     )
   }
 
-  if (link) {
+  if (url) {
     lines.push(
       '',
       '👉 Aproveite a oferta:',
-      link
+      url
     )
   }
 
-  const portuguese =
-    lines.join('\n')
-
-  if (
-    draft.language === 'both'
-  ) {
-    return `${portuguese}
-
-────────────────
-
-🔥 **DEAL FOUND!**
-
-🛍 ${name || 'Product'}${
-      previousPrice > price
-        ? `
-
-📉 From ~~${formatMoney(
-            previousPrice
-          )}~~`
-        : ''
-    }${
-      price
-        ? `
-
-Now 💰 **${formatMoney(
-            price
-          )}**${
-            discount
-              ? ` — **${discount}% OFF**`
-              : ''
-          }`
-        : ''
-    }${
-      savings > 0
-        ? `
-
-💸 Save ${formatMoney(
-            savings
-          )}`
-        : ''
-    }${
-      installments > 1
-        ? `
-
-💳 ${installments}x of ${formatMoney(
-            installmentValue
-          )}${
-            draft.installmentInterest ===
-            'no-interest'
-              ? ' interest-free'
-              : ''
-          }`
-        : ''
-    }${
-      link
-        ? `
-
-👉 Get the deal:
-${link}`
-        : ''
-    }`
-  }
-
-  return portuguese
+  return lines.join('\n')
 }
 
 function renderPromotionPreview(
   text
 ) {
-  const html =
-    escapeHtml(text)
-      .replaceAll(
-        /\*\*(.*?)\*\*/g,
-        '<strong>$1</strong>'
-      )
-      .replaceAll(
-        /~~(.*?)~~/g,
-        '<s>$1</s>'
-      )
-      .replaceAll(
-        /\n/g,
-        '<br>'
-      )
+  if (!text) {
+    return ''
+  }
+
+  const lines =
+    String(text).split('\n')
+
+  const html = lines
+    .map((line) => {
+      const escaped =
+        escapeHtml(line)
+
+      if (!escaped.trim()) {
+        return '<div class="promotion-space"></div>'
+      }
+
+      const formatted =
+        escaped
+          .replace(
+            /\*\*(.*?)\*\*/g,
+            '<strong>$1</strong>'
+          )
+          .replace(
+            /~~(.*?)~~/g,
+            '<del>$1</del>'
+          )
+
+      if (
+        formatted.includes(
+          'OFERTA ENCONTRADA'
+        ) ||
+        formatted.includes(
+          'DEAL FOUND'
+        )
+      ) {
+        return `
+          <div class="promotion-title">
+            ${formatted}
+          </div>
+        `
+      }
+
+      if (
+        formatted.startsWith(
+          '👉 '
+        )
+      ) {
+        return `
+          <div class="promotion-cta">
+            ${formatted}
+          </div>
+        `
+      }
+
+      if (
+        /^https?:\/\//i.test(
+          line.trim()
+        )
+      ) {
+        const safeUrl =
+          escapeHtml(
+            line.trim()
+          )
+
+        return `
+          <div class="promotion-link">
+            <a
+              href="${safeUrl}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              ${safeUrl}
+            </a>
+          </div>
+        `
+      }
+
+      if (
+        formatted.startsWith(
+          'Por 💰'
+        ) ||
+        formatted.startsWith(
+          '💰 '
+        )
+      ) {
+        return `
+          <div class="promotion-price">
+            ${formatted}
+          </div>
+        `
+      }
+
+      if (
+        formatted.startsWith(
+          '📉 '
+        )
+      ) {
+        return `
+          <div class="promotion-old-price">
+            ${formatted}
+          </div>
+        `
+      }
+
+      return `
+        <div class="promotion-line">
+          ${formatted}
+        </div>
+      `
+    })
+    .join('')
 
   return `
-    <div class="preview-content">
+    <article
+      class="promotion-card"
+    >
 
-      <p class="eyebrow">
-        PRÉVIA DA DIVULGAÇÃO
-      </p>
-
-      <div class="promotion-message">
+      <div
+        class="promotion-body"
+      >
         ${html}
       </div>
 
-      <div class="form-actions">
+      <div
+        class="promotion-actions"
+      >
 
         <button
           type="button"
@@ -2030,86 +2441,8 @@ function renderPromotionPreview(
 
       </div>
 
-    </div>
+    </article>
   `
-}
-function filterDemoOffers() {
-  const query =
-    String(
-      ofertasBuscaDraft.query || ''
-    )
-      .trim()
-      .toLowerCase()
-
-  const minimumDiscount =
-    Number(
-      ofertasBuscaDraft.discount
-    ) || 0
-
-  const maximumPrice =
-    Number(
-      ofertasBuscaDraft.priceMax
-    ) || 0
-
-  const limit =
-    Number(
-      ofertasBuscaDraft.limit
-    ) || 10
-
-  return ofertasDemo
-    .filter((offer) => {
-      if (
-        offer.platform !==
-        ofertasBuscaDraft.platform
-      ) {
-        return false
-      }
-
-      const discount =
-        calculateDiscount(
-          offer.price,
-          offer.previousPrice
-        )
-
-      if (
-        discount <
-        minimumDiscount
-      ) {
-        return false
-      }
-
-      if (
-        maximumPrice > 0 &&
-        offer.price > maximumPrice
-      ) {
-        return false
-      }
-
-      if (query) {
-        const searchable = [
-          offer.name,
-          offer.description,
-          offer.category
-        ]
-          .join(' ')
-          .toLowerCase()
-
-        if (
-          !searchable.includes(query)
-        ) {
-          return false
-        }
-      }
-
-      return true
-    })
-    .sort((a, b) => {
-      return (
-        calculateMavuriScore(b) -
-        calculateMavuriScore(a)
-      )
-    })
-    .slice(0, limit)
 }
 
 function sendOfferToDivulgacao(
@@ -2128,9 +2461,6 @@ function sendOfferToDivulgacao(
       offer.productUrl ||
       '',
 
-    // Por enquanto usamos a URL do produto.
-    // Depois este campo receberá o link oficial
-    // gerado pela integração de afiliados.
     affiliateUrl:
       offer.affiliateUrl ||
       offer.productUrl ||
@@ -2201,13 +2531,11 @@ function updateBuscaDraft(
       '10'
   }
 }
-
-async function handleEntryForm(
-  form
+async function saveEntry(
+  sectionId,
+  form,
+  entryId = null
 ) {
-  const sectionId =
-    form.dataset.entryForm
-
   const section =
     sections.find(
       (item) =>
@@ -2233,97 +2561,89 @@ async function handleEntryForm(
       ).trim()
   }
 
-  for (
-    const field of section.fields
+  section.fields.forEach(
+    (field) => {
+      const reference =
+        section.references?.[field]
+
+      if (
+        reference?.multiple
+      ) {
+        payload[field] =
+          data
+            .getAll(field)
+            .filter(Boolean)
+
+        return
+      }
+
+      payload[field] =
+        String(
+          data.get(field) || ''
+        ).trim()
+    }
+  )
+
+  if (
+    entryId
   ) {
-    const reference =
-      section.references?.[field]
-
-    if (
-      reference?.multiple
-    ) {
-      payload[field] =
-        data.getAll(field)
-    } else {
-      payload[field] =
-        data.get(field) || ''
-    }
-  }
-
-  try {
-    const entryId =
-      form.dataset.entryId
-
-    if (entryId) {
-      await section.repository.update(
-        entryId,
-        payload
-      )
-    } else {
-      await section.repository.create(
-        payload
-      )
-    }
-
-    await loadCatalogs()
-
-    page = section.id
-
-    await render()
-  } catch (error) {
-    console.error(error)
-
-    alert(
-      'Não foi possível salvar o cadastro.'
+    await section.repository.update(
+      entryId,
+      payload
+    )
+  } else {
+    await section.repository.create(
+      payload
     )
   }
+
+  await loadCatalogs()
+
+  page =
+    section.id
+
+  render()
 }
 
-async function handleRemove(
-  section,
+async function removeEntry(
+  sectionId,
   entryId
 ) {
-  const entry =
-    getEntries(section).find(
+  const section =
+    sections.find(
       (item) =>
-        item.id === entryId
+        item.id === sectionId
     )
 
-  const name =
-    entry?.name ||
-    'este cadastro'
+  if (!section) {
+    return
+  }
 
   const confirmed =
     window.confirm(
-      `Deseja realmente excluir "${name}"?`
+      'Deseja realmente excluir este cadastro?'
     )
 
   if (!confirmed) {
     return
   }
 
-  try {
-    await section.repository.remove(
-      entryId
-    )
+  await section.repository.remove(
+    entryId
+  )
 
-    await loadCatalogs()
+  await loadCatalogs()
 
-    await render()
-  } catch (error) {
-    console.error(error)
-
-    alert(
-      'Não foi possível excluir o cadastro.'
-    )
-  }
+  render()
 }
 
 function exportBackup() {
   const backup = {
     version: 1,
+
     exportedAt:
       new Date().toISOString(),
+
     catalogs
   }
 
@@ -2348,14 +2668,18 @@ function exportBackup() {
     )
 
   const link =
-    document.createElement('a')
+    document.createElement(
+      'a'
+    )
 
   link.href = url
 
   link.download =
-    `mavuri-backup-${new Date()
-      .toISOString()
-      .slice(0, 10)}.json`
+    `mavuri-backup-${
+      new Date()
+        .toISOString()
+        .slice(0, 10)
+    }.json`
 
   document.body.appendChild(
     link
@@ -2377,66 +2701,69 @@ async function importBackup(
     return
   }
 
+  const confirmed =
+    window.confirm(
+      'A importação adicionará os dados do backup ao sistema. Deseja continuar?'
+    )
+
+  if (!confirmed) {
+    return
+  }
+
   try {
     const text =
       await file.text()
 
     const backup =
-      JSON.parse(text)
+      JSON.parse(
+        text
+      )
+
+    const backupCatalogs =
+      backup.catalogs
 
     if (
-      !backup ||
-      typeof backup !== 'object' ||
-      !backup.catalogs
+      !backupCatalogs ||
+      typeof backupCatalogs !==
+      'object'
     ) {
       throw new Error(
-        'Arquivo inválido.'
+        'Arquivo de backup inválido.'
       )
-    }
-
-    const confirmed =
-      window.confirm(
-        'Importar este backup poderá substituir os dados atuais. Deseja continuar?'
-      )
-
-    if (!confirmed) {
-      return
     }
 
     for (
       const section of sections
     ) {
       const entries =
-        backup.catalogs[
+        backupCatalogs[
           section.id
         ]
 
       if (
-        !Array.isArray(entries)
+        !Array.isArray(
+          entries
+        )
       ) {
         continue
-      }
-
-      const currentEntries =
-        await section.repository.list()
-
-      for (
-        const current of currentEntries
-      ) {
-        await section.repository.remove(
-          current.id
-        )
       }
 
       for (
         const entry of entries
       ) {
-        const {
-          id,
-          created_at,
-          updated_at,
-          ...payload
-        } = entry
+        const payload = {
+          ...entry
+        }
+
+        delete payload.id
+        delete payload.created_at
+        delete payload.updated_at
+
+        if (
+          !payload.name
+        ) {
+          continue
+        }
 
         await section.repository.create(
           payload
@@ -2450,111 +2777,73 @@ async function importBackup(
       'Backup importado com sucesso.'
     )
 
-    page = 'dashboard'
+    page =
+      'dashboard'
 
-    await render()
+    render()
   } catch (error) {
     console.error(error)
 
     alert(
-      'Não foi possível importar este backup. Verifique se o arquivo é um backup válido do Mavuri.'
+      error?.message ||
+      'Não foi possível importar o backup.'
     )
   }
 }
-function bind() {
-  root.querySelectorAll(
-    '[data-page]'
-  ).forEach((button) => {
-    button.addEventListener(
-      'click',
-      async () => {
-        const form =
-          root.querySelector(
-            '[data-divulgacao]'
-          )
 
-        if (form) {
-          updateDivulgacaoDraft(
-            form
-          )
-        }
-
-        page =
-          button.dataset.page
-
-        await render()
-      }
+function bindEvents() {
+  root
+    .querySelectorAll(
+      '[data-page]'
     )
-  })
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          async () => {
+            const nextPage =
+              button.dataset.page
 
-  root.querySelectorAll(
-    '[data-add]'
-  ).forEach((button) => {
-    button.addEventListener(
-      'click',
-      async () => {
-        page =
-          `add:${button.dataset.add}`
+            page =
+              nextPage
 
-        await render()
-      }
-    )
-  })
-
-  root.querySelectorAll(
-    '[data-edit]'
-  ).forEach((button) => {
-    button.addEventListener(
-      'click',
-      async () => {
-        const section =
-          sections.find(
-            (item) =>
-              item.id === page
-          )
-
-        if (!section) {
-          return
-        }
-
-        page =
-          `edit:${section.id}:${button.dataset.edit}`
-
-        await render()
-      }
-    )
-  })
-
-  root.querySelectorAll(
-    '[data-remove]'
-  ).forEach((button) => {
-    button.addEventListener(
-      'click',
-      async () => {
-        const section =
-          sections.find(
-            (item) =>
-              item.id === page
-          )
-
-        if (!section) {
-          return
-        }
-
-        await handleRemove(
-          section,
-          button.dataset.remove
+            await render()
+          }
         )
       }
     )
-  })
+
+  const logoutButton =
+    root.querySelector(
+      '[data-logout]'
+    )
+
+  if (
+    logoutButton
+  ) {
+    logoutButton.addEventListener(
+      'click',
+      async () => {
+        await signOut()
+
+        session = null
+
+        page =
+          'dashboard'
+
+        render()
+      }
+    )
+  }
 
   const loginForm =
     root.querySelector(
       '[data-login]'
     )
 
-  if (loginForm) {
+  if (
+    loginForm
+  ) {
     loginForm.addEventListener(
       'submit',
       async (event) => {
@@ -2565,7 +2854,7 @@ function bind() {
             '.login-error'
           )
 
-        const button =
+        const submitButton =
           loginForm.querySelector(
             'button[type="submit"]'
           )
@@ -2575,69 +2864,272 @@ function bind() {
             loginForm
           )
 
-        errorElement.hidden =
-          true
-
-        button.disabled =
-          true
-
         try {
+          if (
+            errorElement
+          ) {
+            errorElement.hidden =
+              true
+
+            errorElement.textContent =
+              ''
+          }
+
+          submitButton.disabled =
+            true
+
+          submitButton.textContent =
+            'Entrando...'
+
           await signIn(
-            data.get('email'),
-            data.get('password')
+            String(
+              data.get('email')
+            ).trim(),
+
+            String(
+              data.get('password')
+            )
           )
         } catch (error) {
           console.error(error)
 
-          errorElement.textContent =
-            'Não foi possível entrar. Verifique seu e-mail e senha.'
+          if (
+            errorElement
+          ) {
+            errorElement.hidden =
+              false
 
-          errorElement.hidden =
+            errorElement.textContent =
+              error?.message ||
+              'Não foi possível entrar.'
+          }
+
+          submitButton.disabled =
             false
-        } finally {
-          button.disabled =
-            false
+
+          submitButton.textContent =
+            'Entrar'
         }
       }
     )
-
-    return
   }
 
-  const logoutButton =
-    root.querySelector(
-      '[data-logout]'
+  root
+    .querySelectorAll(
+      '[data-add]'
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          async () => {
+            page =
+              `new:${button.dataset.add}`
+
+            await render()
+          }
+        )
+      }
     )
 
-  if (logoutButton) {
-    logoutButton.addEventListener(
-      'click',
-      async () => {
-        await signOut()
+  root
+    .querySelectorAll(
+      '[data-edit]'
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          async () => {
+            const entryId =
+              button.dataset.edit
+
+            const section =
+              sections.find(
+                (item) =>
+                  getEntries(item)
+                    .some(
+                      (entry) =>
+                        String(entry.id) ===
+                        String(entryId)
+                    )
+              )
+
+            if (!section) {
+              return
+            }
+
+            page =
+              `edit:${section.id}:${entryId}`
+
+            await render()
+          }
+        )
+      }
+    )
+
+  root
+    .querySelectorAll(
+      '[data-remove]'
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          async () => {
+            const entryId =
+              button.dataset.remove
+
+            const section =
+              sections.find(
+                (item) =>
+                  getEntries(item)
+                    .some(
+                      (entry) =>
+                        String(entry.id) ===
+                        String(entryId)
+                    )
+              )
+
+            if (!section) {
+              return
+            }
+
+            await removeEntry(
+              section.id,
+              entryId
+            )
+          }
+        )
+      }
+    )
+
+  root
+    .querySelectorAll(
+      '[data-entry-form]'
+    )
+    .forEach(
+      (form) => {
+        form.addEventListener(
+          'submit',
+          async (event) => {
+            event.preventDefault()
+
+            const submitButton =
+              form.querySelector(
+                'button[type="submit"]'
+              )
+
+            const originalText =
+              submitButton.textContent
+
+            try {
+              submitButton.disabled =
+                true
+
+              submitButton.textContent =
+                'Salvando...'
+
+              await saveEntry(
+                form.dataset.entryForm,
+                form,
+                form.dataset.entryId ||
+                  null
+              )
+            } catch (error) {
+              console.error(error)
+
+              alert(
+                error?.message ||
+                'Não foi possível salvar.'
+              )
+
+              submitButton.disabled =
+                false
+
+              submitButton.textContent =
+                originalText
+            }
+          }
+        )
+      }
+    )
+
+  const searchForm =
+    root.querySelector(
+      '[data-buscar-ofertas]'
+    )
+
+  if (
+    searchForm
+  ) {
+    searchForm.addEventListener(
+      'submit',
+      async (event) => {
+        event.preventDefault()
+
+        updateBuscaDraft(
+          searchForm
+        )
+
+        await searchOffers()
+
+        await render()
       }
     )
   }
+
+  root
+    .querySelectorAll(
+      '[data-gerar-divulgacao]'
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          () => {
+            const offer =
+              ofertasEncontradas.find(
+                (item) =>
+                  String(item.id) ===
+                  String(
+                    button.dataset
+                      .gerarDivulgacao
+                  )
+              )
+
+            sendOfferToDivulgacao(
+              offer
+            )
+          }
+        )
+      }
+    )
 
   const divulgacaoForm =
     root.querySelector(
       '[data-divulgacao]'
     )
 
-  if (divulgacaoForm) {
-    const saveDraft = () => {
-      updateDivulgacaoDraft(
-        divulgacaoForm
-      )
-    }
-
+  if (
+    divulgacaoForm
+  ) {
     divulgacaoForm.addEventListener(
       'input',
-      saveDraft
+      () => {
+        updateDivulgacaoDraft(
+          divulgacaoForm
+        )
+      }
     )
 
     divulgacaoForm.addEventListener(
       'change',
-      saveDraft
+      () => {
+        updateDivulgacaoDraft(
+          divulgacaoForm
+        )
+      }
     )
 
     divulgacaoForm.addEventListener(
@@ -2659,84 +3151,28 @@ function bind() {
             '[data-promotion-preview]'
           )
 
-        if (preview) {
+        if (
+          preview
+        ) {
           preview.innerHTML =
             renderPromotionPreview(
               divulgacaoPreview
             )
+
+          bindEvents()
         }
-
-        bind()
       }
     )
   }
-
-  const buscarOfertasForm =
-    root.querySelector(
-      '[data-buscar-ofertas]'
-    )
-
-  if (buscarOfertasForm) {
-    const saveBuscaDraft = () => {
-      updateBuscaDraft(
-        buscarOfertasForm
-      )
-    }
-
-    buscarOfertasForm.addEventListener(
-      'input',
-      saveBuscaDraft
-    )
-
-    buscarOfertasForm.addEventListener(
-      'change',
-      saveBuscaDraft
-    )
-
-    buscarOfertasForm.addEventListener(
-      'submit',
-      async (event) => {
-        event.preventDefault()
-
-        updateBuscaDraft(
-          buscarOfertasForm
-        )
-
-        ofertasEncontradas =
-          filterDemoOffers()
-
-        await render()
-      }
-    )
-  }
-
-  root.querySelectorAll(
-    '[data-gerar-divulgacao]'
-  ).forEach((button) => {
-    button.addEventListener(
-      'click',
-      () => {
-        const offer =
-          ofertasEncontradas.find(
-            (item) =>
-              item.id ===
-              button.dataset
-                .gerarDivulgacao
-          )
-
-        sendOfferToDivulgacao(
-          offer
-        )
-      }
-    )
-  })
 
   const copyPreviewButton =
     root.querySelector(
       '[data-copy-preview]'
     )
 
-  if (copyPreviewButton) {
+  if (
+    copyPreviewButton
+  ) {
     copyPreviewButton.addEventListener(
       'click',
       async () => {
@@ -2749,47 +3185,34 @@ function bind() {
             copyPreviewButton.textContent
 
           copyPreviewButton.textContent =
-            '✓ Copiado'
+            'Copiado!'
 
           setTimeout(
             () => {
               copyPreviewButton.textContent =
                 originalText
             },
-            2000
+            1500
           )
         } catch (error) {
           console.error(error)
 
           alert(
-            'Não foi possível copiar o texto automaticamente.'
+            'Não foi possível copiar o texto.'
           )
         }
       }
     )
   }
 
-  root.querySelectorAll(
-    '[data-entry-form]'
-  ).forEach((form) => {
-    form.addEventListener(
-      'submit',
-      async (event) => {
-        event.preventDefault()
-
-        await handleEntryForm(
-          form
-        )
-      }
-    )
-  })
-
   const exportButton =
     root.querySelector(
       '[data-export]'
     )
 
-  if (exportButton) {
+  if (
+    exportButton
+  ) {
     exportButton.addEventListener(
       'click',
       exportBackup
@@ -2801,161 +3224,201 @@ function bind() {
       '[data-import]'
     )
 
-  const backupInput =
+  const backupFile =
     root.querySelector(
       '#backup-file'
     )
 
   if (
     importButton &&
-    backupInput
+    backupFile
   ) {
     importButton.addEventListener(
       'click',
       () => {
-        backupInput.click()
+        backupFile.click()
       }
     )
 
-    backupInput.addEventListener(
+    backupFile.addEventListener(
       'change',
       async () => {
         const file =
-          backupInput.files?.[0]
+          backupFile.files?.[0]
 
         await importBackup(
           file
         )
 
-        backupInput.value =
+        backupFile.value =
           ''
       }
     )
   }
 }
 
+function currentContent() {
+  if (
+    page === 'dashboard'
+  ) {
+    return dashboard()
+  }
+
+  if (
+    page === 'buscar-ofertas'
+  ) {
+    return buscarOfertasPage()
+  }
+
+  if (
+    page === 'divulgacao'
+  ) {
+    return divulgacaoPage()
+  }
+
+  if (
+    page.startsWith(
+      'new:'
+    )
+  ) {
+    const sectionId =
+      page.replace(
+        'new:',
+        ''
+      )
+
+    const section =
+      sections.find(
+        (item) =>
+          item.id ===
+          sectionId
+      )
+
+    if (
+      section
+    ) {
+      return formPage(
+        section
+      )
+    }
+  }
+
+  if (
+    page.startsWith(
+      'edit:'
+    )
+  ) {
+    const [
+      ,
+      sectionId,
+      entryId
+    ] =
+      page.split(':')
+
+    const section =
+      sections.find(
+        (item) =>
+          item.id ===
+          sectionId
+      )
+
+    const entry =
+      section
+        ? getEntries(
+            section
+          ).find(
+            (item) =>
+              String(item.id) ===
+              String(entryId)
+          )
+        : null
+
+    if (
+      section &&
+      entry
+    ) {
+      return formPage(
+        section,
+        entry
+      )
+    }
+
+    page =
+      sectionId ||
+      'dashboard'
+
+    return currentContent()
+  }
+
+  const section =
+    sections.find(
+      (item) =>
+        item.id === page
+    )
+
+  if (
+    section
+  ) {
+    return sectionPage(
+      section
+    )
+  }
+
+  page =
+    'dashboard'
+
+  return dashboard()
+}
+
 async function render() {
+  if (!root) {
+    return
+  }
+
   if (!session) {
     root.innerHTML =
       loginPage()
 
-    bind()
+    bindEvents()
 
     return
   }
 
-  if (!catalogsLoaded) {
+  if (
+    !catalogsLoaded
+  ) {
     try {
+      root.innerHTML = `
+        <main class="app-loading">
+          Carregando dados...
+        </main>
+      `
+
       await loadCatalogs()
     } catch (error) {
       console.error(error)
 
       root.innerHTML = `
-        <div class="shell">
-
-          ${navigation()}
-
-          <main>
-
-            <section class="next-steps">
-
-              <h1>
-                Não foi possível carregar os dados
-              </h1>
-
-              <p>
-                Verifique a conexão com o Supabase e tente
-                atualizar a página.
-              </p>
-
-            </section>
-
-          </main>
-
-        </div>
+        <main class="app-loading">
+          Não foi possível carregar os dados.
+        </main>
       `
-
-      bind()
 
       return
     }
   }
 
-  const section =
-    sections.find(
-      (s) =>
-        s.id === page
-    )
-
-  const edit =
-    page.startsWith('edit:')
-      ? sections.find(
-          (s) =>
-            s.id ===
-            page.split(':')[1]
-        )
-      : null
-
-  const add =
-    page.startsWith('add:')
-      ? sections.find(
-          (s) =>
-            s.id ===
-            page.split(':')[1]
-        )
-      : null
-
-  const entry =
-    edit
-      ? getEntries(edit).find(
-          (item) =>
-            item.id ===
-            page.split(':')[2]
-        )
-      : null
-
-  let content
-
-  if (
-    page === 'divulgacao'
-  ) {
-    content =
-      divulgacaoPage()
-  } else if (
-    page === 'buscar-ofertas'
-  ) {
-    content =
-      buscarOfertasPage()
-  } else if (edit) {
-    content =
-      formPage(
-        edit,
-        entry
-      )
-  } else if (add) {
-    content =
-      formPage(add)
-  } else if (section) {
-    content =
-      sectionPage(section)
-  } else {
-    content =
-      dashboard()
-  }
-
   root.innerHTML = `
-    <div class="shell">
-
+    <div class="app-shell">
       ${navigation()}
 
       <main>
-        ${content}
+        ${currentContent()}
       </main>
-
     </div>
   `
 
-  bind()
+  bindEvents()
 }
 
 async function initialize() {
@@ -2968,12 +3431,11 @@ async function initialize() {
         session =
           nextSession
 
-        catalogsLoaded =
-          false
-
-        if (!session) {
-          page =
-            'dashboard'
+        if (
+          session &&
+          !catalogsLoaded
+        ) {
+          await loadCatalogs()
         }
 
         await render()
@@ -2984,20 +3446,13 @@ async function initialize() {
   } catch (error) {
     console.error(error)
 
-    root.innerHTML = `
-      <section class="next-steps">
-
-        <h1>
-          Erro ao iniciar o Mavuri
-        </h1>
-
-        <p>
-          Verifique a configuração do projeto e atualize
-          a página.
-        </p>
-
-      </section>
-    `
+    if (root) {
+      root.innerHTML = `
+        <main class="app-loading">
+          Não foi possível iniciar o Mavuri.
+        </main>
+      `
+    }
   }
 }
 
