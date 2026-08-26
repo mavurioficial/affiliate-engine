@@ -12,9 +12,12 @@
     <div id="app"></div>
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./src/offers-service-worker.js')
-            .catch((error) => console.error('Falha ao iniciar busca de ofertas:', error))
+        window.addEventListener('load', async () => {
+          try {
+            await navigator.serviceWorker.register('./offers-service-worker.js', { scope: './' })
+          } catch (error) {
+            console.error('Falha ao iniciar busca de ofertas:', error)
+          }
         })
       }
     </script>
