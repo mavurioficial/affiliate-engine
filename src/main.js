@@ -1330,24 +1330,30 @@ function divulgacaoPage() {
         data-promotion-preview
       >
 
-        ${divulgacaoPreview || `
-          <div class="preview-empty">
+        ${
+  divulgacaoPreview
+    ? renderPromotionPreview(
+        divulgacaoPreview
+      )
+    : `
+      <div class="preview-empty">
 
-            <span>
-              🚀
-            </span>
+        <span>
+          🚀
+        </span>
 
-            <h2>
-              Sua divulgação aparecerá aqui
-            </h2>
+        <h2>
+          Sua divulgação aparecerá aqui
+        </h2>
 
-            <p>
-              Preencha os dados do produto e gere uma
-              prévia da publicação.
-            </p>
+        <p>
+          Preencha os dados do produto e gere uma
+          prévia da publicação.
+        </p>
 
-          </div>
-        `}
+      </div>
+    `
+}
 
       </section>
 
