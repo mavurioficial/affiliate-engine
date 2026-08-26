@@ -4,6 +4,7 @@ rmSync('dist', { recursive: true, force: true })
 mkdirSync('dist', { recursive: true })
 
 cpSync('index.html', 'dist/index.html')
+cpSync('offers-service-worker.js', 'dist/offers-service-worker.js')
 cpSync('src', 'dist/src', { recursive: true })
 
 // O main.js atual ainda importa módulos de compatibilidade fora de src.
