@@ -78,9 +78,18 @@ function navigation() {
           Visão geral
         </button>
 
-        <p>Administração</p>
+        <p>Divulgação</p>
 
-        ${sections.map((s) => `
+<button
+  class="${page === 'divulgacao' ? 'active' : ''}"
+  data-page="divulgacao"
+>
+  Nova divulgação
+</button>
+
+<p>Administração</p>
+
+${sections.map((s) => `
           <button
             class="${page === s.id ? 'active' : ''}"
             data-page="${s.id}"
@@ -246,7 +255,170 @@ function dashboard() {
     </section>
   `
 }
+function divulgacaoPage() {
+  return `
+    <header class="page-heading">
+      <p class="eyebrow">DIVULGAÇÃO</p>
 
+      <h1>Nova divulgação</h1>
+
+      <p>
+        Prepare uma nova oferta utilizando os links oficiais
+        das plataformas de afiliados.
+      </p>
+    </header>
+
+    <section class="divulgacao-layout">
+
+      <form
+        class="divulgacao-form"
+        data-divulgacao
+      >
+
+        <label>
+          <span>Plataforma</span>
+
+          <select
+            name="platform"
+            required
+          >
+            <option value="mercadolivre">
+              Mercado Livre
+            </option>
+
+            <option
+              value="shopee"
+              disabled
+            >
+              Shopee — em breve
+            </option>
+
+            <option
+              value="amazon"
+              disabled
+            >
+              Amazon — em breve
+            </option>
+
+            <option
+              value="aliexpress"
+              disabled
+            >
+              AliExpress — em breve
+            </option>
+          </select>
+        </label>
+
+        <label>
+          <span>URL original do produto</span>
+
+          <input
+            type="url"
+            name="productUrl"
+            placeholder="https://produto.mercadolivre.com.br/..."
+          />
+        </label>
+
+        <label>
+          <span>Link oficial de afiliado</span>
+
+          <input
+            type="url"
+            name="affiliateUrl"
+            placeholder="https://meli.la/..."
+            required
+          />
+
+          <small>
+            Utilize o link gerado oficialmente
+            pela plataforma de afiliados.
+          </small>
+        </label>
+
+        <label>
+          <span>Nome do produto</span>
+
+          <input
+            name="productName"
+            placeholder="Ex.: Tênis Asics Gel Shogun"
+            required
+          />
+        </label>
+
+        <div class="form-grid">
+
+          <label>
+            <span>Preço atual</span>
+
+            <input
+              name="price"
+              placeholder="Ex.: 285"
+            />
+          </label>
+
+          <label>
+            <span>Preço anterior</span>
+
+            <input
+              name="previousPrice"
+              placeholder="Ex.: 459"
+            />
+          </label>
+
+        </div>
+
+        <label>
+          <span>Idioma</span>
+
+          <select name="language">
+
+            <option value="pt">
+              Português
+            </option>
+
+            <option value="en">
+              Inglês
+            </option>
+
+            <option value="both">
+              Português e Inglês
+            </option>
+
+          </select>
+        </label>
+
+        <button
+          class="primary"
+          type="submit"
+        >
+          Gerar prévia
+        </button>
+
+      </form>
+
+      <section
+        class="promotion-preview"
+        data-promotion-preview
+      >
+
+        <div class="preview-empty">
+
+          <span>🚀</span>
+
+          <h2>Sua divulgação aparecerá aqui</h2>
+
+          <p>
+            Preencha os dados do produto e gere
+            uma prévia da publicação.
+          </p>
+
+        </div>
+
+      </section>
+
+    </section>
+  `
+}
 function fieldInput(s, entry, field) {
   const reference = s.references?.[field]
 
@@ -511,7 +683,9 @@ async function render() {
       )
     : null
 
-  const content = edit
+const content = page === 'divulgacao'
+  ? divulgacaoPage()
+  : edit
     ? formPage(edit, entry)
     : add
       ? formPage(add)
@@ -683,7 +857,181 @@ function bind() {
         await render()
       }
     )
-  }
+    const divulgacaoForm =
+    root.querySelector('[data-divulgacao]')
+
+  if (divulgacaoForm) {
+    divulgacaoForm.addEventListener(
+      'submit',
+      (event) => {
+        event.preventDefault()
+
+        const formData =
+          new FormData(divulgacaoForm)
+
+        const productName =
+          formData.get('productName')
+
+        const price =
+          formData.get('price')
+
+        const previousPrice =
+          formData.get('previousPrice')
+
+        const affiliateUrl =
+          formData.get('affiliateUrl')
+
+        const language =
+          formData.get('language')
+
+        const preview =
+          root.querySelector(
+            '[data-promotion-preview]'
+          )
+
+        let discount = ''
+
+        if (
+          Number(price) &&
+          Number(previousPrice) &&
+          Number(previousPrice) > Number(price)
+        ) {
+          discount = Math.round(
+            (
+              1 -
+              Number(price) /
+              Number(previousPrice)
+            ) * 100
+          )
+        }
+
+        const promotionPt = `
+          <div class="promotion-card">
+
+            <p class="promotion-badge">
+              🔥 OFERTA ENCONTRADA
+            </p>
+
+            <h2>
+              ${escapeHtml(productName)}
+            </h2>
+
+            ${
+              price
+                ? `
+                  <p class="promotion-price">
+                    💰 R$ ${escapeHtml(price)}
+                  </p>
+                `
+                : ''
+            }
+
+            ${
+              discount
+                ? `
+                  <p class="promotion-discount">
+                    📉 ${discount}% OFF
+                  </p>
+                `
+                : ''
+            }
+
+            ${
+              previousPrice
+                ? `
+                  <p class="promotion-previous">
+                    De R$ ${escapeHtml(previousPrice)}
+                  </p>
+                `
+                : ''
+            }
+
+            <p>
+              👉 Confira a oferta:
+            </p>
+
+            <a
+              href="${escapeHtml(affiliateUrl)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              ${escapeHtml(affiliateUrl)}
+            </a>
+
+          </div>
+        `
+
+        const promotionEn = `
+          <div class="promotion-card">
+
+            <p class="promotion-badge">
+              🔥 DEAL FOUND
+            </p>
+
+            <h2>
+              ${escapeHtml(productName)}
+            </h2>
+
+            ${
+              price
+                ? `
+                  <p class="promotion-price">
+                    💰 R$ ${escapeHtml(price)}
+                  </p>
+                `
+                : ''
+            }
+
+            ${
+              discount
+                ? `
+                  <p class="promotion-discount">
+                    📉 ${discount}% OFF
+                  </p>
+                `
+                : ''
+            }
+
+            <p>
+              👉 Check the deal:
+            </p>
+
+            <a
+              href="${escapeHtml(affiliateUrl)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              ${escapeHtml(affiliateUrl)}
+            </a>
+
+          </div>
+        `
+
+        preview.innerHTML =
+          language === 'en'
+            ? promotionEn
+            : language === 'both'
+              ? `
+                <div class="promotion-language">
+                  <p class="eyebrow">
+                    PORTUGUÊS
+                  </p>
+
+                  ${promotionPt}
+                </div>
+
+                <div class="promotion-language">
+                  <p class="eyebrow">
+                    ENGLISH
+                  </p>
+
+                  ${promotionEn}
+                </div>
+              `
+              : promotionPt
+      }
+    )
+  }}
 
   const loginForm =
     root.querySelector('[data-login]')
