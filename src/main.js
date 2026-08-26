@@ -25,6 +25,19 @@ let session = null
 let catalogs = {}
 let catalogsLoaded = false
 
+// Mantém o rascunho da divulgação enquanto o usuário navega entre as abas.
+let divulgacaoDraft = {
+  platform: 'mercadolivre',
+  productUrl: '',
+  affiliateUrl: '',
+  productName: '',
+  price: '',
+  previousPrice: '',
+  language: 'pt'
+}
+
+let divulgacaoPreview = ''
+
 const value = (item) =>
   Array.isArray(item) ? item.join(' · ') : (item ?? '')
 
@@ -80,16 +93,16 @@ function navigation() {
 
         <p>Divulgação</p>
 
-<button
-  class="${page === 'divulgacao' ? 'active' : ''}"
-  data-page="divulgacao"
->
-  Nova divulgação
-</button>
+        <button
+          class="${page === 'divulgacao' ? 'active' : ''}"
+          data-page="divulgacao"
+        >
+          Nova divulgação
+        </button>
 
-<p>Administração</p>
+        <p>Administração</p>
 
-${sections.map((s) => `
+        ${sections.map((s) => `
           <button
             class="${page === s.id ? 'active' : ''}"
             data-page="${s.id}"
@@ -255,6 +268,7 @@ function dashboard() {
     </section>
   `
 }
+
 function divulgacaoPage() {
   return `
     <header class="page-heading">
@@ -282,7 +296,7 @@ function divulgacaoPage() {
             name="platform"
             required
           >
-            <option value="mercadolivre">
+            <option value="mercadolivre" ${divulgacaoDraft.platform === 'mercadolivre' ? 'selected' : ''}>
               Mercado Livre
             </option>
 
@@ -315,6 +329,7 @@ function divulgacaoPage() {
           <input
             type="url"
             name="productUrl"
+            value="${escapeHtml(divulgacaoDraft.productUrl)}"
             placeholder="https://produto.mercadolivre.com.br/..."
           />
         </label>
@@ -325,6 +340,7 @@ function divulgacaoPage() {
           <input
             type="url"
             name="affiliateUrl"
+            value="${escapeHtml(divulgacaoDraft.affiliateUrl)}"
             placeholder="https://meli.la/..."
             required
           />
@@ -340,6 +356,7 @@ function divulgacaoPage() {
 
           <input
             name="productName"
+            value="${escapeHtml(divulgacaoDraft.productName)}"
             placeholder="Ex.: Tênis Asics Gel Shogun"
             required
           />
@@ -352,6 +369,7 @@ function divulgacaoPage() {
 
             <input
               name="price"
+              value="${escapeHtml(divulgacaoDraft.price)}"
               placeholder="Ex.: 285"
             />
           </label>
@@ -361,6 +379,7 @@ function divulgacaoPage() {
 
             <input
               name="previousPrice"
+              value="${escapeHtml(divulgacaoDraft.previousPrice)}"
               placeholder="Ex.: 459"
             />
           </label>
@@ -372,15 +391,15 @@ function divulgacaoPage() {
 
           <select name="language">
 
-            <option value="pt">
+            <option value="pt" ${divulgacaoDraft.language === 'pt' ? 'selected' : ''}>
               Português
             </option>
 
-            <option value="en">
+            <option value="en" ${divulgacaoDraft.language === 'en' ? 'selected' : ''}>
               Inglês
             </option>
 
-            <option value="both">
+            <option value="both" ${divulgacaoDraft.language === 'both' ? 'selected' : ''}>
               Português e Inglês
             </option>
 
@@ -401,18 +420,13 @@ function divulgacaoPage() {
         data-promotion-preview
       >
 
-        <div class="preview-empty">
-
-          <span>🚀</span>
-
-          <h2>Sua divulgação aparecerá aqui</h2>
-
-          <p>
-            Preencha os dados do produto e gere
-            uma prévia da publicação.
-          </p>
-
-        </div>
+        ${divulgacaoPreview || `
+          <div class="preview-empty">
+            <span>🚀</span>
+            <h2>Sua divulgação aparecerá aqui</h2>
+            <p>Preencha os dados do produto e gere uma prévia da publicação.</p>
+          </div>
+        `}
 
       </section>
 
@@ -423,17 +437,44 @@ function fieldInput(s, entry, field) {
   const reference = s.references?.[field]
 
   if (reference) {
-    const target = sections.find(
-      (item) => item.id === reference.section
-    )
+    const options =
+      sections.find(
+        (section) => section.id === reference.section
+      )
 
-    const options = target
-      ? getEntries(target)
-      : []
+    const entries =
+      options
+        ? getEntries(options)
+        : []
 
-    const current = Array.isArray(entry[field])
-      ? entry[field]
-      : [entry[field]].filter(Boolean)
+    const selected =
+      Array.isArray(entry?.[field])
+        ? entry[field]
+        : entry?.[field]
+          ? [entry[field]]
+          : []
+
+    if (reference.multiple) {
+      return `
+        <label>
+          <span>${labels[field]}</span>
+
+          <select
+            name="${field}"
+            multiple
+          >
+            ${entries.map((item) => `
+              <option
+                value="${escapeHtml(item.id)}"
+                ${selected.includes(item.id) ? 'selected' : ''}
+              >
+                ${escapeHtml(item.name)}
+              </option>
+            `).join('')}
+          </select>
+        </label>
+      `
+    }
 
     return `
       <label>
@@ -441,32 +482,20 @@ function fieldInput(s, entry, field) {
 
         <select
           name="${field}"
-          ${reference.multiple ? 'multiple size="4"' : ''}
-          required
         >
-          <option
-            value=""
-            ${current.length ? '' : 'selected'}
-            ${reference.multiple ? 'hidden' : ''}
-          >
+          <option value="">
             Selecione...
           </option>
 
-          ${options.map((item) => `
+          ${entries.map((item) => `
             <option
-              value="${escapeHtml(item.name)}"
-              ${current.includes(item.name) ? 'selected' : ''}
+              value="${escapeHtml(item.id)}"
+              ${selected.includes(item.id) ? 'selected' : ''}
             >
               ${escapeHtml(item.name)}
             </option>
           `).join('')}
         </select>
-
-        ${
-          reference.multiple
-            ? '<small>Use Ctrl para selecionar mais de uma opção.</small>'
-            : ''
-        }
       </label>
     `
   }
@@ -477,29 +506,112 @@ function fieldInput(s, entry, field) {
 
       <input
         name="${field}"
-        value="${escapeHtml(editable(entry, field))}"
-        ${field === 'name' ? 'required' : ''}
+        value="${escapeHtml(editable(entry || {}, field))}"
       />
     </label>
   `
 }
 
-function sectionPage(s) {
-  const entries = getEntries(s)
+function formPage(section, entry = null) {
+  const editing = Boolean(entry)
 
   return `
     <header class="page-heading">
-      <p class="eyebrow">${s.eyebrow}</p>
+      <p class="eyebrow">
+        ${section.eyebrow}
+      </p>
 
       <div class="heading-row">
         <div>
-          <h1>${s.title}</h1>
-          <p>${s.intro}</p>
+          <h1>
+            ${editing ? 'Editar cadastro' : 'Novo cadastro'}
+          </h1>
+
+          <p>
+            ${editing
+              ? `Atualize as informações de ${escapeHtml(entry.name)}.`
+              : `Inclua um novo registro em ${section.label}.`
+            }
+          </p>
+        </div>
+
+        <button
+          data-page="${section.id}"
+        >
+          Cancelar
+        </button>
+      </div>
+    </header>
+
+    <form
+      class="entry-form"
+      data-form="${section.id}"
+      data-id="${entry?.id || ''}"
+    >
+      ${fieldInput(
+        section,
+        entry,
+        'name'
+      )}
+
+      <label>
+        <span>Descrição</span>
+
+        <textarea
+          name="description"
+          rows="4"
+        >${escapeHtml(entry?.description || '')}</textarea>
+      </label>
+
+      ${section.fields.map((field) =>
+        fieldInput(
+          section,
+          entry,
+          field
+        )
+      ).join('')}
+
+      <div class="form-actions">
+        <button
+          class="primary"
+          type="submit"
+        >
+          ${editing
+            ? 'Salvar alterações'
+            : 'Criar cadastro'
+          }
+        </button>
+
+        <button
+          type="button"
+          data-page="${section.id}"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  `
+}
+
+function sectionPage(section) {
+  const entries = getEntries(section)
+
+  return `
+    <header class="page-heading">
+      <p class="eyebrow">
+        ${section.eyebrow}
+      </p>
+
+      <div class="heading-row">
+        <div>
+          <h1>${section.title}</h1>
+
+          <p>${section.intro}</p>
         </div>
 
         <button
           class="primary"
-          data-add="${s.id}"
+          data-add="${section.id}"
         >
           + Novo cadastro
         </button>
@@ -508,12 +620,13 @@ function sectionPage(s) {
 
     <section
       class="catalog"
-      aria-label="${s.title}"
+      aria-label="${section.title}"
     >
       ${
         entries.length
           ? entries.map((entry) => `
             <article class="entry">
+
               <div>
                 <h2>
                   ${escapeHtml(entry.name)}
@@ -525,29 +638,42 @@ function sectionPage(s) {
               </div>
 
               <dl>
-                ${s.fields.map((field) => `
+                ${section.fields.map((field) => `
                   <div>
-                    <dt>${labels[field]}</dt>
+                    <dt>
+                      ${labels[field]}
+                    </dt>
 
                     <dd>
-                      ${escapeHtml(value(entry[field]))}
+                      ${escapeHtml(
+                        displayField(
+                          section,
+                          entry,
+                          field
+                        )
+                      )}
                     </dd>
                   </div>
                 `).join('')}
               </dl>
 
               <div class="entry-actions">
-                <button data-edit="${entry.id}">
+
+                <button
+                  data-edit="${section.id}:${entry.id}"
+                >
                   Editar
                 </button>
 
                 <button
                   class="danger"
-                  data-remove="${entry.id}"
+                  data-remove="${section.id}:${entry.id}"
                 >
                   Excluir
                 </button>
+
               </div>
+
             </article>
           `).join('')
           : `
@@ -559,68 +685,75 @@ function sectionPage(s) {
     </section>
 
     <p class="notice">
-      Os dados ficam salvos no Supabase.
+      Os dados ficam armazenados no Supabase.
+      Use o backup da Visão geral como medida adicional de segurança.
     </p>
   `
 }
 
-function formPage(s, entry = null) {
-  const isEdit = Boolean(entry)
+function displayField(section, entry, field) {
+  const reference =
+    section.references?.[field]
 
-  const blank = Object.fromEntries(
-    ['name', 'description', ...s.fields]
-      .map((field) => [field, ''])
-  )
+  if (!reference) {
+    return value(entry[field])
+  }
 
-  const record = entry || blank
+  const targetSection =
+    sections.find(
+      (item) =>
+        item.id === reference.section
+    )
 
-  return `
-    <header class="page-heading">
-      <p class="eyebrow">${s.eyebrow}</p>
+  if (!targetSection) {
+    return value(entry[field])
+  }
 
-      <h1>
-        ${isEdit ? 'Editar cadastro' : 'Novo cadastro'}
-      </h1>
+  const allEntries =
+    getEntries(targetSection)
 
-      <p>${s.label}</p>
-    </header>
+  const ids =
+    Array.isArray(entry[field])
+      ? entry[field]
+      : entry[field]
+        ? [entry[field]]
+        : []
 
-    <form
-      class="editor"
-      data-section="${s.id}"
-      data-id="${entry?.id || ''}"
-    >
-      ${fieldInput(s, record, 'name')}
+  const names =
+    ids
+      .map((id) =>
+        allEntries.find(
+          (item) => item.id === id
+        )?.name
+      )
+      .filter(Boolean)
 
-      ${fieldInput(s, record, 'description')}
-
-      ${s.fields
-        .map((field) => fieldInput(s, record, field))
-        .join('')}
-
-      <div class="form-actions">
-        <button
-          type="button"
-          data-page="${s.id}"
-        >
-          Cancelar
-        </button>
-
-        <button
-          class="primary"
-          type="submit"
-        >
-          ${
-            isEdit
-              ? 'Salvar alterações'
-              : 'Adicionar cadastro'
-          }
-        </button>
-      </div>
-    </form>
-  `
+  return names.join(' · ')
 }
 
+function errorPage(error) {
+  return `
+    <div class="error-page">
+      <h1>
+        Não foi possível carregar os dados
+      </h1>
+
+      <p>
+        ${escapeHtml(
+          error?.message ||
+          'Ocorreu um erro inesperado.'
+        )}
+      </p>
+
+      <button
+        class="primary"
+        data-reload
+      >
+        Tentar novamente
+      </button>
+    </div>
+  `
+}
 async function render() {
   if (!session) {
     root.innerHTML = loginPage()
@@ -628,223 +761,350 @@ async function render() {
     return
   }
 
-  if (!catalogsLoaded) {
-    try {
+  try {
+    if (!catalogsLoaded) {
       await loadCatalogs()
-    } catch (error) {
-      console.error('Erro ao carregar catálogos:', error)
-
-      root.innerHTML = `
-        <div class="login-shell">
-          <div class="login-card">
-            <p class="eyebrow">ERRO</p>
-
-            <h1>Não foi possível carregar os dados</h1>
-
-            <p>
-              Verifique a conexão com o Supabase
-              e tente novamente.
-            </p>
-
-            <button
-              class="primary"
-              data-reload
-            >
-              Tentar novamente
-            </button>
-          </div>
-        </div>
-      `
-
-      bind()
-      return
     }
+
+    const section =
+      sections.find(
+        (s) => s.id === page
+      )
+
+    const edit =
+      page.startsWith('edit:')
+        ? sections.find(
+            (s) =>
+              s.id === page.split(':')[1]
+          )
+        : null
+
+    const add =
+      page.startsWith('add:')
+        ? sections.find(
+            (s) =>
+              s.id === page.split(':')[1]
+          )
+        : null
+
+    const entry =
+      edit
+        ? getEntries(edit).find(
+            (item) =>
+              item.id === page.split(':')[2]
+          )
+        : null
+
+    const content =
+      page === 'divulgacao'
+        ? divulgacaoPage()
+        : edit
+          ? formPage(edit, entry)
+          : add
+            ? formPage(add)
+            : section
+              ? sectionPage(section)
+              : dashboard()
+
+    root.innerHTML = `
+      <div class="shell">
+        ${navigation()}
+
+        <main>
+          ${content}
+        </main>
+      </div>
+    `
+
+    bind()
+  } catch (error) {
+    root.innerHTML = `
+      <div class="shell">
+        ${navigation()}
+
+        <main>
+          ${errorPage(error)}
+        </main>
+      </div>
+    `
+
+    bind()
+  }
+}
+
+function saveDivulgacaoDraft(form) {
+  const formData =
+    new FormData(form)
+
+  divulgacaoDraft = {
+    platform:
+      String(
+        formData.get('platform') ||
+        'mercadolivre'
+      ),
+
+    productUrl:
+      String(
+        formData.get('productUrl') ||
+        ''
+      ),
+
+    affiliateUrl:
+      String(
+        formData.get('affiliateUrl') ||
+        ''
+      ),
+
+    productName:
+      String(
+        formData.get('productName') ||
+        ''
+      ),
+
+    price:
+      String(
+        formData.get('price') ||
+        ''
+      ),
+
+    previousPrice:
+      String(
+        formData.get('previousPrice') ||
+        ''
+      ),
+
+    language:
+      String(
+        formData.get('language') ||
+        'pt'
+      )
+  }
+}
+
+function formatPromotionPrice(value) {
+  const text =
+    String(value || '')
+      .trim()
+      .replace(/\./g, '')
+      .replace(',', '.')
+
+  const number =
+    Number(text)
+
+  if (
+    !Number.isFinite(number) ||
+    number <= 0
+  ) {
+    return String(value || '')
   }
 
-  const section = sections.find(
-    (s) => s.id === page
-  )
+  return new Intl.NumberFormat(
+    'pt-BR',
+    {
+      style: 'currency',
+      currency: 'BRL'
+    }
+  ).format(number)
+}
 
-  const edit = page.startsWith('edit:')
-    ? sections.find(
-        (s) => s.id === page.split(':')[1]
+function promotionPreviewHtml(data) {
+  const productName =
+    data.productName || ''
+
+  const price =
+    data.price || ''
+
+  const previousPrice =
+    data.previousPrice || ''
+
+  const affiliateUrl =
+    data.affiliateUrl || ''
+
+  const language =
+    data.language || 'pt'
+
+  const numericPrice =
+    Number(
+      String(price)
+        .replace(/\./g, '')
+        .replace(',', '.')
+    )
+
+  const numericPreviousPrice =
+    Number(
+      String(previousPrice)
+        .replace(/\./g, '')
+        .replace(',', '.')
+    )
+
+  let discount = ''
+
+  if (
+    Number.isFinite(numericPrice) &&
+    Number.isFinite(numericPreviousPrice) &&
+    numericPrice > 0 &&
+    numericPreviousPrice > numericPrice
+  ) {
+    discount =
+      Math.round(
+        (
+          1 -
+          numericPrice /
+          numericPreviousPrice
+        ) * 100
       )
-    : null
+  }
 
-  const add = page.startsWith('add:')
-    ? sections.find(
-        (s) => s.id === page.split(':')[1]
-      )
-    : null
+  const promotionPt = `
+    <div class="promotion-card">
 
-  const entry = edit
-    ? getEntries(edit).find(
-        (item) => item.id === page.split(':')[2]
-      )
-    : null
+      <p class="promotion-badge">
+        🔥 OFERTA ENCONTRADA
+      </p>
 
-const content = page === 'divulgacao'
-  ? divulgacaoPage()
-  : edit
-    ? formPage(edit, entry)
-    : add
-      ? formPage(add)
-      : section
-        ? sectionPage(section)
-        : dashboard()
+      <h2>
+        ${escapeHtml(productName)}
+      </h2>
 
-  root.innerHTML = `
-    <div class="shell">
-      ${navigation()}
+      ${
+        price
+          ? `
+            <p class="promotion-price">
+              💰 ${escapeHtml(
+                formatPromotionPrice(price)
+              )}
+            </p>
+          `
+          : ''
+      }
 
-      <main>
-        ${content}
-      </main>
+      ${
+        discount
+          ? `
+            <p class="promotion-discount">
+              📉 ${discount}% OFF
+            </p>
+          `
+          : ''
+      }
+
+      ${
+        previousPrice
+          ? `
+            <p class="promotion-previous">
+              De ${escapeHtml(
+                formatPromotionPrice(previousPrice)
+              )}
+            </p>
+          `
+          : ''
+      }
+
+      <p>
+        👉 Confira a oferta:
+      </p>
+
+      <a
+        href="${escapeHtml(affiliateUrl)}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        ${escapeHtml(affiliateUrl)}
+      </a>
+
     </div>
   `
 
-  bind()
-}
+  const promotionEn = `
+    <div class="promotion-card">
 
-async function exportBackup() {
-  const catalogsForBackup = Object.fromEntries(
-    sections.map((s) => [
-      s.id,
-      getEntries(s)
-    ])
-  )
+      <p class="promotion-badge">
+        🔥 DEAL FOUND
+      </p>
 
-  const backup = {
-    version: 1,
-    application: 'Mavuri Affiliate Engine',
-    exportedAt: new Date().toISOString(),
-    catalogs: catalogsForBackup
+      <h2>
+        ${escapeHtml(productName)}
+      </h2>
+
+      ${
+        price
+          ? `
+            <p class="promotion-price">
+              💰 ${escapeHtml(
+                formatPromotionPrice(price)
+              )}
+            </p>
+          `
+          : ''
+      }
+
+      ${
+        discount
+          ? `
+            <p class="promotion-discount">
+              📉 ${discount}% OFF
+            </p>
+          `
+          : ''
+      }
+
+      ${
+        previousPrice
+          ? `
+            <p class="promotion-previous">
+              Was ${escapeHtml(
+                formatPromotionPrice(previousPrice)
+              )}
+            </p>
+          `
+          : ''
+      }
+
+      <p>
+        👉 Check the deal:
+      </p>
+
+      <a
+        href="${escapeHtml(affiliateUrl)}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        ${escapeHtml(affiliateUrl)}
+      </a>
+
+    </div>
+  `
+
+  if (language === 'en') {
+    return promotionEn
   }
 
-  const blob = new Blob(
-    [JSON.stringify(backup, null, 2)],
-    {
-      type: 'application/json'
-    }
-  )
+  if (language === 'both') {
+    return `
+      <div class="promotion-language">
 
-  const url = URL.createObjectURL(blob)
+        <p class="eyebrow">
+          PORTUGUÊS
+        </p>
 
-  const link = document.createElement('a')
+        ${promotionPt}
 
-  link.href = url
+      </div>
 
-  link.download =
-    `mavuri-affiliate-engine-backup-${
-      new Date().toISOString().slice(0, 10)
-    }.json`
+      <div class="promotion-language">
 
-  link.click()
+        <p class="eyebrow">
+          ENGLISH
+        </p>
 
-  URL.revokeObjectURL(url)
-}
+        ${promotionEn}
 
-function readFileAsText(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-
-    reader.onload = () => resolve(reader.result)
-
-    reader.onerror = () =>
-      reject(new Error('Não foi possível ler o arquivo.'))
-
-    reader.readAsText(file)
-  })
-}
-
-async function importBackup(file) {
-  try {
-    const content = await readFileAsText(file)
-
-    const backup = JSON.parse(content)
-
-    if (
-      !backup ||
-      backup.version !== 1 ||
-      !backup.catalogs ||
-      typeof backup.catalogs !== 'object'
-    ) {
-      throw new Error('Formato inválido')
-    }
-
-    const missing = sections.some(
-      (s) => !Array.isArray(backup.catalogs[s.id])
-    )
-
-    if (missing) {
-      throw new Error('Backup incompleto')
-    }
-
-    if (
-      !confirm(
-        'Importar o backup substituirá todos os dados atuais do banco. Continuar?'
-      )
-    ) {
-      return
-    }
-
-    for (const section of sections) {
-      const currentEntries = getEntries(section)
-
-      for (const entry of currentEntries) {
-        await section.repository.remove(entry.id)
-      }
-    }
-
-    for (const section of sections) {
-      const entries = backup.catalogs[section.id]
-
-      for (const entry of entries) {
-        const { id, created_at, updated_at, ...data } = entry
-
-        await section.repository.create(data)
-      }
-    }
-
-    catalogsLoaded = false
-
-    await loadCatalogs()
-
-    alert('Backup importado com sucesso.')
-
-    page = 'dashboard'
-
-    await render()
-  } catch (error) {
-    console.error('Erro ao importar backup:', error)
-
-    alert(
-      'Não foi possível importar este arquivo. Selecione um backup válido do Mavuri Affiliate Engine.'
-    )
+      </div>
+    `
   }
-}
 
-function usageOf(sectionId, name) {
-  return sections.flatMap((s) =>
-    Object.entries(s.references || {})
-      .filter(([, reference]) =>
-        reference.section === sectionId
-      )
-      .flatMap(([field]) =>
-        getEntries(s)
-          .filter((entry) =>
-            Array.isArray(entry[field])
-              ? entry[field].includes(name)
-              : entry[field] === name
-          )
-          .map((entry) => ({
-            section: s,
-            entry
-          }))
-      )
-  )
+  return promotionPt
 }
-
 function bind() {
   const reloadButton =
     root.querySelector('[data-reload]')
@@ -857,181 +1117,60 @@ function bind() {
         await render()
       }
     )
-    const divulgacaoForm =
+  }
+
+  // --------------------------------------------------
+  // NOVA DIVULGAÇÃO
+  // --------------------------------------------------
+
+  const divulgacaoForm =
     root.querySelector('[data-divulgacao]')
 
   if (divulgacaoForm) {
+    const saveDraft = () => {
+      saveDivulgacaoDraft(divulgacaoForm)
+    }
+
+    divulgacaoForm.addEventListener(
+      'input',
+      saveDraft
+    )
+
+    divulgacaoForm.addEventListener(
+      'change',
+      saveDraft
+    )
+
     divulgacaoForm.addEventListener(
       'submit',
       (event) => {
         event.preventDefault()
 
-        const formData =
-          new FormData(divulgacaoForm)
+        saveDivulgacaoDraft(
+          divulgacaoForm
+        )
 
-        const productName =
-          formData.get('productName')
-
-        const price =
-          formData.get('price')
-
-        const previousPrice =
-          formData.get('previousPrice')
-
-        const affiliateUrl =
-          formData.get('affiliateUrl')
-
-        const language =
-          formData.get('language')
+        divulgacaoPreview =
+          promotionPreviewHtml(
+            divulgacaoDraft
+          )
 
         const preview =
           root.querySelector(
             '[data-promotion-preview]'
           )
 
-        let discount = ''
-
-        if (
-          Number(price) &&
-          Number(previousPrice) &&
-          Number(previousPrice) > Number(price)
-        ) {
-          discount = Math.round(
-            (
-              1 -
-              Number(price) /
-              Number(previousPrice)
-            ) * 100
-          )
+        if (preview) {
+          preview.innerHTML =
+            divulgacaoPreview
         }
-
-        const promotionPt = `
-          <div class="promotion-card">
-
-            <p class="promotion-badge">
-              🔥 OFERTA ENCONTRADA
-            </p>
-
-            <h2>
-              ${escapeHtml(productName)}
-            </h2>
-
-            ${
-              price
-                ? `
-                  <p class="promotion-price">
-                    💰 R$ ${escapeHtml(price)}
-                  </p>
-                `
-                : ''
-            }
-
-            ${
-              discount
-                ? `
-                  <p class="promotion-discount">
-                    📉 ${discount}% OFF
-                  </p>
-                `
-                : ''
-            }
-
-            ${
-              previousPrice
-                ? `
-                  <p class="promotion-previous">
-                    De R$ ${escapeHtml(previousPrice)}
-                  </p>
-                `
-                : ''
-            }
-
-            <p>
-              👉 Confira a oferta:
-            </p>
-
-            <a
-              href="${escapeHtml(affiliateUrl)}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              ${escapeHtml(affiliateUrl)}
-            </a>
-
-          </div>
-        `
-
-        const promotionEn = `
-          <div class="promotion-card">
-
-            <p class="promotion-badge">
-              🔥 DEAL FOUND
-            </p>
-
-            <h2>
-              ${escapeHtml(productName)}
-            </h2>
-
-            ${
-              price
-                ? `
-                  <p class="promotion-price">
-                    💰 R$ ${escapeHtml(price)}
-                  </p>
-                `
-                : ''
-            }
-
-            ${
-              discount
-                ? `
-                  <p class="promotion-discount">
-                    📉 ${discount}% OFF
-                  </p>
-                `
-                : ''
-            }
-
-            <p>
-              👉 Check the deal:
-            </p>
-
-            <a
-              href="${escapeHtml(affiliateUrl)}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              ${escapeHtml(affiliateUrl)}
-            </a>
-
-          </div>
-        `
-
-        preview.innerHTML =
-          language === 'en'
-            ? promotionEn
-            : language === 'both'
-              ? `
-                <div class="promotion-language">
-                  <p class="eyebrow">
-                    PORTUGUÊS
-                  </p>
-
-                  ${promotionPt}
-                </div>
-
-                <div class="promotion-language">
-                  <p class="eyebrow">
-                    ENGLISH
-                  </p>
-
-                  ${promotionEn}
-                </div>
-              `
-              : promotionPt
       }
     )
-  }}
+  }
+
+  // --------------------------------------------------
+  // LOGIN
+  // --------------------------------------------------
 
   const loginForm =
     root.querySelector('[data-login]')
@@ -1042,55 +1181,69 @@ function bind() {
       async (event) => {
         event.preventDefault()
 
-        const errorElement =
-          loginForm.querySelector('.login-error')
+        const formData =
+          new FormData(loginForm)
+
+        const email =
+          String(
+            formData.get('email') ||
+            ''
+          )
+
+        const password =
+          String(
+            formData.get('password') ||
+            ''
+          )
+
+        const errorBox =
+          loginForm.querySelector(
+            '.login-error'
+          )
 
         const button =
           loginForm.querySelector(
             'button[type="submit"]'
           )
 
-        const formData =
-          new FormData(loginForm)
-
-        errorElement.hidden = true
-
-        button.disabled = true
-
-        button.textContent = 'Entrando...'
-
         try {
+          if (button) {
+            button.disabled = true
+            button.textContent =
+              'Entrando...'
+          }
+
+          if (errorBox) {
+            errorBox.hidden = true
+            errorBox.textContent = ''
+          }
+
           await signIn(
-            formData.get('email'),
-            formData.get('password')
+            email,
+            password
           )
         } catch (error) {
-          errorElement.textContent =
-            error.message ||
-            'Não foi possível realizar o login.'
+          if (errorBox) {
+            errorBox.hidden = false
 
-          errorElement.hidden = false
-        } finally {
-          button.disabled = false
-          button.textContent = 'Entrar'
+            errorBox.textContent =
+              error?.message ||
+              'Não foi possível entrar.'
+          }
+
+          if (button) {
+            button.disabled = false
+            button.textContent =
+              'Entrar'
+          }
         }
       }
     )
-
-    return
   }
 
-  const logoutButton =
-    root.querySelector('[data-logout]')
-
-  if (logoutButton) {
-    logoutButton.addEventListener(
-      'click',
-      async () => {
-        await signOut()
-      }
-    )
-  }
+  // --------------------------------------------------
+  // NAVEGAÇÃO
+  // --------------------------------------------------
 
   root
     .querySelectorAll('[data-page]')
@@ -1098,11 +1251,17 @@ function bind() {
       button.addEventListener(
         'click',
         async () => {
-          page = button.dataset.page
+          page =
+            button.dataset.page
+
           await render()
         }
       )
     })
+
+  // --------------------------------------------------
+  // NOVO CADASTRO
+  // --------------------------------------------------
 
   root
     .querySelectorAll('[data-add]')
@@ -1118,25 +1277,27 @@ function bind() {
       )
     })
 
+  // --------------------------------------------------
+  // EDITAR CADASTRO
+  // --------------------------------------------------
+
   root
     .querySelectorAll('[data-edit]')
     .forEach((button) => {
       button.addEventListener(
         'click',
         async () => {
-          const s = sections.find(
-            (item) => page === item.id
-          )
-
-          if (!s) return
-
           page =
-            `edit:${s.id}:${button.dataset.edit}`
+            `edit:${button.dataset.edit}`
 
           await render()
         }
       )
     })
+
+  // --------------------------------------------------
+  // EXCLUIR CADASTRO
+  // --------------------------------------------------
 
   root
     .querySelectorAll('[data-remove]')
@@ -1144,68 +1305,186 @@ function bind() {
       button.addEventListener(
         'click',
         async () => {
-          const s = sections.find(
-            (item) => page === item.id
-          )
+          const [
+            sectionId,
+            entryId
+          ] =
+            button.dataset.remove.split(':')
 
-          if (!s) return
-
-          const entry =
-            getEntries(s).find(
+          const section =
+            sections.find(
               (item) =>
-                item.id === button.dataset.remove
+                item.id === sectionId
             )
 
-          const usage = entry
-            ? usageOf(s.id, entry.name)
-            : []
-
-          if (usage.length) {
-            alert(
-              `Não é possível excluir “${entry.name}” porque ele é usado em: ${
-                usage
-                  .map(
-                    (item) =>
-                      `${item.section.label} / ${item.entry.name}`
-                  )
-                  .join(', ')
-              }.`
-            )
-
+          if (!section) {
             return
           }
 
-          if (
-            !confirm(
-              'Excluir este cadastro?'
+          const entry =
+            getEntries(section).find(
+              (item) =>
+                item.id === entryId
             )
-          ) {
+
+          const name =
+            entry?.name ||
+            'este cadastro'
+
+          const confirmed =
+            window.confirm(
+              `Deseja realmente excluir "${name}"?`
+            )
+
+          if (!confirmed) {
             return
           }
 
           try {
-            await s.repository.remove(
-              button.dataset.remove
+            await section.repository.remove(
+              entryId
             )
 
             catalogsLoaded = false
 
-            await loadCatalogs()
-
             await render()
           } catch (error) {
-            console.error(
-              'Erro ao excluir cadastro:',
-              error
-            )
-
-            alert(
-              'Não foi possível excluir este cadastro.'
+            window.alert(
+              error?.message ||
+              'Não foi possível excluir o cadastro.'
             )
           }
         }
       )
     })
+
+  // --------------------------------------------------
+  // FORMULÁRIOS DE CADASTRO
+  // --------------------------------------------------
+
+  root
+    .querySelectorAll('[data-form]')
+    .forEach((form) => {
+      form.addEventListener(
+        'submit',
+        async (event) => {
+          event.preventDefault()
+
+          const sectionId =
+            form.dataset.form
+
+          const entryId =
+            form.dataset.id
+
+          const section =
+            sections.find(
+              (item) =>
+                item.id === sectionId
+            )
+
+          if (!section) {
+            return
+          }
+
+          const formData =
+            new FormData(form)
+
+          const data = {
+            name:
+              String(
+                formData.get('name') ||
+                ''
+              ).trim(),
+
+            description:
+              String(
+                formData.get('description') ||
+                ''
+              ).trim()
+          }
+
+          section.fields.forEach(
+            (field) => {
+              const reference =
+                section.references?.[field]
+
+              if (
+                reference?.multiple
+              ) {
+                data[field] =
+                  formData
+                    .getAll(field)
+                    .filter(Boolean)
+
+                return
+              }
+
+              const raw =
+                formData.get(field)
+
+              data[field] =
+                raw === null
+                  ? ''
+                  : String(raw).trim()
+            }
+          )
+
+          try {
+            const button =
+              form.querySelector(
+                'button[type="submit"]'
+              )
+
+            if (button) {
+              button.disabled = true
+              button.textContent =
+                'Salvando...'
+            }
+
+            if (entryId) {
+              await section.repository.update(
+                entryId,
+                data
+              )
+            } else {
+              await section.repository.create(
+                data
+              )
+            }
+
+            catalogsLoaded = false
+
+            page =
+              sectionId
+
+            await render()
+          } catch (error) {
+            window.alert(
+              error?.message ||
+              'Não foi possível salvar o cadastro.'
+            )
+
+            const button =
+              form.querySelector(
+                'button[type="submit"]'
+              )
+
+            if (button) {
+              button.disabled = false
+
+              button.textContent =
+                entryId
+                  ? 'Salvar alterações'
+                  : 'Criar cadastro'
+            }
+          }
+        }
+      )
+    })
+
+  // --------------------------------------------------
+  // EXPORTAR BACKUP
+  // --------------------------------------------------
 
   const exportButton =
     root.querySelector('[data-export]')
@@ -1213,9 +1492,68 @@ function bind() {
   if (exportButton) {
     exportButton.addEventListener(
       'click',
-      exportBackup
+      () => {
+        const backup = {
+          exportedAt:
+            new Date().toISOString(),
+
+          version: 1,
+
+          catalogs:
+            Object.fromEntries(
+              sections.map(
+                (section) => [
+                  section.id,
+                  getEntries(section)
+                ]
+              )
+            )
+        }
+
+        const blob =
+          new Blob(
+            [
+              JSON.stringify(
+                backup,
+                null,
+                2
+              )
+            ],
+            {
+              type:
+                'application/json'
+            }
+          )
+
+        const url =
+          URL.createObjectURL(blob)
+
+        const link =
+          document.createElement('a')
+
+        link.href = url
+
+        link.download =
+          `mavuri-backup-${
+            new Date()
+              .toISOString()
+              .slice(0, 10)
+          }.json`
+
+        document.body.appendChild(link)
+
+        link.click()
+
+        link.remove()
+
+        URL.revokeObjectURL(url)
+      }
     )
   }
+
+  // --------------------------------------------------
+  // IMPORTAR BACKUP
+  // --------------------------------------------------
 
   const importButton =
     root.querySelector('[data-import]')
@@ -1229,168 +1567,178 @@ function bind() {
   ) {
     importButton.addEventListener(
       'click',
-      () => backupFile.click()
+      () => {
+        backupFile.click()
+      }
     )
 
     backupFile.addEventListener(
       'change',
       async () => {
-        if (backupFile.files?.[0]) {
-          await importBackup(
-            backupFile.files[0]
-          )
-        }
+        const file =
+          backupFile.files?.[0]
 
-        backupFile.value = ''
-      }
-    )
-  }
-
-  const form =
-    root.querySelector('.editor')
-
-  if (form) {
-    form.addEventListener(
-      'submit',
-      async (event) => {
-        event.preventDefault()
-
-        const s = sections.find(
-          (item) =>
-            item.id === form.dataset.section
-        )
-
-        if (!s) return
-
-        const submitButton =
-          form.querySelector(
-            'button[type="submit"]'
-          )
-
-        const formData =
-          new FormData(form)
-
-        const data =
-          Object.fromEntries(
-            formData.entries()
-          )
-
-        Object.entries(
-          s.references || {}
-        ).forEach(
-          ([field, reference]) => {
-            if (reference.multiple) {
-              data[field] =
-                formData
-                  .getAll(field)
-                  .filter(Boolean)
-            }
-          }
-        )
-
-        s.fields.forEach((field) => {
-          if (
-            !s.references?.[field] &&
-            typeof data[field] === 'string' &&
-            data[field].includes(',')
-          ) {
-            data[field] =
-              data[field]
-                .split(',')
-                .map(
-                  (item) => item.trim()
-                )
-                .filter(Boolean)
-          }
-        })
-
-        if (!data.name?.trim()) {
-          alert(
-            'Informe um nome para o cadastro.'
-          )
-
+        if (!file) {
           return
         }
 
-        submitButton.disabled = true
-
-        submitButton.textContent =
-          'Salvando...'
-
         try {
-          if (form.dataset.id) {
-            await s.repository.update(
-              form.dataset.id,
-              data
+          const text =
+            await file.text()
+
+          const backup =
+            JSON.parse(text)
+
+          if (
+            !backup?.catalogs ||
+            typeof backup.catalogs !==
+              'object'
+          ) {
+            throw new Error(
+              'Arquivo de backup inválido.'
             )
-          } else {
-            await s.repository.create(data)
+          }
+
+          const confirmed =
+            window.confirm(
+              'A importação poderá adicionar ou atualizar registros. Deseja continuar?'
+            )
+
+          if (!confirmed) {
+            backupFile.value = ''
+            return
+          }
+
+          for (
+            const section of sections
+          ) {
+            const entries =
+              backup.catalogs[
+                section.id
+              ]
+
+            if (
+              !Array.isArray(entries)
+            ) {
+              continue
+            }
+
+            for (
+              const entry of entries
+            ) {
+              const {
+                id,
+                ...data
+              } = entry
+
+              if (
+                id &&
+                typeof section.repository.update ===
+                  'function'
+              ) {
+                try {
+                  await section.repository.update(
+                    id,
+                    data
+                  )
+                } catch {
+                  await section.repository.create(
+                    data
+                  )
+                }
+              } else {
+                await section.repository.create(
+                  data
+                )
+              }
+            }
           }
 
           catalogsLoaded = false
 
-          await loadCatalogs()
-
-          page = s.id
+          window.alert(
+            'Backup importado com sucesso.'
+          )
 
           await render()
         } catch (error) {
-          console.error(
-            'Erro ao salvar cadastro:',
-            error
+          window.alert(
+            error?.message ||
+            'Não foi possível importar o backup.'
           )
+        } finally {
+          backupFile.value = ''
+        }
+      }
+    )
+  }
 
-          alert(
-            'Não foi possível salvar o cadastro.'
+  // --------------------------------------------------
+  // LOGOUT
+  // --------------------------------------------------
+
+  const logoutButton =
+    root.querySelector('[data-logout]')
+
+  if (logoutButton) {
+    logoutButton.addEventListener(
+      'click',
+      async () => {
+        try {
+          await signOut()
+        } catch (error) {
+          window.alert(
+            error?.message ||
+            'Não foi possível sair.'
           )
-
-          submitButton.disabled = false
-
-          submitButton.textContent =
-            form.dataset.id
-              ? 'Salvar alterações'
-              : 'Adicionar cadastro'
         }
       }
     )
   }
 }
 
-async function start() {
+async function initialize() {
   try {
-    session = await getSession()
+    session =
+      await getSession()
 
-    if (session) {
-      await loadCatalogs()
-    }
-  } catch (error) {
-    console.error(
-      'Erro ao iniciar aplicação:',
-      error
-    )
-  }
+    onAuthChange(
+      async (nextSession) => {
+        session =
+          nextSession
 
-  await render()
+        if (!session) {
+          catalogs = {}
+          catalogsLoaded = false
+          page = 'dashboard'
+        }
 
-  onAuthChange(async (nextSession) => {
-    session = nextSession
-
-    catalogs = {}
-    catalogsLoaded = false
-
-    if (session) {
-      try {
-        await loadCatalogs()
-      } catch (error) {
-        console.error(
-          'Erro ao carregar dados após autenticação:',
-          error
-        )
+        await render()
       }
-    }
+    )
 
     await render()
-  })
+  } catch (error) {
+    console.error(
+      'Erro ao inicializar Mavuri:',
+      error
+    )
+
+    root.innerHTML = `
+      <div class="error-page">
+        <h1>
+          Erro ao iniciar o Mavuri
+        </h1>
+
+        <p>
+          ${escapeHtml(
+            error?.message ||
+            'Verifique a configuração da aplicação.'
+          )}
+        </p>
+      </div>
+    `
+  }
 }
 
-start()
+initialize()
