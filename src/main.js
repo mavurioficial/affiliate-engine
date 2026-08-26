@@ -364,27 +364,54 @@ function divulgacaoPage() {
 
         <div class="form-grid">
 
-          <label>
-            <span>Preço atual</span>
+  <label>
+    <span>Preço atual</span>
 
-            <input
-              name="price"
-              value="${escapeHtml(divulgacaoDraft.price)}"
-              placeholder="Ex.: 285"
-            />
-          </label>
+    <input
+      name="price"
+      placeholder="Ex.: 285"
+    />
+  </label>
 
-          <label>
-            <span>Preço anterior</span>
+  <label>
+    <span>Preço anterior</span>
 
-            <input
-              name="previousPrice"
-              value="${escapeHtml(divulgacaoDraft.previousPrice)}"
-              placeholder="Ex.: 459"
-            />
-          </label>
+    <input
+      name="previousPrice"
+      placeholder="Ex.: 459"
+    />
+  </label>
 
-        </div>
+</div>
+
+<div class="form-grid">
+
+  <label>
+    <span>Número de parcelas</span>
+
+    <input
+      type="number"
+      name="installments"
+      min="2"
+      placeholder="Ex.: 10"
+    />
+  </label>
+
+  <label>
+    <span>Parcelamento</span>
+
+    <select name="installmentInterest">
+      <option value="no-interest">
+        Sem juros
+      </option>
+
+      <option value="with-interest">
+        Com juros
+      </option>
+    </select>
+  </label>
+
+</div>
 
         <label>
           <span>Idioma</span>
@@ -923,6 +950,49 @@ function promotionPreviewHtml(data) {
   const language =
     data.language || 'pt'
 
+  const installments =
+  Number(formData.get('installments'))
+
+const installmentInterest =
+  formData.get('installmentInterest')
+
+const parsePrice = (value) => {
+  if (!value) return 0
+
+  const normalized = String(value)
+    .replace('R$', '')
+    .trim()
+    .replace(/\./g, '')
+    .replace(',', '.')
+
+  return Number(normalized) || 0
+}
+
+const formatPrice = (value) =>
+  Number(value).toLocaleString(
+    'pt-BR',
+    {
+      style: 'currency',
+      currency: 'BRL'
+    }
+  )
+
+const currentPrice =
+  parsePrice(price)
+
+const oldPrice =
+  parsePrice(previousPrice)
+
+const savings =
+  oldPrice > currentPrice
+    ? oldPrice - currentPrice
+    : 0
+
+const installmentValue =
+  installments > 1 && currentPrice
+    ? currentPrice / installments
+    : 0
+
   const numericPrice =
     Number(
       String(price)
@@ -937,83 +1007,108 @@ function promotionPreviewHtml(data) {
         .replace(',', '.')
     )
 
-  let discount = ''
+  let discount = 0
 
-  if (
-    Number.isFinite(numericPrice) &&
-    Number.isFinite(numericPreviousPrice) &&
-    numericPrice > 0 &&
-    numericPreviousPrice > numericPrice
-  ) {
-    discount =
-      Math.round(
-        (
-          1 -
-          numericPrice /
-          numericPreviousPrice
-        ) * 100
-      )
-  }
+if (
+  currentPrice &&
+  oldPrice &&
+  oldPrice > currentPrice
+) {
+  discount = Math.round(
+    (
+      1 -
+      currentPrice / oldPrice
+    ) * 100
+  )
+}
 
   const promotionPt = `
-    <div class="promotion-card">
+  <div class="promotion-card">
 
-      <p class="promotion-badge">
-        🔥 OFERTA ENCONTRADA
-      </p>
+    <p class="promotion-badge">
+      🔥 OFERTA ENCONTRADA!
+    </p>
 
-      <h2>
-        ${escapeHtml(productName)}
-      </h2>
+    <h2>
+      👟 ${escapeHtml(productName)}
+    </h2>
 
-      ${
-        price
-          ? `
-            <p class="promotion-price">
-              💰 ${escapeHtml(
-                formatPromotionPrice(price)
-              )}
-            </p>
-          `
-          : ''
-      }
+    ${
+      oldPrice > currentPrice
+        ? `
+          <p class="promotion-previous">
+            📉 De
+            <s>
+              ${formatPrice(oldPrice)}
+            </s>
+          </p>
+        `
+        : ''
+    }
 
-      ${
-        discount
-          ? `
-            <p class="promotion-discount">
-              📉 ${discount}% OFF
-            </p>
-          `
-          : ''
-      }
+    ${
+      currentPrice
+        ? `
+          <p class="promotion-price">
+            💰 Por
+            <strong>
+              ${formatPrice(currentPrice)}
+            </strong>
+            ${
+              discount
+                ? `— ${discount}% OFF`
+                : ''
+            }
+          </p>
+        `
+        : ''
+    }
 
-      ${
-        previousPrice
-          ? `
-            <p class="promotion-previous">
-              De ${escapeHtml(
-                formatPromotionPrice(previousPrice)
-              )}
-            </p>
-          `
-          : ''
-      }
+    ${
+      savings
+        ? `
+          <p class="promotion-savings">
+            💸 Economize
+            <strong>
+              ${formatPrice(savings)}
+            </strong>
+          </p>
+        `
+        : ''
+    }
 
-      <p>
-        👉 Confira a oferta:
-      </p>
+    ${
+      installmentValue
+        ? `
+          <p class="promotion-installments">
+            💳
+            <strong>
+              ${installments}x de ${formatPrice(installmentValue)}
+            </strong>
+            ${
+              installmentInterest === 'no-interest'
+                ? 'sem juros'
+                : 'com juros'
+            }
+          </p>
+        `
+        : ''
+    }
 
-      <a
-        href="${escapeHtml(affiliateUrl)}"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        ${escapeHtml(affiliateUrl)}
-      </a>
+    <p>
+      👉 Aproveite a oferta:
+    </p>
 
-    </div>
-  `
+    <a
+      href="${escapeHtml(affiliateUrl)}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      ${escapeHtml(affiliateUrl)}
+    </a>
+
+  </div>
+`
 
   const promotionEn = `
     <div class="promotion-card">
