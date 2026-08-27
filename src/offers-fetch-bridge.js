@@ -1,6 +1,6 @@
-// Ponte entre o fluxo legado do Affiliate Engine e a API validada
-// no projeto mavuri-api-test. O GitHub Pages não pode falar diretamente
-// com o Mercado Livre com segurança, por isso a chamada passa pelo proxy.
+// Ponte entre o fluxo legado do Affiliate Engine e a API do Mavuri.
+// A busca não exige token para funcionar: o proxy tenta a consulta pública do
+// Mercado Livre e usa o token apenas quando ele já existe na sessão.
 const OFFERS_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/meli'
 const MELI_TOKEN_KEY = 'mavuri.meli.access-token'
 const nativeFetch = window.fetch.bind(window)
@@ -8,65 +8,34 @@ const nativeFetch = window.fetch.bind(window)
 function isOffersRequest(input) {
   const raw = typeof input === 'string'
     ? input
-    : input instanceof Request
-      ? input.url
-      : String(input)
-
+    : input instanceof Request ? input.url : String(input)
   try {
     const url = new URL(raw, window.location.origin)
-    return url.pathname === '/api/offers' ||
-      url.pathname.endsWith('/affiliate-engine/api/offers')
+    return url.pathname === '/api/offers' || url.pathname.endsWith('/affiliate-engine/api/offers')
   } catch {
     return false
   }
 }
 
-function getMeliToken() {
+function getSavedMeliToken() {
   try {
-    const saved = window.sessionStorage.getItem(MELI_TOKEN_KEY)
-    if (saved) return saved
+    return String(window.sessionStorage.getItem(MELI_TOKEN_KEY) || '').trim()
   } catch {
-    // Se sessionStorage estiver indisponível, seguimos com a sessão atual.
+    return ''
   }
-
-  const token = window.prompt(
-    'Cole o Access Token do Mercado Livre para esta sessão. Ele não será salvo permanentemente.'
-  )
-
-  const normalized = String(token || '').trim()
-  if (!normalized) return ''
-
-  try {
-    window.sessionStorage.setItem(MELI_TOKEN_KEY, normalized)
-  } catch {
-    // O token continua disponível somente para esta chamada.
-  }
-
-  return normalized
 }
 
-function numberOrNull(...values) {
+function numberOrZero(...values) {
   for (const value of values) {
     if (value === null || value === undefined || value === '') continue
-
-    if (typeof value === 'string') {
-      const text = value.trim()
-      if (!text) continue
-
-      // Aceita 1.234,56 e 1234.56 sem transformar preço válido em zero.
-      const normalized = text.includes(',')
-        ? text.replace(/\./g, '').replace(',', '.')
-        : text
-      const parsed = Number(normalized)
-      if (Number.isFinite(parsed)) return parsed
-      continue
-    }
-
-    const parsed = Number(value)
+    const text = typeof value === 'string' ? value.trim() : value
+    const normalized = typeof text === 'string' && text.includes(',')
+      ? text.replace(/\./g, '').replace(',', '.')
+      : text
+    const parsed = Number(normalized)
     if (Number.isFinite(parsed)) return parsed
   }
-
-  return null
+  return 0
 }
 
 function firstText(...values) {
@@ -77,203 +46,30 @@ function firstText(...values) {
   return ''
 }
 
-function firstArray(...values) {
-  for (const value of values) {
-    if (Array.isArray(value)) return value
-  }
-  return []
-}
-
-function normalizeInstallments(item) {
-  const source = item?.installments ?? item?.parcelas
-  const nested = source && typeof source === 'object' ? source : {}
-  const pricing = item?.pricing || item?.price_data || {}
-
-  const quantity = numberOrNull(
-    nested.quantity,
-    nested.quantidade,
-    nested.installments,
-    item?.installmentQuantity,
-    item?.installments_count,
-    item?.installment_quantity,
-    item?.parcelas_quantidade,
-    typeof source === 'number' ? source : null
-  ) || 0
-
-  const amount = numberOrNull(
-    nested.amount,
-    nested.valor,
-    nested.value,
-    item?.installment_amount,
-    item?.installmentAmount,
-    item?.parcela_valor,
-    pricing?.installment_amount
-  ) || 0
-
-  const rate = numberOrNull(
-    nested.rate,
-    nested.juros,
-    item?.installment_rate,
-    item?.installmentRate,
-    item?.taxa_juros
-  ) || 0
-
-  return { quantity, amount, rate }
-}
-
-function normalizeOfferPayload(item) {
-  const installments = normalizeInstallments(item)
-  const pricing = item?.pricing || item?.price_data || item?.prices || {}
-
-  const price = numberOrNull(
-    item?.price,
-    item?.preco,
-    item?.currentPrice,
-    item?.current_price,
-    item?.preco_atual,
-    item?.valor,
-    item?.sale_price,
-    item?.salePrice,
-    pricing?.price,
-    pricing?.current_price,
-    pricing?.sale_price,
-    item?.buy_box_winner?.price
-  ) || 0
-
-  const originalPrice = numberOrNull(
-    item?.original_price,
-    item?.originalPrice,
-    item?.previousPrice,
-    item?.previous_price,
-    item?.preco_original,
-    item?.preco_anterior,
-    item?.listPrice,
-    item?.list_price,
-    pricing?.original_price,
-    pricing?.previous_price,
-    item?.buy_box_winner?.original_price
-  ) || 0
-
-  const title = firstText(
-    item?.title,
-    item?.titulo,
-    item?.name,
-    item?.nome,
-    item?.productName,
-    item?.product_name,
-    item?.id
-  )
-
-  const description = firstText(
-    item?.description,
-    item?.descricao,
-    item?.subtitle,
-    item?.short_description,
-    item?.descricao_curta,
-    item?.attributes?.find?.((attribute) => attribute?.id === 'MODEL')?.value_name
-  )
-
-  const image = firstText(
-    item?.thumbnail,
-    item?.imagem,
-    item?.image,
-    item?.image_url,
-    item?.pictures?.[0]?.url
-  )
-
-  const permalink = firstText(
-    item?.permalink,
-    item?.link,
-    item?.url,
-    item?.productUrl,
-    item?.product_url,
-    item?.id ? `https://produto.mercadolivre.com.br/${item.id}` : ''
-  )
+function normalizeOffer(item) {
+  const installments = item?.installments && typeof item.installments === 'object'
+    ? item.installments : {}
+  const title = firstText(item?.title, item?.name, item?.titulo, item?.id)
+  const price = numberOrZero(item?.price, item?.current_price, item?.preco)
+  const originalPrice = numberOrZero(item?.original_price, item?.previous_price, item?.preco_original)
+  const quantity = numberOrZero(installments?.quantity, item?.installmentQuantity, item?.parcelas)
+  const amount = numberOrZero(installments?.amount, item?.installmentAmount)
+  const rate = numberOrZero(installments?.rate, item?.installmentRate)
+  const image = firstText(item?.thumbnail, item?.image, item?.imagem, item?.pictures?.[0]?.secure_url, item?.pictures?.[0]?.url)
+  const permalink = firstText(item?.permalink, item?.productUrl, item?.link, item?.id ? `https://produto.mercadolivre.com.br/${item.id}` : '')
+  const description = firstText(item?.description, item?.descricao, item?.subtitle, item?.short_description)
 
   return {
     ...item,
-    title,
-    titulo: title,
-    name: title,
-    description,
-    descricao: description,
-    price,
-    preco: price,
-    currentPrice: price,
-    current_price: price,
-    original_price: originalPrice,
-    originalPrice,
-    previousPrice: originalPrice,
-    previous_price: originalPrice,
-    preco_original: originalPrice,
-    installments: installments.quantity,
-    parcelas: installments.quantity,
-    installmentQuantity: installments.quantity,
-    installmentAmount: installments.amount,
-    installmentRate: installments.rate,
-    installmentInterest: installments.rate === 0 ? 'no-interest' : 'with-interest',
-    thumbnail: image,
-    image,
-    imagem: image,
-    permalink,
-    productUrl: permalink,
-    product_url: permalink,
-    link: permalink
-  }
-}
-
-async function enrichMissingOfferData(item) {
-  const normalized = normalizeOfferPayload(item)
-
-  // O proxy pode devolver dados parciais quando o resultado vem do catálogo.
-  // Nesse caso consultamos o item real pelo ID e só usamos os campos ausentes.
-  const itemId = firstText(
-    normalized.id,
-    item?.item_id,
-    item?.buy_box_winner?.item_id
-  )
-
-  const needsDetails = itemId && (
-    normalized.price <= 0 ||
-    !normalized.description ||
-    normalized.installments <= 0 ||
-    !normalized.image
-  )
-
-  if (!needsDetails) return normalized
-
-  try {
-    const headers = { accept: 'application/json' }
-    const token = getMeliToken()
-    if (token) headers.authorization = `Bearer ${token}`
-
-    const response = await nativeFetch(
-      `https://api.mercadolibre.com/items/${encodeURIComponent(itemId)}`,
-      { headers, cache: 'no-store' }
-    )
-
-    if (!response.ok) return normalized
-
-    const detail = await response.json()
-    const detailNormalized = normalizeOfferPayload(detail)
-
-    return normalizeOfferPayload({
-      ...normalized,
-      ...detailNormalized,
-      // Mantém a descrição já enriquecida pelo proxy quando existir.
-      description: detailNormalized.description || normalized.description,
-      permalink: detailNormalized.permalink || normalized.permalink,
-      productUrl: detailNormalized.productUrl || normalized.productUrl,
-      thumbnail: detailNormalized.thumbnail || normalized.thumbnail,
-      image: detailNormalized.image || normalized.image,
-      price: detailNormalized.price || normalized.price,
-      original_price: detailNormalized.original_price || normalized.original_price,
-      installments: detailNormalized.installments || normalized.installments,
-      installmentAmount: detailNormalized.installmentAmount || normalized.installmentAmount,
-      installmentRate: detailNormalized.installmentRate || normalized.installmentRate
-    })
-  } catch {
-    return normalized
+    title, titulo: title, name: title,
+    description, descricao: description,
+    price, preco: price, currentPrice: price, current_price: price,
+    original_price: originalPrice, originalPrice, previousPrice: originalPrice, previous_price: originalPrice,
+    installments: quantity, parcelas: quantity, installmentQuantity: quantity,
+    installmentAmount: amount, installmentRate: rate,
+    installmentInterest: rate === 0 ? 'no-interest' : 'with-interest',
+    thumbnail: image, image, imagem: image,
+    permalink, productUrl: permalink, product_url: permalink, link: permalink
   }
 }
 
@@ -285,42 +81,20 @@ async function normalizeOffersResponse(response) {
     const payload = await response.clone().json()
     const source = Array.isArray(payload)
       ? payload
-      : firstArray(
-          payload?.results,
-          payload?.items,
-          payload?.products,
-          payload?.produtos,
-          payload?.data?.results,
-          payload?.data?.items,
-          payload?.data?.products,
-          payload?.data?.produtos
-        )
+      : (Array.isArray(payload?.results) ? payload.results :
+         Array.isArray(payload?.items) ? payload.items :
+         Array.isArray(payload?.products) ? payload.products : [])
 
-    if (!source.length && !Array.isArray(payload)) return response
-
-    const normalized = await Promise.all(
-      source.map(enrichMissingOfferData)
-    )
-
-    // Sempre expõe results. O Affiliate Engine antigo entende results/items,
-    // enquanto a API pode devolver products/produtos dependendo da origem.
+    if (!Array.isArray(source)) return response
+    const normalized = source.map(normalizeOffer)
     const body = Array.isArray(payload)
       ? normalized
-      : {
-          ...payload,
-          results: normalized,
-          items: normalized,
-          products: normalized,
-          produtos: normalized
-        }
+      : { ...payload, results: normalized, items: normalized, products: normalized, produtos: normalized }
 
     return new Response(JSON.stringify(body), {
       status: response.status,
       statusText: response.statusText,
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store'
-      }
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
     })
   } catch {
     return response
@@ -334,24 +108,18 @@ window.fetch = async function (input, init = {}) {
     typeof input === 'string' ? input : input.url,
     window.location.origin
   )
-
   const target = new URL(OFFERS_ENDPOINT)
   target.search = requestUrl.search
   target.searchParams.set('action', 'search')
-  // Evita qualquer resposta intermediária antiga durante a troca de versões.
-  target.searchParams.set('_v', '20260827-3')
+  target.searchParams.set('_v', '20260827-4')
 
-  const token = getMeliToken()
-  if (!token) {
-    throw new Error('É necessário informar um Access Token do Mercado Livre para buscar ofertas.')
-  }
+  const headers = { accept: 'application/json' }
+  const token = getSavedMeliToken()
+  if (token) headers.authorization = `Bearer ${token}`
 
   const response = await nativeFetch(target.toString(), {
     method: 'GET',
-    headers: {
-      accept: 'application/json',
-      authorization: `Bearer ${token}`
-    },
+    headers,
     cache: 'no-store',
     signal: init?.signal
   })
