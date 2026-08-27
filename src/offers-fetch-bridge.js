@@ -35,9 +35,7 @@ function getMeliToken() {
 
   const normalized = String(token || '').trim()
 
-  if (!normalized) {
-    return ''
-  }
+  if (!normalized) return ''
 
   try {
     window.sessionStorage.setItem(MELI_TOKEN_KEY, normalized)
@@ -46,6 +44,143 @@ function getMeliToken() {
   }
 
   return normalized
+}
+
+function numberOrNull(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    const text = String(value || '').trim()
+    if (text) return text
+  }
+  return ''
+}
+
+function normalizeInstallments(item) {
+  const source = item?.installments
+  const nested = source && typeof source === 'object' ? source : {}
+
+  const quantity = numberOrNull(
+    nested.quantity,
+    item?.installmentQuantity,
+    item?.installments_count,
+    typeof source === 'number' ? source : null
+  ) || 0
+
+  const amount = numberOrNull(
+    nested.amount,
+    item?.installment_amount,
+    item?.installmentAmount
+  ) || 0
+
+  const rate = numberOrNull(
+    nested.rate,
+    item?.installment_rate,
+    item?.installmentRate
+  ) || 0
+
+  return { quantity, amount, rate }
+}
+
+function normalizeOfferPayload(item) {
+  const installments = normalizeInstallments(item)
+  const price = numberOrNull(
+    item?.price,
+    item?.currentPrice,
+    item?.sale_price,
+    item?.salePrice,
+    item?.buy_box_winner?.price
+  ) || 0
+
+  const originalPrice = numberOrNull(
+    item?.original_price,
+    item?.originalPrice,
+    item?.previousPrice,
+    item?.listPrice,
+    item?.buy_box_winner?.original_price
+  )
+
+  const title = firstText(
+    item?.title,
+    item?.name,
+    item?.productName,
+    item?.id
+  )
+
+  const description = firstText(
+    item?.description,
+    item?.subtitle,
+    item?.short_description,
+    item?.attributes?.find?.((attribute) => attribute?.id === 'MODEL')?.value_name
+  )
+
+  return {
+    ...item,
+    title,
+    name: title,
+    description,
+    price,
+    original_price: originalPrice,
+    previousPrice: originalPrice,
+    installments: installments.quantity,
+    installmentQuantity: installments.quantity,
+    installmentAmount: installments.amount,
+    installmentRate: installments.rate,
+    installmentInterest: installments.rate === 0 ? 'no-interest' : 'with-interest',
+    thumbnail: firstText(
+      item?.thumbnail,
+      item?.image,
+      item?.pictures?.[0]?.url
+    ),
+    permalink: firstText(
+      item?.permalink,
+      item?.productUrl,
+      item?.url,
+      item?.id ? `https://produto.mercadolivre.com.br/${item.id}` : ''
+    )
+  }
+}
+
+async function normalizeOffersResponse(response) {
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) return response
+
+  try {
+    const payload = await response.clone().json()
+    const source = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.results)
+        ? payload.results
+        : Array.isArray(payload?.items)
+          ? payload.items
+          : null
+
+    if (!source) return response
+
+    const normalized = source.map(normalizeOfferPayload)
+    const body = Array.isArray(payload)
+      ? normalized
+      : {
+          ...payload,
+          results: Array.isArray(payload?.results) ? normalized : payload.results,
+          items: Array.isArray(payload?.items) ? normalized : payload.items
+        }
+
+    return new Response(JSON.stringify(body), {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers
+    })
+  } catch {
+    return response
+  }
 }
 
 window.fetch = async function (input, init = {}) {
@@ -66,7 +201,7 @@ window.fetch = async function (input, init = {}) {
     throw new Error('É necessário informar um Access Token do Mercado Livre para buscar ofertas.')
   }
 
-  return nativeFetch(target.toString(), {
+  const response = await nativeFetch(target.toString(), {
     method: 'GET',
     headers: {
       accept: 'application/json',
@@ -75,4 +210,6 @@ window.fetch = async function (input, init = {}) {
     cache: 'no-store',
     signal: init?.signal
   })
+
+  return normalizeOffersResponse(response)
 }
