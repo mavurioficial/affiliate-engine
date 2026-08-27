@@ -222,6 +222,61 @@ function normalizeOfferPayload(item) {
   }
 }
 
+async function enrichMissingOfferData(item) {
+  const normalized = normalizeOfferPayload(item)
+
+  // O proxy pode devolver dados parciais quando o resultado vem do catálogo.
+  // Nesse caso consultamos o item real pelo ID e só usamos os campos ausentes.
+  const itemId = firstText(
+    normalized.id,
+    item?.item_id,
+    item?.buy_box_winner?.item_id
+  )
+
+  const needsDetails = itemId && (
+    normalized.price <= 0 ||
+    !normalized.description ||
+    normalized.installments <= 0 ||
+    !normalized.image
+  )
+
+  if (!needsDetails) return normalized
+
+  try {
+    const headers = { accept: 'application/json' }
+    const token = getMeliToken()
+    if (token) headers.authorization = `Bearer ${token}`
+
+    const response = await nativeFetch(
+      `https://api.mercadolibre.com/items/${encodeURIComponent(itemId)}`,
+      { headers, cache: 'no-store' }
+    )
+
+    if (!response.ok) return normalized
+
+    const detail = await response.json()
+    const detailNormalized = normalizeOfferPayload(detail)
+
+    return normalizeOfferPayload({
+      ...normalized,
+      ...detailNormalized,
+      // Mantém a descrição já enriquecida pelo proxy quando existir.
+      description: detailNormalized.description || normalized.description,
+      permalink: detailNormalized.permalink || normalized.permalink,
+      productUrl: detailNormalized.productUrl || normalized.productUrl,
+      thumbnail: detailNormalized.thumbnail || normalized.thumbnail,
+      image: detailNormalized.image || normalized.image,
+      price: detailNormalized.price || normalized.price,
+      original_price: detailNormalized.original_price || normalized.original_price,
+      installments: detailNormalized.installments || normalized.installments,
+      installmentAmount: detailNormalized.installmentAmount || normalized.installmentAmount,
+      installmentRate: detailNormalized.installmentRate || normalized.installmentRate
+    })
+  } catch {
+    return normalized
+  }
+}
+
 async function normalizeOffersResponse(response) {
   const contentType = response.headers.get('content-type') || ''
   if (!contentType.includes('application/json')) return response
@@ -243,7 +298,9 @@ async function normalizeOffersResponse(response) {
 
     if (!source.length && !Array.isArray(payload)) return response
 
-    const normalized = source.map(normalizeOfferPayload)
+    const normalized = await Promise.all(
+      source.map(enrichMissingOfferData)
+    )
 
     // Sempre expõe results. O Affiliate Engine antigo entende results/items,
     // enquanto a API pode devolver products/produtos dependendo da origem.
@@ -282,7 +339,7 @@ window.fetch = async function (input, init = {}) {
   target.search = requestUrl.search
   target.searchParams.set('action', 'search')
   // Evita qualquer resposta intermediária antiga durante a troca de versões.
-  target.searchParams.set('_v', '20260827-2')
+  target.searchParams.set('_v', '20260827-3')
 
   const token = getMeliToken()
   if (!token) {
