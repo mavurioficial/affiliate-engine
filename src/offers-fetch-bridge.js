@@ -1,8 +1,8 @@
-// Ponte entre o fluxo legado do Affiliate Engine e a API validada
-// no projeto mavuri-api-test. O GitHub Pages não pode falar diretamente
-// com o Mercado Livre com segurança, por isso a chamada passa pelo proxy.
-const OFFERS_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/meli'
-const MELI_TOKEN_KEY = 'mavuri.meli.access-token'
+// Ponte de compatibilidade para o fluxo existente do main.js.
+// No GitHub Pages não existe /api/offers. Para a busca pública de produtos,
+// consultamos diretamente a API pública de busca do Mercado Livre, evitando
+// depender de proxy, Edge Function ou credenciais apenas para pesquisar ofertas.
+const MERCADO_LIVRE_SEARCH = 'https://api.mercadolibre.com/sites/MLB/search'
 const nativeFetch = window.fetch.bind(window)
 
 function isOffersRequest(input) {
@@ -21,34 +21,7 @@ function isOffersRequest(input) {
   }
 }
 
-function getMeliToken() {
-  try {
-    const saved = window.sessionStorage.getItem(MELI_TOKEN_KEY)
-    if (saved) return saved
-  } catch {
-    // Se sessionStorage estiver indisponível, seguimos com a sessão atual.
-  }
-
-  const token = window.prompt(
-    'Cole o Access Token do Mercado Livre para esta sessão. Ele não será salvo permanentemente.'
-  )
-
-  const normalized = String(token || '').trim()
-
-  if (!normalized) {
-    return ''
-  }
-
-  try {
-    window.sessionStorage.setItem(MELI_TOKEN_KEY, normalized)
-  } catch {
-    // O token continua disponível somente para esta chamada.
-  }
-
-  return normalized
-}
-
-window.fetch = async function (input, init = {}) {
+window.fetch = async function (input, init) {
   if (!isOffersRequest(input)) return nativeFetch(input, init)
 
   const requestUrl = new URL(
@@ -56,21 +29,17 @@ window.fetch = async function (input, init = {}) {
     window.location.origin
   )
 
-  const target = new URL(OFFERS_ENDPOINT)
-  target.search = requestUrl.search
-  target.searchParams.set('action', 'search')
+  const target = new URL(MERCADO_LIVRE_SEARCH)
+  const query = requestUrl.searchParams.get('q') || ''
+  const limit = requestUrl.searchParams.get('limit') || '10'
 
-  const token = getMeliToken()
-
-  if (!token) {
-    throw new Error('É necessário informar um Access Token do Mercado Livre para buscar ofertas.')
-  }
+  target.searchParams.set('q', query)
+  target.searchParams.set('limit', limit)
 
   return nativeFetch(target.toString(), {
     method: 'GET',
     headers: {
-      accept: 'application/json',
-      authorization: `Bearer ${token}`
+      accept: 'application/json'
     },
     cache: 'no-store',
     signal: init?.signal
