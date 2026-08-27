@@ -34,7 +34,6 @@ function getMeliToken() {
   )
 
   const normalized = String(token || '').trim()
-
   if (!normalized) return ''
 
   try {
@@ -49,9 +48,24 @@ function getMeliToken() {
 function numberOrNull(...values) {
   for (const value of values) {
     if (value === null || value === undefined || value === '') continue
+
+    if (typeof value === 'string') {
+      const text = value.trim()
+      if (!text) continue
+
+      // Aceita 1.234,56 e 1234.56 sem transformar preço válido em zero.
+      const normalized = text.includes(',')
+        ? text.replace(/\./g, '').replace(',', '.')
+        : text
+      const parsed = Number(normalized)
+      if (Number.isFinite(parsed)) return parsed
+      continue
+    }
+
     const parsed = Number(value)
     if (Number.isFinite(parsed)) return parsed
   }
+
   return null
 }
 
@@ -63,27 +77,45 @@ function firstText(...values) {
   return ''
 }
 
+function firstArray(...values) {
+  for (const value of values) {
+    if (Array.isArray(value)) return value
+  }
+  return []
+}
+
 function normalizeInstallments(item) {
-  const source = item?.installments
+  const source = item?.installments ?? item?.parcelas
   const nested = source && typeof source === 'object' ? source : {}
+  const pricing = item?.pricing || item?.price_data || {}
 
   const quantity = numberOrNull(
     nested.quantity,
+    nested.quantidade,
+    nested.installments,
     item?.installmentQuantity,
     item?.installments_count,
+    item?.installment_quantity,
+    item?.parcelas_quantidade,
     typeof source === 'number' ? source : null
   ) || 0
 
   const amount = numberOrNull(
     nested.amount,
+    nested.valor,
+    nested.value,
     item?.installment_amount,
-    item?.installmentAmount
+    item?.installmentAmount,
+    item?.parcela_valor,
+    pricing?.installment_amount
   ) || 0
 
   const rate = numberOrNull(
     nested.rate,
+    nested.juros,
     item?.installment_rate,
-    item?.installmentRate
+    item?.installmentRate,
+    item?.taxa_juros
   ) || 0
 
   return { quantity, amount, rate }
@@ -91,11 +123,20 @@ function normalizeInstallments(item) {
 
 function normalizeOfferPayload(item) {
   const installments = normalizeInstallments(item)
+  const pricing = item?.pricing || item?.price_data || item?.prices || {}
+
   const price = numberOrNull(
     item?.price,
+    item?.preco,
     item?.currentPrice,
+    item?.current_price,
+    item?.preco_atual,
+    item?.valor,
     item?.sale_price,
     item?.salePrice,
+    pricing?.price,
+    pricing?.current_price,
+    pricing?.sale_price,
     item?.buy_box_winner?.price
   ) || 0
 
@@ -103,48 +144,81 @@ function normalizeOfferPayload(item) {
     item?.original_price,
     item?.originalPrice,
     item?.previousPrice,
+    item?.previous_price,
+    item?.preco_original,
+    item?.preco_anterior,
     item?.listPrice,
+    item?.list_price,
+    pricing?.original_price,
+    pricing?.previous_price,
     item?.buy_box_winner?.original_price
-  )
+  ) || 0
 
   const title = firstText(
     item?.title,
+    item?.titulo,
     item?.name,
+    item?.nome,
     item?.productName,
+    item?.product_name,
     item?.id
   )
 
   const description = firstText(
     item?.description,
+    item?.descricao,
     item?.subtitle,
     item?.short_description,
+    item?.descricao_curta,
     item?.attributes?.find?.((attribute) => attribute?.id === 'MODEL')?.value_name
+  )
+
+  const image = firstText(
+    item?.thumbnail,
+    item?.imagem,
+    item?.image,
+    item?.image_url,
+    item?.pictures?.[0]?.url
+  )
+
+  const permalink = firstText(
+    item?.permalink,
+    item?.link,
+    item?.url,
+    item?.productUrl,
+    item?.product_url,
+    item?.id ? `https://produto.mercadolivre.com.br/${item.id}` : ''
   )
 
   return {
     ...item,
     title,
+    titulo: title,
     name: title,
     description,
+    descricao: description,
     price,
+    preco: price,
+    currentPrice: price,
+    current_price: price,
     original_price: originalPrice,
+    originalPrice,
     previousPrice: originalPrice,
+    previous_price: originalPrice,
+    preco_original: originalPrice,
     installments: installments.quantity,
+    parcelas: installments.quantity,
     installmentQuantity: installments.quantity,
     installmentAmount: installments.amount,
     installmentRate: installments.rate,
     installmentInterest: installments.rate === 0 ? 'no-interest' : 'with-interest',
-    thumbnail: firstText(
-      item?.thumbnail,
-      item?.image,
-      item?.pictures?.[0]?.url
-    ),
-    permalink: firstText(
-      item?.permalink,
-      item?.productUrl,
-      item?.url,
-      item?.id ? `https://produto.mercadolivre.com.br/${item.id}` : ''
-    )
+    thumbnail: image,
+    image,
+    imagem: image,
+    permalink,
+    productUrl: permalink,
+    product_url: permalink,
+    link: permalink
   }
 }
 
@@ -156,27 +230,40 @@ async function normalizeOffersResponse(response) {
     const payload = await response.clone().json()
     const source = Array.isArray(payload)
       ? payload
-      : Array.isArray(payload?.results)
-        ? payload.results
-        : Array.isArray(payload?.items)
-          ? payload.items
-          : null
+      : firstArray(
+          payload?.results,
+          payload?.items,
+          payload?.products,
+          payload?.produtos,
+          payload?.data?.results,
+          payload?.data?.items,
+          payload?.data?.products,
+          payload?.data?.produtos
+        )
 
-    if (!source) return response
+    if (!source.length && !Array.isArray(payload)) return response
 
     const normalized = source.map(normalizeOfferPayload)
+
+    // Sempre expõe results. O Affiliate Engine antigo entende results/items,
+    // enquanto a API pode devolver products/produtos dependendo da origem.
     const body = Array.isArray(payload)
       ? normalized
       : {
           ...payload,
-          results: Array.isArray(payload?.results) ? normalized : payload.results,
-          items: Array.isArray(payload?.items) ? normalized : payload.items
+          results: normalized,
+          items: normalized,
+          products: normalized,
+          produtos: normalized
         }
 
     return new Response(JSON.stringify(body), {
       status: response.status,
       statusText: response.statusText,
-      headers: response.headers
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store'
+      }
     })
   } catch {
     return response
@@ -194,9 +281,10 @@ window.fetch = async function (input, init = {}) {
   const target = new URL(OFFERS_ENDPOINT)
   target.search = requestUrl.search
   target.searchParams.set('action', 'search')
+  // Evita qualquer resposta intermediária antiga durante a troca de versões.
+  target.searchParams.set('_v', '20260827-2')
 
   const token = getMeliToken()
-
   if (!token) {
     throw new Error('É necessário informar um Access Token do Mercado Livre para buscar ofertas.')
   }
