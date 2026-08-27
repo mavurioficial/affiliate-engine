@@ -7,9 +7,25 @@
     <title>Mavuri Affiliate Engine</title>
     <link rel="stylesheet" href="./src/styles.css" />
     <link rel="stylesheet" href="./src/app.css" />
+    <style>
+      #mavuri-version {
+        position: fixed;
+        right: 12px;
+        bottom: 10px;
+        z-index: 99999;
+        padding: 5px 9px;
+        border-radius: 6px;
+        background: #122b20;
+        color: #d9f99d;
+        font: 600 11px/1.2 system-ui, sans-serif;
+        box-shadow: 0 2px 8px rgba(0,0,0,.25);
+        opacity: .9;
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="mavuri-version">Mavuri v2026.08.27.01</div>
     <script type="module" src="./src/offers-fetch-bridge.js"></script>
     <script type="module" src="./src/main.js"></script>
   </body>
