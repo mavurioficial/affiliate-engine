@@ -1,9 +1,7 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
 const supabaseUrl = 'https://otikoxnfotyjgphrdudn.supabase.co'
 const supabaseKey = 'sb_publishable_DSklSKpNz_Jlwi2Wx089TA_5JR8pBSt'
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+let clientPromise = null
 
 function timeout(ms) {
   return new Promise((resolve) => {
@@ -11,26 +9,48 @@ function timeout(ms) {
   })
 }
 
-export async function getSession() {
-  // A aplicação não pode ficar presa indefinidamente na tela de carregamento
-  // por uma consulta de sessão lenta ou indisponível.
-  const result = await Promise.race([
-    supabase.auth.getSession(),
-    timeout(7000)
-  ])
-
-  if (!result) {
-    return null
+async function getClient() {
+  if (!clientPromise) {
+    clientPromise = Promise.race([
+      import('https://esm.sh/@supabase/supabase-js@2')
+        .then(({ createClient }) => createClient(supabaseUrl, supabaseKey)),
+      timeout(7000)
+    ]).then((client) => {
+      if (!client) {
+        throw new Error('Não foi possível carregar o serviço de autenticação.')
+      }
+      return client
+    }).catch((error) => {
+      clientPromise = null
+      throw error
+    })
   }
 
-  const { data, error } = result
+  return clientPromise
+}
 
-  if (error) throw error
+export async function getSession() {
+  try {
+    const supabase = await getClient()
+    const result = await Promise.race([
+      supabase.auth.getSession(),
+      timeout(7000)
+    ])
 
-  return data.session
+    if (!result) return null
+
+    const { data, error } = result
+    if (error) throw error
+
+    return data.session
+  } catch (error) {
+    console.warn('Autenticação indisponível na inicialização:', error)
+    return null
+  }
 }
 
 export async function signIn(email, password) {
+  const supabase = await getClient()
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
@@ -42,13 +62,22 @@ export async function signIn(email, password) {
 }
 
 export async function signOut() {
+  const supabase = await getClient()
   const { error } = await supabase.auth.signOut()
 
   if (error) throw error
 }
 
 export function onAuthChange(callback) {
-  return supabase.auth.onAuthStateChange((_event, session) => {
-    callback(session)
-  })
+  getClient()
+    .then((supabase) => {
+      supabase.auth.onAuthStateChange((_event, session) => {
+        callback(session)
+      })
+    })
+    .catch((error) => {
+      console.warn('Monitoramento de autenticação indisponível:', error)
+    })
+
+  return { data: { subscription: { unsubscribe() {} } } }
 }
