@@ -1,8 +1,9 @@
 const HUB_URL = 'https://mercadolivre.com.br/afiliados/hub?is_affiliate=true#menu-user'
 const STORAGE_KEY = 'mavuri.hub.capture'
-const APP_VERSION = 'APP 2026.08.28.06'
+const APP_VERSION = 'APP 2026.08.28.07'
 
 let lastMode = ''
+let pendingApply = false
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -13,20 +14,21 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;')
 }
 
+// localStorage é usado para o rascunho sobreviver à troca de abas/telas e até a um reload.
 function readCapture() {
   try {
-    return JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null') || {}
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || {}
   } catch {
     return {}
   }
 }
 
 function writeCapture(capture) {
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(capture || {}))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(capture || {}))
 }
 
 function clearCapture() {
-  sessionStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(STORAGE_KEY)
 }
 
 function hubPage() {
@@ -92,7 +94,7 @@ function hubPage() {
 
     <section class="next-steps hub-automation-status">
       <h2>Próximo nível de automação</h2>
-      <p>O passo seguinte é uma extensão do navegador para ler diretamente a página do Hub onde você já está autenticado e enviar para o Mavuri o produto selecionado e o link copiado. Isso evita depender de uma API pública de busca e mantém o fluxo dentro do seu ambiente de afiliado.</p>
+      <p>O próximo passo é enriquecer automaticamente os dados do link do afiliado. Enquanto essa leitura não estiver disponível, o link nunca será perdido e os campos extras continuam opcionais.</p>
     </section>
   `
 }
@@ -101,6 +103,7 @@ function persistHubForm(form) {
   if (!form) return
   const data = new FormData(form)
   writeCapture({
+    ...readCapture(),
     affiliateUrl: String(data.get('affiliateUrl') || '').trim(),
     productName: String(data.get('productName') || '').trim(),
     category: String(data.get('category') || '').trim(),
@@ -111,6 +114,15 @@ function persistHubForm(form) {
   })
 }
 
+function setField(form, name, value) {
+  const field = form.elements.namedItem(name)
+  if (!field) return false
+  if (field.value !== String(value ?? '')) field.value = String(value ?? '')
+  field.dispatchEvent(new Event('input', { bubbles: true }))
+  field.dispatchEvent(new Event('change', { bubbles: true }))
+  return true
+}
+
 function applyHubDraft() {
   const capture = readCapture()
   if (!capture.affiliateUrl) return false
@@ -118,23 +130,46 @@ function applyHubDraft() {
   const form = document.querySelector('[data-divulgacao]')
   if (!form) return false
 
-  const set = (name, value) => {
-    const field = form.elements.namedItem(name)
-    if (field && value !== undefined && value !== null) field.value = value
+  // O link é o único dado obrigatório na captura. A tela seguinte recebe um título padrão
+  // para não bloquear o usuário por campos que ele não informou.
+  setField(form, 'productName', capture.productName || 'Oferta selecionada no Hub do Mercado Livre')
+  setField(form, 'description', capture.description || '')
+  setField(form, 'productUrl', capture.affiliateUrl)
+  setField(form, 'affiliateUrl', capture.affiliateUrl)
+  setField(form, 'price', capture.price || '')
+  setField(form, 'previousPrice', capture.previousPrice || '')
+  setField(form, 'installments', capture.installments || '')
+  setField(form, 'installmentInterest', 'no-interest')
+
+  pendingApply = false
+
+  // Só envia depois que todos os valores acima estiverem no DOM. Se a tela tiver outro
+  // requisito obrigatório, remove temporariamente a obrigatoriedade dos campos vazios,
+  // pois esses dados são complementares e não devem travar a geração da prévia.
+  const temporarilyOptional = [...form.querySelectorAll('[required]')]
+    .filter((field) => !String(field.value || '').trim())
+  temporarilyOptional.forEach((field) => field.removeAttribute('required'))
+
+  try {
+    form.requestSubmit()
+  } finally {
+    setTimeout(() => temporarilyOptional.forEach((field) => field.setAttribute('required', '')), 0)
   }
 
-  set('productName', capture.productName || 'Oferta selecionada no Mercado Livre')
-  set('description', capture.description || '')
-  set('productUrl', capture.affiliateUrl)
-  set('affiliateUrl', capture.affiliateUrl)
-  set('price', capture.price || '')
-  set('previousPrice', capture.previousPrice || '')
-  set('installments', capture.installments || '')
-  set('installmentInterest', 'no-interest')
-
-  form.requestSubmit()
-  clearCapture()
   return true
+}
+
+function scheduleApplyHubDraft() {
+  if (pendingApply) return
+  pendingApply = true
+  let attempts = 0
+  const timer = setInterval(() => {
+    attempts += 1
+    if (applyHubDraft() || attempts >= 20) {
+      pendingApply = false
+      clearInterval(timer)
+    }
+  }, 100)
 }
 
 function bindHubEvents(container) {
@@ -149,18 +184,12 @@ function bindHubEvents(container) {
   })
 
   const form = container.querySelector('[data-hub-capture]')
-
   form?.addEventListener('input', () => persistHubForm(form))
   form?.addEventListener('change', () => persistHubForm(form))
-
   form?.addEventListener('submit', (event) => {
     event.preventDefault()
     persistHubForm(event.currentTarget)
-
-    const affiliateUrl = String(readCapture().affiliateUrl || '').trim()
-    if (!affiliateUrl) return
-
-    document.querySelector('[data-page="divulgacao"]')?.click()
+    if (readCapture().affiliateUrl) document.querySelector('[data-page="divulgacao"]')?.click()
   })
 }
 
@@ -168,41 +197,25 @@ function ensureVersionBadge() {
   if (!document.getElementById('mavuri-version-badge')) {
     const style = document.createElement('style')
     style.textContent = `
-      #mavuri-version-badge {
-        position: fixed;
-        right: 12px;
-        bottom: 10px;
-        z-index: 2147483647;
-        padding: 7px 10px;
-        border-radius: 6px;
-        background: #1f3d2a;
-        color: #fff;
-        font: 700 11px/1.2 Arial, sans-serif;
-        box-shadow: 0 2px 10px rgba(0,0,0,.25);
-        letter-spacing: .3px;
-      }
+      #mavuri-version-badge { position:fixed; right:12px; bottom:10px; z-index:2147483647; padding:7px 10px; border-radius:6px; background:#1f3d2a; color:#fff; font:700 11px/1.2 Arial,sans-serif; box-shadow:0 2px 10px rgba(0,0,0,.25); letter-spacing:.3px; }
     `
     document.head.appendChild(style)
-
     const badge = document.createElement('div')
     badge.id = 'mavuri-version-badge'
     document.body.appendChild(badge)
   }
-
   document.getElementById('mavuri-version-badge').textContent = APP_VERSION
 }
 
 function decorateNavigation() {
   document.querySelectorAll('[data-page="buscar-ofertas"]').forEach((button) => {
-    const text = button.textContent.trim()
-    if (text !== 'Hub de Afiliados') button.textContent = 'Hub de Afiliados'
+    if (button.textContent.trim() !== 'Hub de Afiliados') button.textContent = 'Hub de Afiliados'
   })
 }
 
 function syncUi() {
   ensureVersionBadge()
   decorateNavigation()
-
   const title = document.querySelector('.page-content .page-heading h1')?.textContent.trim()
 
   if (title === 'Buscar ofertas') {
@@ -217,7 +230,7 @@ function syncUi() {
 
   if (title === 'Nova divulgação') {
     lastMode = 'divulgacao'
-    applyHubDraft()
+    scheduleApplyHubDraft()
     return
   }
 
@@ -226,6 +239,6 @@ function syncUi() {
 
 const observer = new MutationObserver(() => syncUi())
 observer.observe(document.documentElement, { childList: true, subtree: true })
-
 document.addEventListener('DOMContentLoaded', syncUi)
+window.addEventListener('storage', ensureVersionBadge)
 ensureVersionBadge()
