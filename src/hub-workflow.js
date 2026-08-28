@@ -1,6 +1,7 @@
 const HUB_URL = 'https://mercadolivre.com.br/afiliados/hub?is_affiliate=true#menu-user'
 const RESOLVER_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/resolve'
 const STORAGE_KEY = 'mavuri.hub.capture'
+const DRAFT_STORAGE_KEY = 'mavuri.hub.draft'
 
 let lastMode = ''
 
@@ -29,7 +30,34 @@ function clearCapture() {
   sessionStorage.removeItem(STORAGE_KEY)
 }
 
+function readDraft() {
+  try {
+    return JSON.parse(sessionStorage.getItem(DRAFT_STORAGE_KEY) || '{}') || {}
+  } catch {
+    return {}
+  }
+}
+
+function writeDraft(draft) {
+  sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft))
+}
+
+function clearDraft() {
+  sessionStorage.removeItem(DRAFT_STORAGE_KEY)
+}
+
+function saveAffiliateUrlDraft(value) {
+  const draft = readDraft()
+  writeDraft({
+    ...draft,
+    affiliateUrl: String(value || '')
+  })
+}
+
 function hubPage() {
+  const draft = readDraft()
+  const affiliateUrl = escapeHtml(draft.affiliateUrl || '')
+
   return `
     <header class="page-heading">
       <p class="eyebrow">MERCADO LIVRE AFILIADOS</p>
@@ -62,7 +90,7 @@ function hubPage() {
 
         <label>
           <span>Seu link de afiliado *</span>
-          <input type="url" name="affiliateUrl" placeholder="Cole o link de afiliado aqui" required />
+          <input type="url" name="affiliateUrl" value="${affiliateUrl}" placeholder="Cole o link de afiliado aqui" required />
         </label>
 
         <div class="form-actions">
@@ -129,6 +157,8 @@ async function resolveAffiliateLink(container) {
     setResolveStatus(container, 'Cole primeiro o seu link de afiliado.', 'error')
     return
   }
+
+  saveAffiliateUrlDraft(affiliateUrl)
 
   try {
     new URL(affiliateUrl)
@@ -197,10 +227,19 @@ function bindHubEvents(container) {
     window.open(HUB_URL, '_blank', 'noopener')
   })
 
+  const affiliateInput = container.querySelector('[name="affiliateUrl"]')
+  affiliateInput?.addEventListener('input', (event) => {
+    saveAffiliateUrlDraft(event.target.value)
+  })
+  affiliateInput?.addEventListener('change', (event) => {
+    saveAffiliateUrlDraft(event.target.value)
+  })
+
   container.querySelector('[data-resolve-link]')?.addEventListener('click', () => resolveAffiliateLink(container))
 
   container.querySelector('[data-hub-clear]')?.addEventListener('click', () => {
     container.querySelector('[data-hub-capture]')?.reset()
+    clearDraft()
     const result = container.querySelector('[data-resolved-result]')
     if (result) result.hidden = true
     const status = container.querySelector('[data-resolve-status]')
@@ -227,6 +266,7 @@ function bindHubEvents(container) {
       description: String(data.get('description') || '').trim()
     })
 
+    clearDraft()
     document.querySelector('[data-page="divulgacao"]')?.click()
   })
 }
