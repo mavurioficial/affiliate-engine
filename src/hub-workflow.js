@@ -1,4 +1,5 @@
 const HUB_URL = 'https://mercadolivre.com.br/afiliados/hub?is_affiliate=true#menu-user'
+const RESOLVER_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/resolve'
 const STORAGE_KEY = 'mavuri.hub.capture'
 
 let lastMode = ''
@@ -10,13 +11,6 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;')
-}
-
-function money(value) {
-  const number = Number(value || 0)
-  return Number.isFinite(number)
-    ? number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-    : ''
 }
 
 function readCapture() {
@@ -49,12 +43,12 @@ function hubPage() {
         <div><strong>1. Abrir o Hub</strong><span>Usa sua sessão já autenticada no Mercado Livre.</span></div>
         <div><strong>2. Escolher oportunidades</strong><span>Mais vendidos, categorias, campanhas e ofertas do próprio portal.</span></div>
         <div><strong>3. Copiar seu link</strong><span>Use o botão Compartilhar do Mercado Livre e copie o link de afiliado.</span></div>
-        <div><strong>4. Gerar divulgação</strong><span>Cole o link no Mavuri e monte a prévia para seus canais.</span></div>
+        <div><strong>4. Localizar anúncio</strong><span>O Mavuri segue o link até encontrar a página real do produto.</span></div>
+        <div><strong>5. Gerar divulgação</strong><span>Os dados do anúncio serão usados sem perder seu link de afiliado.</span></div>
       </div>
       <div class="form-actions">
         <button class="primary" type="button" data-open-hub>↗ Abrir Hub de Afiliados</button>
       </div>
-      <p class="hub-note">Nesta etapa não fazemos mais uma busca genérica de produtos. O Hub do Mercado Livre passa a ser a fonte das oportunidades.</p>
     </section>
 
     <section class="form-card hub-capture">
@@ -62,7 +56,7 @@ function hubPage() {
         <div class="section-title">
           <div>
             <h2>Capturar oferta escolhida</h2>
-            <p>Cole aqui o link copiado no botão Compartilhar do seu Hub.</p>
+            <p>Cole o link copiado no botão Compartilhar do seu Hub. Primeiro vamos localizar automaticamente o anúncio real.</p>
           </div>
         </div>
 
@@ -71,15 +65,31 @@ function hubPage() {
           <input type="url" name="affiliateUrl" placeholder="Cole o link de afiliado aqui" required />
         </label>
 
-        <div class="form-grid">
-          <label><span>Nome do produto</span><input type="text" name="productName" placeholder="Ex.: TV Samsung 55..." /></label>
-          <label><span>Categoria</span><input type="text" name="category" placeholder="Ex.: Eletrônicos" /></label>
+        <div class="form-actions">
+          <button class="primary" type="button" data-resolve-link>Buscar anúncio pelo link</button>
+        </div>
+
+        <div data-resolve-status aria-live="polite" style="margin: 14px 0 18px;"></div>
+
+        <div data-resolved-result hidden>
+          <div class="form-grid">
+            <label><span>Página intermediária</span><input type="text" name="socialUrl" readonly /></label>
+          </div>
+          <div class="form-grid">
+            <label><span>Anúncio real localizado</span><input type="text" name="productUrl" readonly /></label>
+            <label><span>ID do produto</span><input type="text" name="productId" readonly /></label>
+          </div>
         </div>
 
         <div class="form-grid">
-          <label><span>Preço atual</span><input type="number" step="0.01" min="0" name="price" placeholder="0,00" /></label>
-          <label><span>Preço anterior</span><input type="number" step="0.01" min="0" name="previousPrice" placeholder="0,00" /></label>
-          <label><span>Parcelas</span><input type="number" min="1" name="installments" placeholder="Ex.: 10" /></label>
+          <label><span>Nome do produto</span><input type="text" name="productName" placeholder="Será preenchido na próxima etapa" /></label>
+          <label><span>Categoria</span><input type="text" name="category" placeholder="Será preenchida na próxima etapa" /></label>
+        </div>
+
+        <div class="form-grid">
+          <label><span>Preço atual</span><input type="number" step="0.01" min="0" name="price" placeholder="Será preenchido na próxima etapa" /></label>
+          <label><span>Preço anterior</span><input type="number" step="0.01" min="0" name="previousPrice" placeholder="Será preenchido na próxima etapa" /></label>
+          <label><span>Parcelas</span><input type="number" min="1" name="installments" placeholder="Será preenchido na próxima etapa" /></label>
         </div>
 
         <label>
@@ -95,10 +105,65 @@ function hubPage() {
     </section>
 
     <section class="next-steps hub-automation-status">
-      <h2>Próximo nível de automação</h2>
-      <p>O passo seguinte é uma extensão do navegador para ler diretamente a página do Hub onde você já está autenticado e enviar para o Mavuri o produto selecionado e o link copiado. Isso evita depender de uma API pública de busca e mantém o fluxo dentro do seu ambiente de afiliado.</p>
+      <h2>Etapa atual</h2>
+      <p>Primeiro resolvemos o caminho <strong>link de afiliado → página social → anúncio real</strong>. O próximo passo será usar o anúncio localizado para preencher automaticamente nome, preço, desconto, parcelas e imagem.</p>
     </section>
   `
+}
+
+function setResolveStatus(container, message, kind = 'info') {
+  const status = container.querySelector('[data-resolve-status]')
+  if (!status) return
+  const tone = kind === 'error' ? '#8b1e1e' : kind === 'success' ? '#245c35' : '#4b5563'
+  status.innerHTML = `<div style="padding:10px 12px;border:1px solid currentColor;border-radius:8px;color:${tone};background:#fff">${escapeHtml(message)}</div>`
+}
+
+async function resolveAffiliateLink(container) {
+  const form = container.querySelector('[data-hub-capture]')
+  const input = form?.elements.namedItem('affiliateUrl')
+  const button = container.querySelector('[data-resolve-link]')
+  const affiliateUrl = String(input?.value || '').trim()
+
+  if (!affiliateUrl) {
+    input?.focus()
+    setResolveStatus(container, 'Cole primeiro o seu link de afiliado.', 'error')
+    return
+  }
+
+  try {
+    new URL(affiliateUrl)
+  } catch {
+    setResolveStatus(container, 'O link informado não parece ser uma URL válida.', 'error')
+    return
+  }
+
+  button.disabled = true
+  const originalText = button.textContent
+  button.textContent = 'Localizando anúncio...'
+  setResolveStatus(container, 'Seguindo o link de afiliado e procurando o anúncio real do produto...')
+
+  try {
+    const url = new URL(RESOLVER_ENDPOINT)
+    url.searchParams.set('url', affiliateUrl)
+    const response = await fetch(url.toString(), { cache: 'no-store' })
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok || !payload.ok || !payload.productUrl) {
+      throw new Error(payload.message || 'O anúncio real ainda não foi localizado.')
+    }
+
+    form.elements.namedItem('socialUrl').value = payload.socialUrl || ''
+    form.elements.namedItem('productUrl').value = payload.productUrl || ''
+    form.elements.namedItem('productId').value = payload.productId || ''
+    container.querySelector('[data-resolved-result]').hidden = false
+
+    setResolveStatus(container, 'Anúncio localizado com sucesso. Seu link de afiliado original continua preservado.', 'success')
+  } catch (error) {
+    setResolveStatus(container, error.message || 'Não foi possível localizar o anúncio automaticamente.', 'error')
+  } finally {
+    button.disabled = false
+    button.textContent = originalText
+  }
 }
 
 function applyHubDraft() {
@@ -115,7 +180,7 @@ function applyHubDraft() {
 
   set('productName', capture.productName || '')
   set('description', capture.description || '')
-  set('productUrl', capture.affiliateUrl || '')
+  set('productUrl', capture.productUrl || capture.affiliateUrl || '')
   set('affiliateUrl', capture.affiliateUrl || '')
   set('price', capture.price || '')
   set('previousPrice', capture.previousPrice || '')
@@ -132,8 +197,14 @@ function bindHubEvents(container) {
     window.open(HUB_URL, '_blank', 'noopener')
   })
 
+  container.querySelector('[data-resolve-link]')?.addEventListener('click', () => resolveAffiliateLink(container))
+
   container.querySelector('[data-hub-clear]')?.addEventListener('click', () => {
     container.querySelector('[data-hub-capture]')?.reset()
+    const result = container.querySelector('[data-resolved-result]')
+    if (result) result.hidden = true
+    const status = container.querySelector('[data-resolve-status]')
+    if (status) status.innerHTML = ''
   })
 
   container.querySelector('[data-hub-capture]')?.addEventListener('submit', (event) => {
@@ -145,6 +216,9 @@ function bindHubEvents(container) {
 
     writeCapture({
       affiliateUrl,
+      socialUrl: String(data.get('socialUrl') || '').trim(),
+      productUrl: String(data.get('productUrl') || '').trim(),
+      productId: String(data.get('productId') || '').trim(),
       productName: String(data.get('productName') || '').trim(),
       category: String(data.get('category') || '').trim(),
       price: String(data.get('price') || '').trim(),
