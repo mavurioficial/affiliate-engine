@@ -1,0 +1,3 @@
+Restored target baseline: 0ddfe7b43e79d3dcfa99e9a53163f6b410d18553
+Criteria: Supabase backend bridge, no manual Mercado Livre token, search and preview baseline.
+Restored on 2026-08-28.
