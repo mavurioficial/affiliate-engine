@@ -1,5 +1,5 @@
 import { CatalogRepository } from '../../application/catalog-repository.js'
-import { supabase } from '../../app/auth.js'
+import { getClient } from '../../app/auth.js'
 
 class SupabaseCatalog extends CatalogRepository {
   constructor(table) {
@@ -8,6 +8,7 @@ class SupabaseCatalog extends CatalogRepository {
   }
 
   async list() {
+    const supabase = await getClient()
     const { data, error } = await supabase
       .from(this.table)
       .select('*')
@@ -19,6 +20,7 @@ class SupabaseCatalog extends CatalogRepository {
   }
 
   async create(entry) {
+    const supabase = await getClient()
     const { data, error } = await supabase
       .from(this.table)
       .insert(entry)
@@ -31,6 +33,7 @@ class SupabaseCatalog extends CatalogRepository {
   }
 
   async update(id, changes) {
+    const supabase = await getClient()
     const { data, error } = await supabase
       .from(this.table)
       .update(changes)
@@ -44,6 +47,7 @@ class SupabaseCatalog extends CatalogRepository {
   }
 
   async remove(id) {
+    const supabase = await getClient()
     const { error } = await supabase
       .from(this.table)
       .delete()
