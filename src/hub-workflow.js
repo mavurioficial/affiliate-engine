@@ -1,6 +1,6 @@
 const HUB_URL = 'https://mercadolivre.com.br/afiliados/hub?is_affiliate=true#menu-user'
 const STORAGE_KEY = 'mavuri.hub.capture'
-const APP_VERSION = 'APP 2026.08.28.07'
+const APP_VERSION = 'APP 2026.08.28.08'
 
 let lastMode = ''
 let pendingApply = false
@@ -14,7 +14,6 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;')
 }
 
-// localStorage é usado para o rascunho sobreviver à troca de abas/telas e até a um reload.
 function readCapture() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || {}
@@ -130,8 +129,6 @@ function applyHubDraft() {
   const form = document.querySelector('[data-divulgacao]')
   if (!form) return false
 
-  // O link é o único dado obrigatório na captura. A tela seguinte recebe um título padrão
-  // para não bloquear o usuário por campos que ele não informou.
   setField(form, 'productName', capture.productName || 'Oferta selecionada no Hub do Mercado Livre')
   setField(form, 'description', capture.description || '')
   setField(form, 'productUrl', capture.affiliateUrl)
@@ -143,9 +140,6 @@ function applyHubDraft() {
 
   pendingApply = false
 
-  // Só envia depois que todos os valores acima estiverem no DOM. Se a tela tiver outro
-  // requisito obrigatório, remove temporariamente a obrigatoriedade dos campos vazios,
-  // pois esses dados são complementares e não devem travar a geração da prévia.
   const temporarilyOptional = [...form.querySelectorAll('[required]')]
     .filter((field) => !String(field.value || '').trim())
   temporarilyOptional.forEach((field) => field.removeAttribute('required'))
@@ -196,9 +190,7 @@ function bindHubEvents(container) {
 function ensureVersionBadge() {
   if (!document.getElementById('mavuri-version-badge')) {
     const style = document.createElement('style')
-    style.textContent = `
-      #mavuri-version-badge { position:fixed; right:12px; bottom:10px; z-index:2147483647; padding:7px 10px; border-radius:6px; background:#1f3d2a; color:#fff; font:700 11px/1.2 Arial,sans-serif; box-shadow:0 2px 10px rgba(0,0,0,.25); letter-spacing:.3px; }
-    `
+    style.textContent = `#mavuri-version-badge { position:fixed; right:12px; bottom:10px; z-index:2147483647; padding:7px 10px; border-radius:6px; background:#1f3d2a; color:#fff; font:700 11px/1.2 Arial,sans-serif; box-shadow:0 2px 10px rgba(0,0,0,.25); letter-spacing:.3px; }`
     document.head.appendChild(style)
     const badge = document.createElement('div')
     badge.id = 'mavuri-version-badge'
