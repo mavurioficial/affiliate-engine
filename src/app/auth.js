@@ -9,7 +9,7 @@ function timeout(ms) {
   })
 }
 
-async function getClient() {
+export async function getClient() {
   if (!clientPromise) {
     clientPromise = Promise.race([
       import('https://esm.sh/@supabase/supabase-js@2')
