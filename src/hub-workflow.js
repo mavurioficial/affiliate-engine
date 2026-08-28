@@ -72,7 +72,7 @@ function hubPage() {
         <div><strong>2. Escolher oportunidades</strong><span>Mais vendidos, categorias, campanhas e ofertas do próprio portal.</span></div>
         <div><strong>3. Copiar seu link</strong><span>Use o botão Compartilhar do Mercado Livre e copie o link de afiliado.</span></div>
         <div><strong>4. Localizar anúncio</strong><span>O Mavuri segue o link até encontrar a página real do produto.</span></div>
-        <div><strong>5. Gerar divulgação</strong><span>Os dados do anúncio serão usados sem perder seu link de afiliado.</span></div>
+        <div><strong>5. Buscar dados e gerar divulgação</strong><span>Os dados reais do anúncio são preenchidos antes da prévia, sem perder seu link de afiliado.</span></div>
       </div>
       <div class="form-actions">
         <button class="primary" type="button" data-open-hub>↗ Abrir Hub de Afiliados</button>
@@ -84,7 +84,7 @@ function hubPage() {
         <div class="section-title">
           <div>
             <h2>Capturar oferta escolhida</h2>
-            <p>Cole o link copiado no botão Compartilhar do seu Hub. Primeiro vamos localizar automaticamente o anúncio real.</p>
+            <p>Cole o link copiado no botão Compartilhar do seu Hub. Vamos localizar o anúncio real e buscar os dados antes de gerar a prévia.</p>
           </div>
         </div>
 
@@ -94,7 +94,7 @@ function hubPage() {
         </label>
 
         <div class="form-actions">
-          <button class="primary" type="button" data-resolve-link>Buscar anúncio pelo link</button>
+          <button class="primary" type="button" data-resolve-link>Buscar anúncio e dados</button>
         </div>
 
         <div data-resolve-status aria-live="polite" style="margin: 14px 0 18px;"></div>
@@ -110,14 +110,14 @@ function hubPage() {
         </div>
 
         <div class="form-grid">
-          <label><span>Nome do produto</span><input type="text" name="productName" placeholder="Será preenchido na próxima etapa" /></label>
-          <label><span>Categoria</span><input type="text" name="category" placeholder="Será preenchida na próxima etapa" /></label>
+          <label><span>Nome do produto</span><input type="text" name="productName" placeholder="Será preenchido automaticamente" /></label>
+          <label><span>Categoria</span><input type="text" name="category" placeholder="Será preenchida automaticamente" /></label>
         </div>
 
         <div class="form-grid">
-          <label><span>Preço atual</span><input type="number" step="0.01" min="0" name="price" placeholder="Será preenchido na próxima etapa" /></label>
-          <label><span>Preço anterior</span><input type="number" step="0.01" min="0" name="previousPrice" placeholder="Será preenchido na próxima etapa" /></label>
-          <label><span>Parcelas</span><input type="number" min="1" name="installments" placeholder="Será preenchido na próxima etapa" /></label>
+          <label><span>Preço atual</span><input type="number" step="0.01" min="0" name="price" placeholder="Será preenchido automaticamente" /></label>
+          <label><span>Preço anterior</span><input type="number" step="0.01" min="0" name="previousPrice" placeholder="Quando disponível" /></label>
+          <label><span>Parcelas</span><input type="number" min="1" name="installments" placeholder="Quando disponível" /></label>
         </div>
 
         <label>
@@ -134,7 +134,7 @@ function hubPage() {
 
     <section class="next-steps hub-automation-status">
       <h2>Etapa atual</h2>
-      <p>Primeiro resolvemos o caminho <strong>link de afiliado → página social → anúncio real</strong>. O próximo passo será usar o anúncio localizado para preencher automaticamente nome, preço, desconto, parcelas e imagem.</p>
+      <p>O Mavuri agora executa o caminho <strong>link de afiliado → página social → anúncio real → leitura dos dados</strong>. Depois de conferir os campos preenchidos, você segue para a prévia mantendo o link de afiliado original para o clique do consumidor.</p>
     </section>
   `
 }
@@ -144,6 +144,11 @@ function setResolveStatus(container, message, kind = 'info') {
   if (!status) return
   const tone = kind === 'error' ? '#8b1e1e' : kind === 'success' ? '#245c35' : '#4b5563'
   status.innerHTML = `<div style="padding:10px 12px;border:1px solid currentColor;border-radius:8px;color:${tone};background:#fff">${escapeHtml(message)}</div>`
+}
+
+function setFormValue(form, name, value) {
+  const field = form?.elements?.namedItem(name)
+  if (field && value !== undefined && value !== null && value !== '') field.value = value
 }
 
 async function resolveAffiliateLink(container) {
@@ -169,8 +174,8 @@ async function resolveAffiliateLink(container) {
 
   button.disabled = true
   const originalText = button.textContent
-  button.textContent = 'Localizando anúncio...'
-  setResolveStatus(container, 'Seguindo o link de afiliado e procurando o anúncio real do produto...')
+  button.textContent = 'Buscando dados...'
+  setResolveStatus(container, 'Seguindo o link de afiliado, localizando o anúncio real e lendo os dados do produto...')
 
   try {
     const url = new URL(RESOLVER_ENDPOINT)
@@ -182,14 +187,34 @@ async function resolveAffiliateLink(container) {
       throw new Error(payload.message || 'O anúncio real ainda não foi localizado.')
     }
 
-    form.elements.namedItem('socialUrl').value = payload.socialUrl || ''
-    form.elements.namedItem('productUrl').value = payload.productUrl || ''
-    form.elements.namedItem('productId').value = payload.productId || ''
+    setFormValue(form, 'socialUrl', payload.socialUrl || '')
+    setFormValue(form, 'productUrl', payload.productUrl || '')
+    setFormValue(form, 'productId', payload.productId || '')
+
+    const product = payload.product || {}
+    setFormValue(form, 'productName', product.title || '')
+    setFormValue(form, 'category', product.category || '')
+    setFormValue(form, 'price', product.price)
+    setFormValue(form, 'previousPrice', product.previousPrice)
+    setFormValue(form, 'installments', product.installments)
+
     container.querySelector('[data-resolved-result]').hidden = false
 
-    setResolveStatus(container, 'Anúncio localizado com sucesso. Seu link de afiliado original continua preservado.', 'success')
+    const loaded = [
+      product.title ? 'nome' : '',
+      product.category ? 'categoria' : '',
+      product.price !== null && product.price !== undefined ? 'preço' : '',
+      product.previousPrice !== null && product.previousPrice !== undefined ? 'preço anterior' : '',
+      product.installments !== null && product.installments !== undefined ? 'parcelas' : ''
+    ].filter(Boolean)
+
+    if (loaded.length) {
+      setResolveStatus(container, `Anúncio localizado e dados preenchidos: ${loaded.join(', ')}. Seu link de afiliado original continua preservado.`, 'success')
+    } else {
+      setResolveStatus(container, 'Anúncio localizado com sucesso. O Mercado Livre não disponibilizou os dados principais nesta leitura; você pode preencher os campos manualmente.', 'success')
+    }
   } catch (error) {
-    setResolveStatus(container, error.message || 'Não foi possível localizar o anúncio automaticamente.', 'error')
+    setResolveStatus(container, error.message || 'Não foi possível localizar o anúncio e buscar os dados automaticamente.', 'error')
   } finally {
     button.disabled = false
     button.textContent = originalText
