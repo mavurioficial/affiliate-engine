@@ -5,8 +5,25 @@ const supabaseKey = 'sb_publishable_DSklSKpNz_Jlwi2Wx089TA_5JR8pBSt'
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
+function timeout(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(() => resolve(null), ms)
+  })
+}
+
 export async function getSession() {
-  const { data, error } = await supabase.auth.getSession()
+  // A aplicação não pode ficar presa indefinidamente na tela de carregamento
+  // por uma consulta de sessão lenta ou indisponível.
+  const result = await Promise.race([
+    supabase.auth.getSession(),
+    timeout(7000)
+  ])
+
+  if (!result) {
+    return null
+  }
+
+  const { data, error } = result
 
   if (error) throw error
 
