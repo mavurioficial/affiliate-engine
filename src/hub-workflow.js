@@ -151,6 +151,60 @@ function setFormValue(form, name, value) {
   if (field && value !== undefined && value !== null && value !== '') field.value = value
 }
 
+function saveCurrentHubCapture(form, affiliateUrl, overrides = {}) {
+  const data = new FormData(form)
+  writeCapture({
+    affiliateUrl: String(affiliateUrl || data.get('affiliateUrl') || '').trim(),
+    socialUrl: String(overrides.socialUrl ?? data.get('socialUrl') ?? '').trim(),
+    productUrl: String(overrides.productUrl ?? data.get('productUrl') ?? '').trim(),
+    productId: String(overrides.productId ?? data.get('productId') ?? '').trim(),
+    productName: String(overrides.productName ?? data.get('productName') ?? '').trim(),
+    category: String(overrides.category ?? data.get('category') ?? '').trim(),
+    price: String(overrides.price ?? data.get('price') ?? '').trim(),
+    previousPrice: String(overrides.previousPrice ?? data.get('previousPrice') ?? '').trim(),
+    installments: String(overrides.installments ?? data.get('installments') ?? '').trim(),
+    description: String(overrides.description ?? data.get('description') ?? '').trim()
+  })
+}
+
+function restoreHubCapture(container) {
+  const capture = readCapture()
+  if (!capture) return
+
+  const form = container.querySelector('[data-hub-capture]')
+  if (!form) return
+
+  const fields = [
+    'affiliateUrl',
+    'socialUrl',
+    'productUrl',
+    'productId',
+    'productName',
+    'category',
+    'price',
+    'previousPrice',
+    'installments',
+    'description'
+  ]
+
+  for (const name of fields) setFormValue(form, name, capture[name])
+
+  const hasResolvedData = Boolean(capture.productUrl || capture.productId || capture.productName || capture.price)
+  const result = container.querySelector('[data-resolved-result]')
+  if (result) result.hidden = !hasResolvedData
+
+  if (hasResolvedData) {
+    const loaded = [
+      capture.productName ? 'nome' : '',
+      capture.category ? 'categoria' : '',
+      capture.price !== '' ? 'preço' : '',
+      capture.previousPrice !== '' ? 'preço anterior' : '',
+      capture.installments !== '' ? 'parcelas' : ''
+    ].filter(Boolean)
+    setResolveStatus(container, `Dados da última busca restaurados${loaded.length ? `: ${loaded.join(', ')}` : ''}.`, 'success')
+  }
+}
+
 async function resolveAffiliateLink(container) {
   const form = container.querySelector('[data-hub-capture]')
   const input = form?.elements.namedItem('affiliateUrl')
@@ -199,6 +253,19 @@ async function resolveAffiliateLink(container) {
     setFormValue(form, 'installments', product.installments)
 
     container.querySelector('[data-resolved-result]').hidden = false
+
+    // Persiste imediatamente o resultado da busca. Assim, trocar de aba,
+    // reconstruir a tela ou voltar ao Hub não apaga os dados capturados.
+    saveCurrentHubCapture(form, affiliateUrl, {
+      socialUrl: payload.socialUrl || '',
+      productUrl: payload.productUrl || '',
+      productId: payload.productId || '',
+      productName: product.title || '',
+      category: product.category || '',
+      price: product.price ?? '',
+      previousPrice: product.previousPrice ?? '',
+      installments: product.installments ?? ''
+    })
 
     const loaded = [
       product.title ? 'nome' : '',
@@ -252,6 +319,8 @@ function bindHubEvents(container) {
     window.open(HUB_URL, '_blank', 'noopener')
   })
 
+  restoreHubCapture(container)
+
   const affiliateInput = container.querySelector('[name="affiliateUrl"]')
   affiliateInput?.addEventListener('input', (event) => {
     saveAffiliateUrlDraft(event.target.value)
@@ -265,6 +334,7 @@ function bindHubEvents(container) {
   container.querySelector('[data-hub-clear]')?.addEventListener('click', () => {
     container.querySelector('[data-hub-capture]')?.reset()
     clearDraft()
+    clearCapture()
     const result = container.querySelector('[data-resolved-result]')
     if (result) result.hidden = true
     const status = container.querySelector('[data-resolve-status]')
