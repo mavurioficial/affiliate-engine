@@ -5,6 +5,10 @@ const DRAFT_STORAGE_KEY = 'mavuri.hub.draft'
 
 let lastMode = ''
 
+// A aplicação nova começa limpa. Depois disso, a captura permanece em
+// sessionStorage para sobreviver à navegação entre abas internas do Mavuri.
+clearHubState()
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -52,10 +56,8 @@ function clearHubState() {
 }
 
 function hubPage() {
-  // A tela do Hub sempre começa limpa.
-  // A captura só é persistida após uma busca bem-sucedida.
-  clearHubState()
-
+  // A navegação interna deve reconstruir a tela sem apagar a captura já feita.
+  // O estado só é apagado no carregamento inicial da aplicação ou pelo botão Limpar.
   return `
     <header class="page-heading">
       <p class="eyebrow">MERCADO LIVRE AFILIADOS</p>
@@ -163,6 +165,44 @@ function saveCurrentHubCapture(form, affiliateUrl, overrides = {}) {
     installments: String(overrides.installments ?? data.get('installments') ?? '').trim(),
     description: String(overrides.description ?? data.get('description') ?? '').trim()
   })
+}
+
+function restoreHubCapture(container) {
+  const capture = readCapture()
+  if (!capture) return
+
+  const form = container.querySelector('[data-hub-capture]')
+  if (!form) return
+
+  const fields = [
+    'affiliateUrl',
+    'socialUrl',
+    'productUrl',
+    'productId',
+    'productName',
+    'category',
+    'price',
+    'previousPrice',
+    'installments',
+    'description'
+  ]
+
+  for (const name of fields) setFormValue(form, name, capture[name])
+
+  const hasResolvedData = Boolean(capture.productUrl || capture.productId || capture.productName || capture.price)
+  const result = container.querySelector('[data-resolved-result]')
+  if (result) result.hidden = !hasResolvedData
+
+  if (hasResolvedData) {
+    const loaded = [
+      capture.productName ? 'nome' : '',
+      capture.category ? 'categoria' : '',
+      capture.price !== '' ? 'preço' : '',
+      capture.previousPrice !== '' ? 'preço anterior' : '',
+      capture.installments !== '' ? 'parcelas' : ''
+    ].filter(Boolean)
+    setResolveStatus(container, `Dados da última busca restaurados${loaded.length ? `: ${loaded.join(', ')}` : ''}.`, 'success')
+  }
 }
 
 async function resolveAffiliateLink(container) {
@@ -274,6 +314,8 @@ function bindHubEvents(container) {
   container.querySelector('[data-open-hub]')?.addEventListener('click', () => {
     window.open(HUB_URL, '_blank', 'noopener')
   })
+
+  restoreHubCapture(container)
 
   container.querySelector('[data-resolve-link]')?.addEventListener('click', () => resolveAffiliateLink(container))
 
