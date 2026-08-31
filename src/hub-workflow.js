@@ -52,8 +52,8 @@ function clearHubState() {
 }
 
 function hubPage() {
-  // A abertura da tela deve sempre começar limpa.
-  // Dados só aparecem depois de uma nova busca explícita.
+  // A tela do Hub sempre começa limpa.
+  // A captura só é persistida após uma busca bem-sucedida.
   clearHubState()
 
   return `
@@ -275,12 +275,6 @@ function bindHubEvents(container) {
     window.open(HUB_URL, '_blank', 'noopener')
   })
 
-  const affiliateInput = container.querySelector('[name="affiliateUrl"]')
-  affiliateInput?.addEventListener('input', () => {
-    // Não persistir o link enquanto o usuário apenas está digitando.
-    // A captura só é salva após uma busca bem-sucedida.
-  })
-
   container.querySelector('[data-resolve-link]')?.addEventListener('click', () => resolveAffiliateLink(container))
 
   container.querySelector('[data-hub-clear]')?.addEventListener('click', () => {
@@ -319,25 +313,36 @@ function bindHubEvents(container) {
 
 function decorateNavigation() {
   document.querySelectorAll('[data-page="buscar-ofertas"]').forEach((button) => {
-    button.addEventListener('click', () => {
-      page = 'buscar-ofertas'
-      render()
-    })
-  })
-
-  document.querySelectorAll('[data-page="divulgacao"]').forEach((button) => {
-    button.addEventListener('click', () => {
-      page = 'divulgacao'
-      render()
-    })
+    const text = button.textContent.trim()
+    if (text !== 'Hub de Afiliados') button.textContent = 'Hub de Afiliados'
   })
 }
 
-export function initHubWorkflow() {
-  window.mavuriHubWorkflow = {
-    render: () => {
-      if (typeof window.mavuriRender === 'function') window.mavuriRender()
-    },
-    applyHubDraft
+function syncUi() {
+  decorateNavigation()
+
+  const title = document.querySelector('.page-content .page-heading h1')?.textContent.trim()
+
+  if (title === 'Buscar ofertas') {
+    const content = document.querySelector('.page-content')
+    if (content && lastMode !== 'hub') {
+      lastMode = 'hub'
+      content.innerHTML = hubPage()
+      bindHubEvents(content)
+    }
+    return
   }
+
+  if (title === 'Nova divulgação') {
+    lastMode = 'divulgacao'
+    applyHubDraft()
+    return
+  }
+
+  lastMode = title || ''
 }
+
+const observer = new MutationObserver(() => syncUi())
+observer.observe(document.documentElement, { childList: true, subtree: true })
+
+document.addEventListener('DOMContentLoaded', syncUi)
