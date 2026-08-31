@@ -1,5 +1,5 @@
 const HUB_URL = 'https://mercadolivre.com.br/afiliados/hub?is_affiliate=true#menu-user'
-const RESOLVER_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/resolve4'
+const RESOLVER_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/resolve3'
 const STORAGE_KEY = 'mavuri.hub.capture'
 const DRAFT_STORAGE_KEY = 'mavuri.hub.draft'
 
@@ -46,17 +46,15 @@ function clearDraft() {
   sessionStorage.removeItem(DRAFT_STORAGE_KEY)
 }
 
-function saveAffiliateUrlDraft(value) {
-  const draft = readDraft()
-  writeDraft({
-    ...draft,
-    affiliateUrl: String(value || '')
-  })
+function clearHubState() {
+  clearDraft()
+  clearCapture()
 }
 
 function hubPage() {
-  const draft = readDraft()
-  const affiliateUrl = escapeHtml(draft.affiliateUrl || '')
+  // A abertura da tela deve sempre começar limpa.
+  // Dados só aparecem depois de uma nova busca explícita.
+  clearHubState()
 
   return `
     <header class="page-heading">
@@ -90,7 +88,7 @@ function hubPage() {
 
         <label>
           <span>Seu link de afiliado *</span>
-          <input type="url" name="affiliateUrl" value="${affiliateUrl}" placeholder="Cole o link de afiliado aqui" required />
+          <input type="url" name="affiliateUrl" value="" placeholder="Cole o link de afiliado aqui" required />
         </label>
 
         <div class="form-actions">
@@ -167,44 +165,6 @@ function saveCurrentHubCapture(form, affiliateUrl, overrides = {}) {
   })
 }
 
-function restoreHubCapture(container) {
-  const capture = readCapture()
-  if (!capture) return
-
-  const form = container.querySelector('[data-hub-capture]')
-  if (!form) return
-
-  const fields = [
-    'affiliateUrl',
-    'socialUrl',
-    'productUrl',
-    'productId',
-    'productName',
-    'category',
-    'price',
-    'previousPrice',
-    'installments',
-    'description'
-  ]
-
-  for (const name of fields) setFormValue(form, name, capture[name])
-
-  const hasResolvedData = Boolean(capture.productUrl || capture.productId || capture.productName || capture.price)
-  const result = container.querySelector('[data-resolved-result]')
-  if (result) result.hidden = !hasResolvedData
-
-  if (hasResolvedData) {
-    const loaded = [
-      capture.productName ? 'nome' : '',
-      capture.category ? 'categoria' : '',
-      capture.price !== '' ? 'preço' : '',
-      capture.previousPrice !== '' ? 'preço anterior' : '',
-      capture.installments !== '' ? 'parcelas' : ''
-    ].filter(Boolean)
-    setResolveStatus(container, `Dados da última busca restaurados${loaded.length ? `: ${loaded.join(', ')}` : ''}.`, 'success')
-  }
-}
-
 async function resolveAffiliateLink(container) {
   const form = container.querySelector('[data-hub-capture]')
   const input = form?.elements.namedItem('affiliateUrl')
@@ -216,8 +176,6 @@ async function resolveAffiliateLink(container) {
     setResolveStatus(container, 'Cole primeiro o seu link de afiliado.', 'error')
     return
   }
-
-  saveAffiliateUrlDraft(affiliateUrl)
 
   try {
     new URL(affiliateUrl)
@@ -317,22 +275,17 @@ function bindHubEvents(container) {
     window.open(HUB_URL, '_blank', 'noopener')
   })
 
-  restoreHubCapture(container)
-
   const affiliateInput = container.querySelector('[name="affiliateUrl"]')
-  affiliateInput?.addEventListener('input', (event) => {
-    saveAffiliateUrlDraft(event.target.value)
-  })
-  affiliateInput?.addEventListener('change', (event) => {
-    saveAffiliateUrlDraft(event.target.value)
+  affiliateInput?.addEventListener('input', () => {
+    // Não persistir o link enquanto o usuário apenas está digitando.
+    // A captura só é salva após uma busca bem-sucedida.
   })
 
   container.querySelector('[data-resolve-link]')?.addEventListener('click', () => resolveAffiliateLink(container))
 
   container.querySelector('[data-hub-clear]')?.addEventListener('click', () => {
+    clearHubState()
     container.querySelector('[data-hub-capture]')?.reset()
-    clearDraft()
-    clearCapture()
     const result = container.querySelector('[data-resolved-result]')
     if (result) result.hidden = true
     const status = container.querySelector('[data-resolve-status]')
@@ -366,36 +319,25 @@ function bindHubEvents(container) {
 
 function decorateNavigation() {
   document.querySelectorAll('[data-page="buscar-ofertas"]').forEach((button) => {
-    const text = button.textContent.trim()
-    if (text !== 'Hub de Afiliados') button.textContent = 'Hub de Afiliados'
+    button.addEventListener('click', () => {
+      page = 'buscar-ofertas'
+      render()
+    })
+  })
+
+  document.querySelectorAll('[data-page="divulgacao"]').forEach((button) => {
+    button.addEventListener('click', () => {
+      page = 'divulgacao'
+      render()
+    })
   })
 }
 
-function syncUi() {
-  decorateNavigation()
-
-  const title = document.querySelector('.page-content .page-heading h1')?.textContent.trim()
-
-  if (title === 'Buscar ofertas') {
-    const content = document.querySelector('.page-content')
-    if (content && lastMode !== 'hub') {
-      lastMode = 'hub'
-      content.innerHTML = hubPage()
-      bindHubEvents(content)
-    }
-    return
+export function initHubWorkflow() {
+  window.mavuriHubWorkflow = {
+    render: () => {
+      if (typeof window.mavuriRender === 'function') window.mavuriRender()
+    },
+    applyHubDraft
   }
-
-  if (title === 'Nova divulgação') {
-    lastMode = 'divulgacao'
-    applyHubDraft()
-    return
-  }
-
-  lastMode = title || ''
 }
-
-const observer = new MutationObserver(() => syncUi())
-observer.observe(document.documentElement, { childList: true, subtree: true })
-
-document.addEventListener('DOMContentLoaded', syncUi)
