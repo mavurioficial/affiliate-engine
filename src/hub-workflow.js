@@ -1,5 +1,5 @@
 const HUB_URL = 'https://mercadolivre.com.br/afiliados/hub?is_affiliate=true#menu-user'
-const RESOLVER_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/resolve'
+const RESOLVER_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/resolve4'
 const STORAGE_KEY = 'mavuri.hub.capture'
 const DRAFT_STORAGE_KEY = 'mavuri.hub.draft'
 
@@ -254,8 +254,6 @@ async function resolveAffiliateLink(container) {
 
     container.querySelector('[data-resolved-result]').hidden = false
 
-    // Persiste imediatamente o resultado da busca. Assim, trocar de aba,
-    // reconstruir a tela ou voltar ao Hub não apaga os dados capturados.
     saveCurrentHubCapture(form, affiliateUrl, {
       socialUrl: payload.socialUrl || '',
       productUrl: payload.productUrl || '',
