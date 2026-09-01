@@ -117,13 +117,8 @@ function hubPage() {
         <div class="form-grid">
           <label><span>Preço atual</span><input type="number" step="0.01" min="0" name="price" placeholder="Será preenchido automaticamente" /></label>
           <label><span>Preço anterior</span><input type="number" step="0.01" min="0" name="previousPrice" placeholder="Quando disponível" /></label>
-          <label><span>Parcelas</span><input type="number" min="1" name="installments" placeholder="Quando disponível" /></label>
+          <label><span>Frete</span><input type="text" name="freight" placeholder="Frete grátis, valor ou não informado" /></label>
         </div>
-
-        <label>
-          <span>Observação/descrição</span>
-          <textarea name="description" rows="3" placeholder="Opcional: detalhe que deseja destacar na mensagem"></textarea>
-        </label>
 
         <div class="form-actions">
           <button class="primary" type="submit">Gerar prévia da divulgação</button>
@@ -162,8 +157,7 @@ function saveCurrentHubCapture(form, affiliateUrl, overrides = {}) {
     category: String(overrides.category ?? data.get('category') ?? '').trim(),
     price: String(overrides.price ?? data.get('price') ?? '').trim(),
     previousPrice: String(overrides.previousPrice ?? data.get('previousPrice') ?? '').trim(),
-    installments: String(overrides.installments ?? data.get('installments') ?? '').trim(),
-    description: String(overrides.description ?? data.get('description') ?? '').trim()
+    freight: String(overrides.freight ?? data.get('freight') ?? '').trim()
   })
 }
 
@@ -183,8 +177,7 @@ function restoreHubCapture(container) {
     'category',
     'price',
     'previousPrice',
-    'installments',
-    'description'
+    'freight'
   ]
 
   for (const name of fields) setFormValue(form, name, capture[name])
@@ -199,7 +192,7 @@ function restoreHubCapture(container) {
       capture.category ? 'categoria' : '',
       capture.price !== '' ? 'preço' : '',
       capture.previousPrice !== '' ? 'preço anterior' : '',
-      capture.installments !== '' ? 'parcelas' : ''
+      capture.freight !== '' ? 'frete' : ''
     ].filter(Boolean)
     setResolveStatus(container, `Dados da última busca restaurados${loaded.length ? `: ${loaded.join(', ')}` : ''}.`, 'success')
   }
@@ -248,7 +241,7 @@ async function resolveAffiliateLink(container) {
     setFormValue(form, 'category', product.category || '')
     setFormValue(form, 'price', product.price)
     setFormValue(form, 'previousPrice', product.previousPrice)
-    setFormValue(form, 'installments', product.installments)
+    setFormValue(form, 'freight', product.freight || product.shipping || product.frete || '')
 
     container.querySelector('[data-resolved-result]').hidden = false
 
@@ -260,7 +253,7 @@ async function resolveAffiliateLink(container) {
       category: product.category || '',
       price: product.price ?? '',
       previousPrice: product.previousPrice ?? '',
-      installments: product.installments ?? ''
+      freight: product.freight || product.shipping || product.frete || ''
     })
 
     const loaded = [
@@ -268,7 +261,7 @@ async function resolveAffiliateLink(container) {
       product.category ? 'categoria' : '',
       product.price !== null && product.price !== undefined ? 'preço' : '',
       product.previousPrice !== null && product.previousPrice !== undefined ? 'preço anterior' : '',
-      product.installments !== null && product.installments !== undefined ? 'parcelas' : ''
+      (product.freight || product.shipping || product.frete) ? 'frete' : ''
     ].filter(Boolean)
 
     if (loaded.length) {
@@ -344,8 +337,7 @@ function bindHubEvents(container) {
       category: String(data.get('category') || '').trim(),
       price: String(data.get('price') || '').trim(),
       previousPrice: String(data.get('previousPrice') || '').trim(),
-      installments: String(data.get('installments') || '').trim(),
-      description: String(data.get('description') || '').trim()
+      freight: String(data.get('freight') || '').trim()
     })
 
     clearDraft()
