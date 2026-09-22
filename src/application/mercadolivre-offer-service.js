@@ -42,6 +42,6 @@ export async function captureMercadoLivreOffer(productUrl, {
       sourceTypeDetail: sourceType === 'api' ? 'mercadolivre_url' : sourceType
     }
   })
-  if (result.created) await enqueueOfferDeliveries(result.offer)
+  if (result.created && resolvedAffiliateUrl) await enqueueOfferDeliveries(result.offer)
   return result.offer
 }
