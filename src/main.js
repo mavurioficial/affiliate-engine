@@ -524,7 +524,7 @@ function flowPage() {
     ${flowState.notice ? `<section class="notice flow-success">${escapeHtml(flowState.notice)}</section>` : ''}
     ${flowState.error ? `<section class="notice">${escapeHtml(flowState.error)}</section>` : ''}
     <section class="flow-capture-panel">
-      <div class="section-title"><h2>Capturar oferta</h2><p>Cole uma URL do Mercado Livre e o Flow registra a oferta e avalia as regras.</p></div>
+      <div class="section-title"><h2>Capturar oferta</h2><p>Cole uma URL do Mercado Livre e o Flow registra a oferta e avalia as regras.</p><div class="flow-connection-hint">🔐 A conexão com o Mercado Livre é feita com OAuth; o Mavuri não pede seu token para colar no navegador.</div></div>
       <form data-flow-capture><div class="flow-capture-grid">
         <label><span>URL do produto</span><input name="productUrl" type="url" required placeholder="https://www.mercadolivre.com.br/..." /></label>
         <label><span>Link de afiliado (opcional)</span><input name="affiliateUrl" type="url" placeholder="Cole aqui se já tiver um link afiliado" /></label>
@@ -3681,7 +3681,8 @@ function bindEvents() {
               }, 120000)
 
               function onMessage(event) {
-                if (event.data?.type !== 'mavuri-meli-auth') return
+                if (event.origin !== 'https://otikoxnfotyjgphrdudn.supabase.co') return
+      if (event.data?.type !== 'mavuri-meli-auth') return
                 window.clearTimeout(timeout)
                 window.removeEventListener('message', onMessage)
                 if (event.data.ok) resolve()
