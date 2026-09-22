@@ -37,6 +37,7 @@ export async function retryFailedDeliveries() {
     .update({ status: 'queued', error_message: null, scheduled_for: new Date().toISOString() })
     .eq('user_id', user.id)
     .eq('status', 'failed')
+    .lt('attempts', 5)
     .select()
   if (error) throw error
   return data || []
