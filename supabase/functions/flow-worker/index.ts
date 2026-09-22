@@ -152,9 +152,7 @@ Deno.serve(async (req) => {
 
       const price = Number(offer?.price || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
       const old = Number(offer?.previous_price || 0)
-      const oldText = old > Number(offer?.price || 0) ? `\nDe: ~${old.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}~` : ""
       const discount = Number(offer?.discount_percent || 0)
-      const discountText = discount > 0 ? `\n🔥 ${discount.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% OFF` : ""
       const escapeHtml = (value: unknown) => String(value || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")
       const destination = String(offer?.affiliate_url || offer?.product_url || "")
       let destinationUrl: URL
@@ -175,7 +173,16 @@ Deno.serve(async (req) => {
       if (clickError) throw new Error(`Falha ao criar tracking: ${clickError.message}`)
 
       const trackedUrl = `${supabaseUrl}/functions/v1/track-click?t=${encodeURIComponent(trackingId)}`
-      const text = `🛍️ <b>${escapeHtml(offer?.title)}</b>${oldText}\n💰 <b>${price}</b>${discountText}${offer?.coupon ? `\n🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : ""}\n\n👉 <a href="${trackedUrl}">Comprar</a>`
+      const messageLines = [
+        `🛍️ <b>${escapeHtml(offer?.title)}</b>`,
+        old > Number(offer?.price || 0) ? `De: <s>${old.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</s>` : "",
+        `💰 <b>${price}</b>`,
+        discount > 0 ? `🔥 <b>${discount.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% OFF</b>` : "",
+        offer?.coupon ? `🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : "",
+        "",
+        `👉 <a href="${trackedUrl}"><b>COMPRAR AGORA</b></a>`
+      ].filter(Boolean)
+      const text = messageLines.join("\n")
 
       const imageUrl = /^https?:\\/\\//i.test(String(offer?.image_url || "").trim())
         ? String(offer.image_url).trim()
@@ -184,7 +191,7 @@ Deno.serve(async (req) => {
       const telegramCaption = text.length > 1024 ? `${text.slice(0, 1000)}…` : text
       const telegramBody = imageUrl
         ? { chat_id: channel.external_ref, photo: imageUrl, caption: telegramCaption, parse_mode: "HTML" }
-        : { chat_id: channel.external_ref, text, parse_mode: "HTML", disable_web_page_preview: false }
+        : { chat_id: channel.external_ref, text, parse_mode: "HTML", disable_web_page_preview: true }
 
       let response: Response
       try {
