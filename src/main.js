@@ -3659,8 +3659,9 @@ function bindEvents() {
             affiliateUrl
           })
 
+          let capturedOffer
           try {
-            await capture()
+            capturedOffer = await capture()
           } catch (captureError) {
             const message = captureError?.message || ''
             if (!/Mercado Livre não conectado ao Mavuri|conexão do Mercado Livre expirou/i.test(message)) throw captureError
@@ -3698,10 +3699,10 @@ function bindEvents() {
               window.addEventListener('message', onMessage)
             })
 
-            await capture()
+            capturedOffer = await capture()
           }
 
-          const notice = offer?.affiliate_url
+          const notice = capturedOffer?.affiliate_url
             ? 'Oferta capturada e pronta para distribuição monetizada.'
             : 'Oferta capturada, mas sem link afiliado. Ela não será enviada automaticamente até receber um link oficial de afiliado.'
           flowState = { ...flowState, loaded: false, notice, error: '' }
