@@ -5,10 +5,10 @@ function telegramUrl(botToken, method) {
 export function formatTelegramOffer(offer) {
   const price = Number(offer.price || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
   const old = Number(offer.previous_price || 0)
-  const oldText = old > Number(offer.price || 0) ? `\\nDe: ~${old.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}~` : ''
+  const oldText = old > Number(offer.price || 0) ? `\nDe: ~${old.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}~` : ''
   const discount = Number(offer.discount_percent || 0)
-  const discountText = discount > 0 ? `\\n🔥 ${discount}% OFF` : ''
-  return `🛍️ <b>${escapeHtml(offer.title)}</b>${oldText}\\n💰 <b>${price}</b>${discountText}${offer.coupon ? `\\n🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : ''}\\n\\n👉 <a href="${escapeHtml(offer.affiliate_url || offer.product_url || '#')}">Comprar</a>`
+  const discountText = discount > 0 ? `\n🔥 ${discount}% OFF` : ''
+  return `🛍️ <b>${escapeHtml(offer.title)}</b>${oldText}\n💰 <b>${price}</b>${discountText}${offer.coupon ? `\n🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : ''}\n\n👉 <a href="${escapeHtml(offer.affiliate_url || offer.product_url || '#')}">Comprar</a>`
 }
 
 function escapeHtml(value) {
