@@ -3,17 +3,28 @@ import { saveOfferDetailed } from './offer-service.js'
 import { resolveAffiliateUrl } from './affiliate-link-service.js'
 import { enqueueOfferDeliveries } from './delivery-service.js'
 import { calculateDiscount } from '../domain/offer-engine.js'
+import { resolveMercadoLivreAffiliateUrl } from '../integrations/affiliate-resolver-client.js'
 
 export async function captureMercadoLivreOffer(productUrl, {
   accessToken,
   affiliateUrl = null,
   sourceType = 'api'
 } = {}) {
-  const product = await resolveMercadoLivreProduct(productUrl, { accessToken })
+  let resolvedProductUrl = productUrl
+  let resolvedAffiliateUrl = affiliateUrl
 
-  const resolvedAffiliateUrl = await resolveAffiliateUrl(product.permalink || productUrl, {
+  if (!resolvedProductUrl && resolvedAffiliateUrl) {
+    const resolved = await resolveMercadoLivreAffiliateUrl(resolvedAffiliateUrl, { accessToken })
+    resolvedProductUrl = resolved.product_url
+  }
+
+  if (!resolvedProductUrl) throw new Error('Informe um link de afiliado do Mercado Livre.')
+
+  const product = await resolveMercadoLivreProduct(resolvedProductUrl, { accessToken })
+
+  resolvedAffiliateUrl = await resolveAffiliateUrl(product.permalink || resolvedProductUrl, {
     marketplace: 'mercadolivre',
-    affiliateUrl
+    affiliateUrl: resolvedAffiliateUrl
   })
 
   const price = Number(product.price || 0)
@@ -26,7 +37,7 @@ export async function captureMercadoLivreOffer(productUrl, {
     price,
     previousPrice,
     discountPercent,
-    productUrl: product.permalink || productUrl,
+    productUrl: product.permalink || resolvedProductUrl,
     affiliateUrl: resolvedAffiliateUrl,
     imageUrl: product.thumbnail,
     sourceType,
