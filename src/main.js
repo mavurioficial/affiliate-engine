@@ -485,7 +485,7 @@ async function loadFlowState() {
       listRules(),
       listDeliveryJobs()
     ])
-    flowState = { loading: false, loaded: true, offers, rules, jobs, error: '', notice: '' }
+    flowState = { loading: false, loaded: true, offers, rules, jobs, error: '', notice: flowState.notice }
   } catch (error) {
     flowState = { ...flowState, loading: false, loaded: true, error: error.message || 'Não foi possível carregar o Flow.' }
   }
