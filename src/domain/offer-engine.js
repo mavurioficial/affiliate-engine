@@ -57,6 +57,8 @@ export function matchesRule(offer, conditions = {}) {
   if (conditions.maxPrice != null && Number(offer.price) > Number(conditions.maxPrice)) return false
   if (conditions.category && normalizeText(offer.category) !== normalizeText(conditions.category)) return false
   if (conditions.seller && normalizeText(offer.seller) !== normalizeText(conditions.seller)) return false
+  if (conditions.categoryId && normalizeText(offer.metadata?.categoryId) !== normalizeText(conditions.categoryId)) return false
+  if (conditions.sellerId && normalizeText(offer.metadata?.sellerId) !== normalizeText(conditions.sellerId)) return false
   if (conditions.couponRequired === true && !offer.coupon) return false
   if (conditions.sourceType && normalizeText(offer.sourceType) !== normalizeText(conditions.sourceType)) return false
 
