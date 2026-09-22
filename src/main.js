@@ -1,12 +1,16 @@
 import { getSession, onAuthChange, signIn, signOut } from './auth.js'
 import { sections } from '../domain/catalog.js'
 import { developmentCatalogs } from '../infrastructure/development/catalog.js'
+import { listOffers } from './application/offer-service.js'
+import { listRules } from './application/rule-service.js'
+import { listDeliveryJobs } from './application/delivery-service.js'
 
 const root =
   document.querySelector('#app')
 
 let session = null
 let page = 'dashboard'
+let flowState = { loading: false, offers: [], rules: [], jobs: [], error: '' }
 let catalogsLoaded = false
 
 const catalogs = {}
@@ -463,6 +467,65 @@ function loginPage() {
       </section>
 
     </main>
+  `
+}
+
+async function loadFlowState() {
+  flowState.loading = true
+  flowState.error = ''
+  try {
+    const [offers, rules, jobs] = await Promise.all([
+      listOffers({ limit: 50 }),
+      listRules(),
+      listDeliveryJobs()
+    ])
+    flowState = { loading: false, offers, rules, jobs, error: '' }
+  } catch (error) {
+    flowState = { ...flowState, loading: false, error: error.message || 'Não foi possível carregar o Flow.' }
+  }
+}
+
+function flowPage() {
+  const sent = flowState.jobs.filter((job) => job.status === 'sent').length
+  const queued = flowState.jobs.filter((job) => job.status === 'queued').length
+  const failed = flowState.jobs.filter((job) => job.status === 'failed').length
+  return `
+    <header class="page-heading">
+      <p class="eyebrow">AUTOMAÇÃO</p>
+      <h1>Mavuri Flow</h1>
+      <p>O centro operacional do Mavuri: ofertas, regras e publicações em um único fluxo.</p>
+    </header>
+    ${flowState.error ? `<section class="notice">${escapeHtml(flowState.error)}</section>` : ''}
+    <section class="flow-pipeline">
+      <div class="flow-node"><span>01</span><strong>Captura</strong><small>Mercado Livre</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><span>02</span><strong>Oferta</strong><small>${flowState.offers.length} capturadas</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><span>03</span><strong>Regras</strong><small>${flowState.rules.length} ativas/cadastradas</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><span>04</span><strong>Distribuição</strong><small>${flowState.jobs.length} jobs</small></div>
+    </section>
+    <section class="flow-metrics">
+      <article><span>Ofertas</span><strong>${flowState.offers.length}</strong><small>capturadas no Flow</small></article>
+      <article><span>Regras</span><strong>${flowState.rules.length}</strong><small>configuradas</small></article>
+      <article><span>Na fila</span><strong>${queued}</strong><small>aguardando publicação</small></article>
+      <article><span>Enviadas</span><strong>${sent}</strong><small>publicações concluídas</small></article>
+      <article><span>Falhas</span><strong>${failed}</strong><small>jobs para investigar</small></article>
+    </section>
+    <section class="flow-columns">
+      <div class="flow-panel">
+        <div class="section-title"><h2>Últimas ofertas</h2><p>Produtos processados pelo mecanismo.</p></div>
+        ${flowState.offers.slice(0,5).map((offer) => `
+          <div class="flow-row"><div><strong>${escapeHtml(offer.title)}</strong><small>${escapeHtml(offer.source_type || 'manual')}</small></div><strong>${formatMoney(offer.price)}</strong></div>
+        `).join('') || '<div class="empty">Nenhuma oferta capturada ainda.</div>'}
+      </div>
+      <div class="flow-panel">
+        <div class="section-title"><h2>Fila de distribuição</h2><p>Acompanhamento das publicações.</p></div>
+        ${flowState.jobs.slice(0,5).map((job) => `
+          <div class="flow-row"><div><strong>${escapeHtml(job.channel_id || 'Canal')}</strong><small>${escapeHtml(job.status)}</small></div><span class="status-dot">${escapeHtml(job.status)}</span></div>
+        `).join('') || '<div class="empty">A fila está vazia.</div>'}
+      </div>
+    </section>
   `
 }
 
@@ -3048,6 +3111,10 @@ async function render() {
     bindEvents()
 
     return
+  }
+
+  if (page === 'flow' && !flowState.offers.length && !flowState.error && !flowState.loading) {
+    await loadFlowState()
   }
 
   if (!catalogsLoaded) {
