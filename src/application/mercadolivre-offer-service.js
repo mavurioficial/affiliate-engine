@@ -1,5 +1,6 @@
 import { resolveMercadoLivreProduct } from '../integrations/mercadolivre-client.js'
 import { saveOffer } from './offer-service.js'
+import { resolveAffiliateUrl } from './affiliate-link-service.js'
 import { calculateDiscount } from '../domain/offer-engine.js'
 
 export async function captureMercadoLivreOffer(productUrl, {
@@ -8,6 +9,11 @@ export async function captureMercadoLivreOffer(productUrl, {
   sourceType = 'mercadolivre_url'
 } = {}) {
   const product = await resolveMercadoLivreProduct(productUrl, { accessToken })
+
+  const resolvedAffiliateUrl = await resolveAffiliateUrl(product.permalink || productUrl, {
+    marketplace: 'mercadolivre',
+    affiliateUrl
+  })
 
   const price = Number(product.price || 0)
   const previousPrice = Number(product.original_price || 0) || null
@@ -20,7 +26,7 @@ export async function captureMercadoLivreOffer(productUrl, {
     previousPrice,
     discountPercent,
     productUrl: product.permalink || productUrl,
-    affiliateUrl,
+    affiliateUrl: resolvedAffiliateUrl,
     imageUrl: product.thumbnail,
     sourceType,
     metadata: {
