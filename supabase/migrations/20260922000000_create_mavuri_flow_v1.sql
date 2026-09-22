@@ -12,7 +12,6 @@ create table if not exists public.flow_clicks (id uuid primary key default gen_r
 
 create index if not exists flow_affiliate_accounts_user_idx on public.flow_affiliate_accounts(user_id);
 create index if not exists flow_affiliate_accounts_marketplace_idx on public.flow_affiliate_accounts(marketplace_id);
-create index if not exists flow_affiliate_accounts_marketplace_idx on public.flow_affiliate_accounts(marketplace_id);
 create index if not exists flow_offers_user_status_idx on public.flow_offers(user_id,status);
 create index if not exists flow_offers_fingerprint_idx on public.flow_offers(user_id,fingerprint);
 create index if not exists flow_channels_user_idx on public.flow_channels(user_id);
@@ -20,15 +19,14 @@ create index if not exists flow_rules_user_idx on public.flow_rules(user_id);
 create index if not exists flow_delivery_jobs_user_idx on public.flow_delivery_jobs(user_id);
 create index if not exists flow_delivery_jobs_offer_idx on public.flow_delivery_jobs(offer_id);
 create index if not exists flow_delivery_jobs_channel_idx on public.flow_delivery_jobs(channel_id);
-create index if not exists flow_delivery_jobs_channel_idx on public.flow_delivery_jobs(channel_id);
 create unique index if not exists flow_delivery_jobs_delivery_key_uidx on public.flow_delivery_jobs(user_id,delivery_key);
 create index if not exists flow_delivery_logs_user_idx on public.flow_delivery_logs(user_id);
 create index if not exists flow_delivery_logs_job_idx on public.flow_delivery_logs(delivery_job_id);
 create index if not exists flow_delivery_logs_offer_idx on public.flow_delivery_logs(offer_id);
 create index if not exists flow_delivery_logs_channel_idx on public.flow_delivery_logs(channel_id);
+create unique index if not exists flow_delivery_logs_sent_job_uidx on public.flow_delivery_logs(delivery_job_id) where status = 'sent';
 create index if not exists flow_clicks_user_idx on public.flow_clicks(user_id);
 create index if not exists flow_clicks_offer_idx on public.flow_clicks(offer_id);
-create index if not exists flow_clicks_channel_idx on public.flow_clicks(channel_id);
 create index if not exists flow_clicks_channel_idx on public.flow_clicks(channel_id);
 create unique index if not exists flow_clicks_tracking_id_uidx on public.flow_clicks(tracking_id) where tracking_id is not null;
 
