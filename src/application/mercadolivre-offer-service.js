@@ -14,6 +14,15 @@ function hasUsableLandingProduct(product) {
   )
 }
 
+function normalizeLandingProduct(product, itemId) {
+  return {
+    ...product,
+    resolvedItemId: itemId || product.id,
+    resolution: product.resolution || 'affiliate_landing_html',
+    raw_source: 'affiliate-resolver'
+  }
+}
+
 export async function captureMercadoLivreOffer(productUrl, {
   accessToken,
   affiliateUrl = null,
@@ -32,20 +41,17 @@ export async function captureMercadoLivreOffer(productUrl, {
 
   if (!resolvedProductUrl) throw new Error('Informe um link de afiliado do Mercado Livre.')
 
+  // The affiliate landing page already contains the product identity and
+  // commercial data needed to capture an offer. Prefer it when available:
+  // Mercado Livre may reject item API reads for seller-scoped OAuth tokens.
   let product
-  try {
+  if (hasUsableLandingProduct(resolvedAffiliatePayload?.product)) {
+    product = normalizeLandingProduct(
+      resolvedAffiliatePayload.product,
+      resolvedAffiliatePayload.item_id
+    )
+  } else {
     product = await resolveMercadoLivreProduct(resolvedProductUrl, { accessToken })
-  } catch (error) {
-    if (!resolvedAffiliatePayload || !hasUsableLandingProduct(resolvedAffiliatePayload.product) || ![400, 403, 404].includes(error?.status)) {
-      throw error
-    }
-
-    product = {
-      ...resolvedAffiliatePayload.product,
-      resolvedItemId: resolvedAffiliatePayload.item_id,
-      resolution: resolvedAffiliatePayload.product.resolution || 'affiliate_landing_html',
-      raw_source: 'affiliate-resolver'
-    }
   }
 
   resolvedAffiliateUrl = await resolveAffiliateUrl(product.permalink || resolvedProductUrl, {
