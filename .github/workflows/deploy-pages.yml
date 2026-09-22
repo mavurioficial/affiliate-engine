@@ -44,7 +44,7 @@ jobs:
 
   deploy:
     environment:
-      name: github-pages
+      name: mavuri-flow-preview
       url: ${{ steps.deployment.outputs.page_url }}
     needs: build
     runs-on: ubuntu-latest
