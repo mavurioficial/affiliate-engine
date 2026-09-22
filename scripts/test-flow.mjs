@@ -7,6 +7,7 @@ import {
   normalizeOffer
 } from '../src/domain/offer-engine.js'
 import { extractMercadoLivreImage, extractMercadoLivreItemId, isMercadoLivreUrl } from '../src/integrations/mercadolivre-client.js'
+import { createFlowCaptureDraftStorage } from '../src/application/flow-capture-draft.js'
 
 const offer = normalizeOffer({
   product_url: 'https://www.mercadolivre.com.br/produto/MLB123',
@@ -103,6 +104,21 @@ const monetizedOffer = normalizeOffer({
 assert.equal(Boolean(monetizedOffer.affiliateUrl), true)
 assert.equal(Boolean(persistedOffer.affiliateUrl), false)
 
+
+// Flow capture draft must survive a tab/page remount and be cleared after successful capture.
+const storage = {
+  values: new Map(),
+  getItem(key) { return this.values.get(key) ?? null },
+  setItem(key, value) { this.values.set(key, value) },
+  removeItem(key) { this.values.delete(key) }
+}
+const draft = createFlowCaptureDraftStorage(storage, 'mavuri.flow.captureDraft.v1:test-user')
+draft.write('https://meli.la/2GRHD3n')
+assert.equal(draft.read(), 'https://meli.la/2GRHD3n')
+const remountedDraft = createFlowCaptureDraftStorage(storage, 'mavuri.flow.captureDraft.v1:test-user')
+assert.equal(remountedDraft.read(), 'https://meli.la/2GRHD3n')
+remountedDraft.clear()
+assert.equal(draft.read(), '')
 
 // Delivery retry exhaustion is enforced at the persistence query boundary (attempts < 5).
 console.log('Flow domain QA: OK')
