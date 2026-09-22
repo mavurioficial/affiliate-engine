@@ -27,3 +27,16 @@ export async function listDeliveryJobs({ status } = {}) {
   if(error) throw error
   return data || []
 }
+
+
+export async function retryFailedDeliveries() {
+  const user = (await supabase.auth.getUser()).data.user
+  if (!user) throw new Error('Usuário não autenticado.')
+  const { data, error } = await supabase.from('flow_delivery_jobs')
+    .update({ status: 'queued', error_message: null, scheduled_for: new Date().toISOString() })
+    .eq('user_id', user.id)
+    .eq('status', 'failed')
+    .select()
+  if (error) throw error
+  return data || []
+}
