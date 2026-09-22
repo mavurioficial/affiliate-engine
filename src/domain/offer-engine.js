@@ -32,6 +32,7 @@ export function normalizeOffer(input = {}) {
     imageUrl: String(input.imageUrl ?? input.image_url ?? input.thumbnail ?? '').trim() || null,
     category: String(input.category ?? '').trim() || null,
     seller: String(input.seller ?? '').trim() || null,
+    externalProductId: String(input.externalProductId ?? input.external_product_id ?? '').trim() || null,
     sourceType: input.sourceType || input.source_type || 'manual',
     metadata: input.metadata || {}
   }
