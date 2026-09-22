@@ -1,11 +1,12 @@
 import { supabase } from '../app/auth.js'
 import { findMatchingRules } from './rule-service.js'
+import { normalizeOffer } from '../domain/offer-engine.js'
 
 export async function enqueueOfferDeliveries(offer) {
   const user = (await supabase.auth.getUser()).data.user
   if (!user) throw new Error('Usuário não autenticado.')
 
-  const rules = await findMatchingRules(offer)
+  const rules = await findMatchingRules(normalizeOffer(offer))
   const channelIds = [...new Set(rules.flatMap(rule => Array.isArray(rule.actions?.channel_ids) ? rule.actions.channel_ids : []))]
   if (!channelIds.length) return []
 
