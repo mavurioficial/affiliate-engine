@@ -5,7 +5,7 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!
 const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}")
 const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}")
 const publishableKey = publishableKeys.default || Deno.env.get("SUPABASE_ANON_KEY") || ""
-const schedulerSecret = Deno.env.get("MAVURI_FLOW_SCHEDULER_SECRET") || ""
+const SCHEDULER_SECRET_SHA256 = "3efb0f37ba962d865839b2beeffd672787e652b4059e4de53940403421cfd423"
 const MAX_ATTEMPTS = 5
 const BACKOFF_MINUTES = [1, 2, 5, 10, 20]
 
@@ -20,9 +20,14 @@ function isSecretKey(value: string) {
   return Object.values(secretKeys).some((key) => key && key === value)
 }
 
-function isSchedulerRequest(authorization: string | null) {
-  if (!schedulerSecret || !authorization) return false
-  return authorization === `Bearer ${schedulerSecret}`
+async function isSchedulerRequest(authorization: string | null) {
+  if (!authorization) return false
+  const prefix = "Bearer "
+  if (!authorization.startsWith(prefix)) return false
+  const secret = authorization.slice(prefix.length)
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret))
+  const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("")
+  return hash === SCHEDULER_SECRET_SHA256
 }
 
 function retryDelayMinutes(attempts: number) {
@@ -56,7 +61,7 @@ Deno.serve(async (req) => {
 
   const authorization = req.headers.get("authorization")
   const apiKey = req.headers.get("apikey") || ""
-  const schedulerRequest = isSchedulerRequest(authorization)
+  const schedulerRequest = await isSchedulerRequest(authorization)
   const serviceToService = schedulerRequest || isSecretKey(apiKey)
 
   if (!serviceToService && !authorization) return json({ error: "Authentication required" }, 401)
