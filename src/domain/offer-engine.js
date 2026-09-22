@@ -45,10 +45,32 @@ export function createOfferFingerprint(offer) {
   return [marketplace, String(product).trim().toLowerCase(), price].join('|')
 }
 
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
 export function matchesRule(offer, conditions = {}) {
   if (conditions.marketplace && conditions.marketplace !== offer.marketplace) return false
   if (conditions.minDiscount != null && Number(offer.discountPercent) < Number(conditions.minDiscount)) return false
+  if (conditions.maxDiscount != null && Number(offer.discountPercent) > Number(conditions.maxDiscount)) return false
+  if (conditions.minPrice != null && Number(offer.price) < Number(conditions.minPrice)) return false
   if (conditions.maxPrice != null && Number(offer.price) > Number(conditions.maxPrice)) return false
-  if (conditions.category && String(offer.category || '').toLowerCase() !== String(conditions.category).toLowerCase()) return false
+  if (conditions.category && normalizeText(offer.category) !== normalizeText(conditions.category)) return false
+  if (conditions.seller && normalizeText(offer.seller) !== normalizeText(conditions.seller)) return false
+  if (conditions.couponRequired === true && !offer.coupon) return false
+  if (conditions.sourceType && normalizeText(offer.sourceType) !== normalizeText(conditions.sourceType)) return false
+
+  const keywords = Array.isArray(conditions.keywords) ? conditions.keywords.map(normalizeText).filter(Boolean) : []
+  if (keywords.length) {
+    const haystack = [offer.title, offer.category, offer.seller].map(normalizeText).join(' ')
+    if (!keywords.some(keyword => haystack.includes(keyword))) return false
+  }
+
+  const deniedKeywords = Array.isArray(conditions.deniedKeywords) ? conditions.deniedKeywords.map(normalizeText).filter(Boolean) : []
+  if (deniedKeywords.length) {
+    const haystack = [offer.title, offer.category, offer.seller].map(normalizeText).join(' ')
+    if (deniedKeywords.some(keyword => haystack.includes(keyword))) return false
+  }
+
   return true
 }
