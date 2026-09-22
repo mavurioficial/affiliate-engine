@@ -152,9 +152,9 @@ Deno.serve(async (req) => {
 
       const price = Number(offer?.price || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
       const old = Number(offer?.previous_price || 0)
-      const oldText = old > Number(offer?.price || 0) ? `\\nDe: ~${old.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}~` : ""
+      const oldText = old > Number(offer?.price || 0) ? `\nDe: ~${old.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}~` : ""
       const discount = Number(offer?.discount_percent || 0)
-      const discountText = discount > 0 ? `\\n🔥 ${discount}% OFF` : ""
+      const discountText = discount > 0 ? `\n🔥 ${discount.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% OFF` : ""
       const escapeHtml = (value: unknown) => String(value || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")
       const destination = String(offer?.affiliate_url || offer?.product_url || "")
       let destinationUrl: URL
