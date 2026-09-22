@@ -3675,27 +3675,29 @@ function bindEvents() {
           const session = (await supabase.auth.getSession()).data.session
           if (!session?.access_token) throw new Error('Sua sessão do Mavuri expirou. Entre novamente.')
 
-          const capture = () => captureMercadoLivreOffer(productUrl, {
-            accessToken: session.access_token,
-            affiliateUrl
-          })
+          const meliAuthEndpoint = 'https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/meli-auth'
 
-          let capturedOffer
-          try {
-            capturedOffer = await capture()
-          } catch (captureError) {
-            const message = captureError?.message || ''
-            if (!/Mercado Livre não conectado ao Mavuri|conexão do Mercado Livre expirou/i.test(message)) throw captureError
-
-            if (button) button.textContent = 'Conectando Mercado Livre...'
-            const popup = window.open('about:blank', 'mavuri-meli-connect', 'width=520,height=700')
-            if (!popup) throw new Error('O navegador bloqueou a janela de conexão. Permita pop-ups para o Mavuri e tente novamente.')
-
-            const connectResponse = await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/meli-auth', {
+          const getMeliConnectionStatus = async () => {
+            const response = await fetch(`${meliAuthEndpoint}?action=status`, {
               headers: { Authorization: `Bearer ${session.access_token}` },
               cache: 'no-store'
             })
-            const connectPayload = await connectResponse.json()
+            const payload = await response.json().catch(() => ({}))
+            if (!response.ok) throw new Error(payload.error || 'Não foi possível verificar a conexão com o Mercado Livre.')
+            return payload
+          }
+
+          const connectMercadoLivre = async () => {
+            if (button) button.textContent = 'Conectando Mercado Livre...'
+
+            const popup = window.open('about:blank', 'mavuri-meli-connect', 'width=520,height=700')
+            if (!popup) throw new Error('O navegador bloqueou a janela de conexão. Permita pop-ups para o Mavuri e tente novamente.')
+
+            const connectResponse = await fetch(meliAuthEndpoint, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+              cache: 'no-store'
+            })
+            const connectPayload = await connectResponse.json().catch(() => ({}))
             if (!connectResponse.ok || !connectPayload.auth_url) {
               popup.close()
               throw new Error(connectPayload.error || 'Não foi possível iniciar a conexão com o Mercado Livre.')
@@ -3710,7 +3712,7 @@ function bindEvents() {
 
               function onMessage(event) {
                 if (event.origin !== 'https://otikoxnfotyjgphrdudn.supabase.co') return
-      if (event.data?.type !== 'mavuri-meli-auth') return
+                if (event.data?.type !== 'mavuri-meli-auth') return
                 window.clearTimeout(timeout)
                 window.removeEventListener('message', onMessage)
                 if (event.data.ok) resolve()
@@ -3720,6 +3722,25 @@ function bindEvents() {
               window.addEventListener('message', onMessage)
             })
 
+            const status = await getMeliConnectionStatus()
+            if (!status.connected) throw new Error('O Mercado Livre não confirmou a conexão. Tente autorizar novamente.')
+          }
+
+          const capture = () => captureMercadoLivreOffer(productUrl, {
+            accessToken: session.access_token,
+            affiliateUrl
+          })
+
+          let connection = await getMeliConnectionStatus()
+          if (!connection.connected) await connectMercadoLivre()
+
+          let capturedOffer
+          try {
+            capturedOffer = await capture()
+          } catch (captureError) {
+            const message = captureError?.message || ''
+            if (!/Mercado Livre não conectado ao Mavuri|conexão do Mercado Livre expirou/i.test(message)) throw captureError
+            await connectMercadoLivre()
             capturedOffer = await capture()
           }
 
