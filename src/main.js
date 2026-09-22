@@ -563,8 +563,8 @@ function flowPage() {
           <label><span>Desconto máximo (%)</span><input name="maxDiscount" type="number" min="0" max="100" placeholder="Sem limite" /></label>
           <label><span>Preço máximo (R$)</span><input name="maxPrice" type="number" min="0" step="0.01" value="500" /></label>
           <label><span>Preço mínimo (R$)</span><input name="minPrice" type="number" min="0" step="0.01" placeholder="Sem mínimo" /></label>
-          <label><span>Categoria</span><input name="category" placeholder="Ex.: Eletrônicos" /></label>
-          <label><span>Vendedor</span><input name="seller" placeholder="Nome exato (opcional)" /></label>
+          <label><span>Categoria</span><input name="category" placeholder="Nome exato ou ID (opcional)" /></label>
+          <label><span>Vendedor</span><input name="seller" placeholder="Nome exato ou ID (opcional)" /></label>
           <label><span>Palavras-chave</span><input name="keywords" placeholder="tv, notebook, gamer" /></label>
           <label><span>Excluir palavras</span><input name="deniedKeywords" placeholder="usado, quebrado" /></label>
           <label><span>Exigir cupom</span><select name="couponRequired"><option value="">Indiferente</option><option value="true">Sim</option><option value="false">Não</option></select></label>
