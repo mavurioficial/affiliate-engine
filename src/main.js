@@ -1,17 +1,19 @@
-import { getSession, onAuthChange, signIn, signOut } from './auth.js'
+import { getSession, onAuthChange, signIn, signOut, supabase } from './auth.js'
 import { sections } from '../domain/catalog.js'
 import { developmentCatalogs } from '../infrastructure/development/catalog.js'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs } from './application/delivery-service.js'
 import { captureMercadoLivreOffer } from './application/mercadolivre-offer-service.js'
+import { createRule } from './application/rule-service.js'
+import { createChannel, listChannels } from './application/channel-service.js'
 
 const root =
   document.querySelector('#app')
 
 let session = null
 let page = 'dashboard'
-let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], error: '', notice: '' }
+let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], error: '', notice: '' }
 let catalogsLoaded = false
 
 const catalogs = {}
@@ -494,53 +496,82 @@ async function loadFlowState() {
 function flowPage() {
   const sent = flowState.jobs.filter((job) => job.status === 'sent').length
   const queued = flowState.jobs.filter((job) => job.status === 'queued').length
+  const processing = flowState.jobs.filter((job) => job.status === 'processing').length
   const failed = flowState.jobs.filter((job) => job.status === 'failed').length
+  const enabledRules = flowState.rules.filter((rule) => rule.enabled).length
+  const describeRule = (rule) => {
+    const c = rule.conditions || {}
+    const a = rule.actions || {}
+    const parts = []
+    if (c.marketplace) parts.push(c.marketplace === 'mercadolivre' ? 'Mercado Livre' : c.marketplace)
+    if (c.minDiscount != null) parts.push(`desconto ≥ ${c.minDiscount}%`)
+    if (c.maxPrice != null) parts.push(`preço ≤ ${formatMoney(c.maxPrice)}`)
+    const channelNames = (a.channel_ids || []).map((id) => flowState.channels.find((channel) => channel.id === id)?.name || 'Canal')
+    if (channelNames.length) parts.push(`→ ${channelNames.join(', ')}`)
+    return parts.join(' · ') || 'Sem condições configuradas'
+  }
   return `
-    <header class="page-heading">
-      <p class="eyebrow">AUTOMAÇÃO</p>
-      <h1>Mavuri Flow</h1>
-      <p>O centro operacional do Mavuri: captura, oferta, regras e distribuição.</p>
-    </header>
+    <header class="page-heading"><p class="eyebrow">AUTOMAÇÃO</p><h1>Mavuri Flow</h1><p>Captura, oferta, regras e distribuição em um único fluxo operacional.</p></header>
     ${flowState.notice ? `<section class="notice flow-success">${escapeHtml(flowState.notice)}</section>` : ''}
     ${flowState.error ? `<section class="notice">${escapeHtml(flowState.error)}</section>` : ''}
     <section class="flow-capture-panel">
-      <div class="section-title"><h2>Capturar oferta</h2><p>Cole uma URL do Mercado Livre e o Flow tenta identificar o produto e registrar a oferta.</p></div>
-      <form data-flow-capture>
-        <div class="flow-capture-grid">
-          <label><span>URL do produto</span><input name="productUrl" type="url" required placeholder="https://www.mercadolivre.com.br/..." /></label>
-          <label><span>Link de afiliado (opcional)</span><input name="affiliateUrl" type="url" placeholder="Cole aqui se já tiver um link afiliado" /></label>
-        </div>
-        <div class="form-actions"><button class="primary" type="submit">⚡ Capturar no Flow</button></div>
-      </form>
+      <div class="section-title"><h2>Capturar oferta</h2><p>Cole uma URL do Mercado Livre e o Flow registra a oferta e avalia as regras.</p></div>
+      <form data-flow-capture><div class="flow-capture-grid">
+        <label><span>URL do produto</span><input name="productUrl" type="url" required placeholder="https://www.mercadolivre.com.br/..." /></label>
+        <label><span>Link de afiliado (opcional)</span><input name="affiliateUrl" type="url" placeholder="Cole aqui se já tiver um link afiliado" /></label>
+      </div><div class="form-actions"><button class="primary" type="submit">⚡ Capturar no Flow</button></div></form>
     </section>
     <section class="flow-pipeline">
-      <div class="flow-node"><span>01</span><strong>Captura</strong><small>Mercado Livre</small></div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-node"><span>02</span><strong>Oferta</strong><small>${flowState.offers.length} capturadas</small></div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-node"><span>03</span><strong>Regras</strong><small>${flowState.rules.length} ativas/cadastradas</small></div>
-      <div class="flow-arrow">→</div>
+      <div class="flow-node"><span>01</span><strong>Captura</strong><small>Mercado Livre</small></div><div class="flow-arrow">→</div>
+      <div class="flow-node"><span>02</span><strong>Oferta</strong><small>${flowState.offers.length} capturadas</small></div><div class="flow-arrow">→</div>
+      <div class="flow-node"><span>03</span><strong>Regras</strong><small>${enabledRules} ativas / ${flowState.rules.length} cadastradas</small></div><div class="flow-arrow">→</div>
       <div class="flow-node"><span>04</span><strong>Distribuição</strong><small>${flowState.jobs.length} jobs</small></div>
     </section>
     <section class="flow-metrics">
-      <article><span>Ofertas</span><strong>${flowState.offers.length}</strong><small>capturadas no Flow</small></article>
-      <article><span>Regras</span><strong>${flowState.rules.length}</strong><small>configuradas</small></article>
-      <article><span>Na fila</span><strong>${queued}</strong><small>aguardando publicação</small></article>
-      <article><span>Enviadas</span><strong>${sent}</strong><small>publicações concluídas</small></article>
-      <article><span>Falhas</span><strong>${failed}</strong><small>jobs para investigar</small></article>
+      <article><span>Ofertas</span><strong>${flowState.offers.length}</strong><small>capturadas</small></article>
+      <article><span>Regras</span><strong>${enabledRules}</strong><small>ativas</small></article>
+      <article><span>Na fila</span><strong>${queued}</strong><small>${processing} processando</small></article>
+      <article><span>Enviadas</span><strong>${sent}</strong><small>concluídas</small></article>
+      <article><span>Falhas</span><strong>${failed}</strong><small>para investigar</small></article>
     </section>
     <section class="flow-columns">
-      <div class="flow-panel">
-        <div class="section-title"><h2>Últimas ofertas</h2><p>Produtos processados pelo mecanismo.</p></div>
-        ${flowState.offers.slice(0,5).map((offer) => `
-          <div class="flow-row"><div><strong>${escapeHtml(offer.title)}</strong><small>${escapeHtml(offer.source_type || 'manual')}</small></div><strong>${formatMoney(offer.price)}</strong></div>
-        `).join('') || '<div class="empty">Nenhuma oferta capturada ainda.</div>'}
+      <div class="flow-panel"><div class="section-title"><h2>Regras do Flow</h2><p>Automação baseada nas características da oferta.</p></div>
+        ${flowState.rules.map((rule) => `<div class="flow-row"><div><strong>${escapeHtml(rule.name)}</strong><small>${escapeHtml(describeRule(rule))}</small></div><span class="status-dot">${rule.enabled ? 'Ativa' : 'Pausada'}</span></div>`).join('') || '<div class="empty">Nenhuma regra cadastrada.</div>'}
       </div>
-      <div class="flow-panel">
-        <div class="section-title"><h2>Fila de distribuição</h2><p>Acompanhamento das publicações.</p></div>
-        ${flowState.jobs.slice(0,5).map((job) => `
-          <div class="flow-row"><div><strong>${escapeHtml(job.channel_id || 'Canal')}</strong><small>${escapeHtml(job.status)}</small></div><span class="status-dot">${escapeHtml(job.status)}</span></div>
-        `).join('') || '<div class="empty">A fila está vazia.</div>'}
+      <div class="flow-panel"><div class="section-title"><h2>Canais</h2><p>Destinos disponíveis para as regras.</p></div>
+        ${flowState.channels.map((channel) => `<div class="flow-row"><div><strong>${escapeHtml(channel.name)}</strong><small>${escapeHtml(channel.type)} · ${escapeHtml(channel.external_ref || 'sem destino')}</small></div><span class="status-dot">${escapeHtml(channel.status)}</span></div>`).join('') || '<div class="empty">Nenhum canal configurado.</div>'}
+      </div>
+    </section>
+    <section class="flow-columns">
+      <div class="flow-panel"><div class="section-title"><h2>Nova regra</h2><p>Exemplo: Mercado Livre + desconto ≥ 20% + preço ≤ R$ 500 → Telegram.</p></div>
+        <form data-flow-rule><div class="flow-form-grid">
+          <label><span>Nome</span><input name="name" required value="Oferta ML ≥20% até R$500" /></label>
+          <label><span>Prioridade</span><input name="priority" type="number" min="1" value="100" /></label>
+          <label><span>Mercado</span><select name="marketplace"><option value="mercadolivre">Mercado Livre</option><option value="">Qualquer</option></select></label>
+          <label><span>Desconto mínimo (%)</span><input name="minDiscount" type="number" min="0" max="100" value="20" /></label>
+          <label><span>Preço máximo (R$)</span><input name="maxPrice" type="number" min="0" step="0.01" value="500" /></label>
+          <label><span>Canal</span><select name="channelId" required><option value="">Selecione um canal</option>${flowState.channels.map((channel) => `<option value="${channel.id}">${escapeHtml(channel.name)} · ${escapeHtml(channel.type)}</option>`).join('')}</select></label>
+        </div><div class="form-actions"><button class="primary" type="submit" ${flowState.channels.length ? '' : 'disabled'}>＋ Criar regra</button></div>
+        ${!flowState.channels.length ? '<small class="flow-hint">Cadastre um canal abaixo antes de criar a regra.</small>' : ''}</form>
+      </div>
+      <div class="flow-panel"><div class="section-title"><h2>Novo canal Telegram</h2><p>O token do bot fica fora do banco e será lido como segredo do worker.</p></div>
+        <form data-flow-channel><div class="flow-form-grid">
+          <label><span>Nome</span><input name="name" required placeholder="Telegram — Ofertas" /></label>
+          <label><span>Chat ID</span><input name="externalRef" required placeholder="-1001234567890" /></label>
+        </div><div class="form-actions"><button class="primary" type="submit">＋ Cadastrar Telegram</button></div>
+        <small class="flow-hint">O bot token nunca é armazenado no navegador.</small></form>
+      </div>
+    </section>
+    <section class="flow-panel"><div class="section-title"><h2>Fila de distribuição</h2><p>Acompanhe e processe os jobs pendentes.</p></div>
+      <div class="form-actions"><button data-flow-worker class="primary" ${queued || processing ? '' : 'disabled'}>▶ Processar fila</button></div>
+      ${flowState.jobs.slice(0,8).map((job) => `<div class="flow-row"><div><strong>${escapeHtml(job.channel_id || 'Canal')}</strong><small>${escapeHtml(job.status)} · tentativa ${Number(job.attempts || 0)}</small></div><span class="status-dot">${escapeHtml(job.error_message || job.status)}</span></div>`).join('') || '<div class="empty">A fila está vazia.</div>'}
+    </section>
+    <section class="flow-columns">
+      <div class="flow-panel"><div class="section-title"><h2>Últimas ofertas</h2><p>Produtos processados pelo mecanismo.</p></div>
+        ${flowState.offers.slice(0,5).map((offer) => `<div class="flow-row"><div><strong>${escapeHtml(offer.title)}</strong><small>${escapeHtml(offer.source_type || 'manual')}</small></div><strong>${formatMoney(offer.price)}</strong></div>`).join('') || '<div class="empty">Nenhuma oferta capturada ainda.</div>'}
+      </div>
+      <div class="flow-panel"><div class="section-title"><h2>Fluxo operacional</h2><p>Capture → avalie → enfileire → publique.</p></div>
+        <ol class="flow-hint-list"><li>Cadastre o canal Telegram.</li><li>Crie a regra.</li><li>Capture uma oferta que atenda às condições.</li><li>O job é criado automaticamente.</li><li>Processe a fila para publicar.</li></ol>
       </div>
     </section>
   `
@@ -3597,6 +3628,74 @@ function bindEvents() {
         }
       }
     )
+  }
+
+  const flowRuleForm = document.querySelector('[data-flow-rule]')
+  if (flowRuleForm) {
+    flowRuleForm.addEventListener('submit', async (event) => {
+      event.preventDefault()
+      const data = new FormData(flowRuleForm)
+      try {
+        const channelId = String(data.get('channelId') || '').trim()
+        if (!channelId) throw new Error('Selecione um canal.')
+        const conditions = {}
+        const marketplace = String(data.get('marketplace') || '').trim()
+        const minDiscount = Number(data.get('minDiscount') || 0)
+        const maxPrice = Number(data.get('maxPrice') || 0)
+        if (marketplace) conditions.marketplace = marketplace
+        if (minDiscount > 0) conditions.minDiscount = minDiscount
+        if (maxPrice > 0) conditions.maxPrice = maxPrice
+        await createRule({
+          name: String(data.get('name') || '').trim(),
+          priority: Number(data.get('priority') || 100),
+          enabled: true,
+          conditions,
+          actions: { channel_ids: [channelId] }
+        })
+        flowState = { ...flowState, loaded: false, notice: 'Regra criada com sucesso.', error: '' }
+        await render()
+      } catch (error) {
+        console.error(error)
+        flowState = { ...flowState, error: error.message || 'Não foi possível criar a regra.', notice: '' }
+        await render()
+      }
+    })
+  }
+
+  const flowChannelForm = document.querySelector('[data-flow-channel]')
+  if (flowChannelForm) {
+    flowChannelForm.addEventListener('submit', async (event) => {
+      event.preventDefault()
+      const data = new FormData(flowChannelForm)
+      try {
+        await createChannel({ type: 'telegram', name: String(data.get('name') || '').trim(), externalRef: String(data.get('externalRef') || '').trim() })
+        flowState = { ...flowState, loaded: false, notice: 'Canal Telegram cadastrado. O token do bot será configurado no backend.', error: '' }
+        await render()
+      } catch (error) {
+        console.error(error)
+        flowState = { ...flowState, error: error.message || 'Não foi possível cadastrar o canal.', notice: '' }
+        await render()
+      }
+    })
+  }
+
+  const flowWorkerButton = document.querySelector('[data-flow-worker]')
+  if (flowWorkerButton) {
+    flowWorkerButton.addEventListener('click', async () => {
+      const originalText = flowWorkerButton.textContent
+      flowWorkerButton.disabled = true
+      flowWorkerButton.textContent = 'Processando...'
+      try {
+        const { data, error } = await supabase.functions.invoke('flow-worker', { body: { limit: 10 } })
+        if (error) throw error
+        flowState = { ...flowState, loaded: false, notice: data?.processed != null ? `${data.processed} job(s) processado(s).` : 'Fila processada.', error: '' }
+        await render()
+      } catch (error) {
+        console.error(error)
+        flowState = { ...flowState, error: error.message || 'Não foi possível processar a fila.', notice: '' }
+        await render()
+      }
+    })
   }
 
   const buscarOfertasForm =
