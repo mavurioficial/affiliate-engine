@@ -177,12 +177,18 @@ Deno.serve(async (req) => {
       const trackedUrl = `${supabaseUrl}/functions/v1/track-click?t=${encodeURIComponent(trackingId)}`
       const text = `🛍️ <b>${escapeHtml(offer?.title)}</b>${oldText}\\n💰 <b>${price}</b>${discountText}${offer?.coupon ? `\\n🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : ""}\\n\\n👉 <a href="${trackedUrl}">Comprar</a>`
 
+      const imageUrl = String(offer?.image_url || "").trim()
+      const telegramMethod = imageUrl ? "sendPhoto" : "sendMessage"
+      const telegramBody = imageUrl
+        ? { chat_id: channel.external_ref, photo: imageUrl, caption: text, parse_mode: "HTML" }
+        : { chat_id: channel.external_ref, text, parse_mode: "HTML", disable_web_page_preview: false }
+
       let response: Response
       try {
-        response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        response = await fetch(`https://api.telegram.org/bot${botToken}/${telegramMethod}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ chat_id: channel.external_ref, text, parse_mode: "HTML", disable_web_page_preview: false })
+          body: JSON.stringify(telegramBody)
         })
       } catch (error) {
         throw new Error(`Falha de rede ao chamar Telegram: ${error instanceof Error ? error.message : String(error)}`)
