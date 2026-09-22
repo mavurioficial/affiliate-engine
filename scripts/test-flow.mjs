@@ -91,5 +91,8 @@ assert.equal(matchesRule(persistedOffer, { maxPrice: 3500 }), false)
 assert.equal(calculateDiscount(100, 100), 0)
 assert.equal(calculateDiscount(100, 0), 0)
 assert.equal(calculateDiscount('invalid', 200), 0)
+// Monetization invariant: an offer without an affiliate URL must not be considered ready for automatic delivery.
+// Re-enrichment of an existing offer with an affiliate URL must be supported by the persistence layer.
+
 
 console.log('Flow domain QA: OK')
