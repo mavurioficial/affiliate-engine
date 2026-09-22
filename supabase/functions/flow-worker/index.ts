@@ -173,12 +173,15 @@ Deno.serve(async (req) => {
       if (clickError) throw new Error(`Falha ao criar tracking: ${clickError.message}`)
 
       const trackedUrl = `${supabaseUrl}/functions/v1/track-click?t=${encodeURIComponent(trackingId)}`
+      const shipping = offer?.metadata?.shipping
+      const freeShipping = shipping?.free_shipping === true || shipping?.freeShipping === true
       const messageLines = [
         `🛍️ <b>${escapeHtml(offer?.title)}</b>`,
+        discount > 0 ? `🔥 <b>${discount.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% OFF</b>` : "",
         old > Number(offer?.price || 0) ? `De: <s>${old.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</s>` : "",
         `💰 <b>${price}</b>`,
-        discount > 0 ? `🔥 <b>${discount.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% OFF</b>` : "",
         offer?.coupon ? `🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : "",
+        freeShipping ? "🚚 <b>Frete grátis</b>" : "",
         "",
         `👉 <a href="${trackedUrl}"><b>COMPRAR AGORA</b></a>`
       ].filter(Boolean)
