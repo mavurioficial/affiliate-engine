@@ -60,6 +60,19 @@ const sameOffer = normalizeOffer({
 
 assert.equal(createOfferFingerprint(offer), createOfferFingerprint(sameOffer))
 
+const persistedOffer = normalizeOffer({
+  marketplace: 'mercadolivre',
+  title: 'Notebook Gamer RTX',
+  price: 3999.9,
+  previous_price: 4999.9,
+  product_url: offer.productUrl,
+  affiliate_url: offer.affiliateUrl,
+  source_type: 'api'
+})
+
+assert.equal(matchesRule(persistedOffer, { marketplace: 'mercadolivre', minDiscount: 10 }), true)
+assert.equal(matchesRule(persistedOffer, { maxPrice: 3500 }), false)
+
 assert.equal(calculateDiscount(100, 100), 0)
 assert.equal(calculateDiscount(100, 0), 0)
 assert.equal(calculateDiscount('invalid', 200), 0)
