@@ -1,5 +1,5 @@
 import { resolveMercadoLivreProduct } from '../integrations/mercadolivre-client.js'
-import { saveOffer } from './offer-service.js'
+import { saveOfferDetailed } from './offer-service.js'
 import { resolveAffiliateUrl } from './affiliate-link-service.js'
 import { enqueueOfferDeliveries } from './delivery-service.js'
 import { calculateDiscount } from '../domain/offer-engine.js'
@@ -7,7 +7,7 @@ import { calculateDiscount } from '../domain/offer-engine.js'
 export async function captureMercadoLivreOffer(productUrl, {
   accessToken,
   affiliateUrl = null,
-  sourceType = 'mercadolivre_url'
+  sourceType = 'api'
 } = {}) {
   const product = await resolveMercadoLivreProduct(productUrl, { accessToken })
 
@@ -20,7 +20,7 @@ export async function captureMercadoLivreOffer(productUrl, {
   const previousPrice = Number(product.original_price || 0) || null
   const discountPercent = calculateDiscount(price, previousPrice)
 
-  const offer = await saveOffer({
+  const result = await saveOfferDetailed({
     marketplace: 'mercadolivre',
     title: product.title,
     price,
@@ -38,9 +38,10 @@ export async function captureMercadoLivreOffer(productUrl, {
       sellerId: product.seller_id || null,
       categoryId: product.category_id || null,
       shipping: product.shipping || null,
-      rawSource: product.raw_source || null
+      rawSource: product.raw_source || null,
+      sourceTypeDetail: sourceType === 'api' ? 'mercadolivre_url' : sourceType
     }
   })
-  await enqueueOfferDeliveries(offer)
-  return offer
+  if (result.created) await enqueueOfferDeliveries(result.offer)
+  return result.offer
 }
