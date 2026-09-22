@@ -73,7 +73,8 @@ Deno.serve(async (req) => {
       const discountText = discount > 0 ? `\n🔥 ${discount}% OFF` : ""
       const escapeHtml = (value: unknown) => String(value || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")
       const destination = String(offer?.affiliate_url || offer?.product_url || "")
-      if (!/^https?:\\/\\//i.test(destination)) throw new Error("A oferta não possui um link de destino válido.")
+      const destinationUrl = new URL(destination)
+      if (!["http:", "https:"].includes(destinationUrl.protocol)) throw new Error("A oferta não possui um link de destino válido.")
 
       const trackingId = crypto.randomUUID()
       const { error: clickError } = await supabase.from("flow_clicks").insert({
