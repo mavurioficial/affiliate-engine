@@ -3648,40 +3648,52 @@ function bindEvents() {
           const session = (await supabase.auth.getSession()).data.session
           if (!session?.access_token) throw new Error('Sua sessão do Mavuri expirou. Entre novamente.')
 
-          let accessToken = session.access_token
-          const popup = window.open('about:blank', 'mavuri-meli-connect', 'width=520,height=700')
-
-          const connectResponse = await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/meli-auth', {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-            cache: 'no-store'
+          const capture = () => captureMercadoLivreOffer(productUrl, {
+            accessToken: session.access_token,
+            affiliateUrl
           })
-          const connectPayload = await connectResponse.json()
-          if (!connectResponse.ok || !connectPayload.auth_url) {
-            popup?.close()
-            throw new Error(connectPayload.error || 'Não foi possível iniciar a conexão com o Mercado Livre.')
+
+          try {
+            await capture()
+          } catch (captureError) {
+            const message = captureError?.message || ''
+            if (!/Mercado Livre não conectado ao Mavuri|conexão do Mercado Livre expirou/i.test(message)) throw captureError
+
+            if (button) button.textContent = 'Conectando Mercado Livre...'
+            const popup = window.open('about:blank', 'mavuri-meli-connect', 'width=520,height=700')
+            if (!popup) throw new Error('O navegador bloqueou a janela de conexão. Permita pop-ups para o Mavuri e tente novamente.')
+
+            const connectResponse = await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/meli-auth', {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+              cache: 'no-store'
+            })
+            const connectPayload = await connectResponse.json()
+            if (!connectResponse.ok || !connectPayload.auth_url) {
+              popup.close()
+              throw new Error(connectPayload.error || 'Não foi possível iniciar a conexão com o Mercado Livre.')
+            }
+            popup.location.href = connectPayload.auth_url
+
+            await new Promise((resolve, reject) => {
+              const timeout = window.setTimeout(() => {
+                window.removeEventListener('message', onMessage)
+                reject(new Error('A conexão com o Mercado Livre demorou mais que o esperado.'))
+              }, 120000)
+
+              function onMessage(event) {
+                if (event.data?.type !== 'mavuri-meli-auth') return
+                window.clearTimeout(timeout)
+                window.removeEventListener('message', onMessage)
+                if (event.data.ok) resolve()
+                else reject(new Error('Não foi possível concluir a conexão com o Mercado Livre.'))
+              }
+
+              window.addEventListener('message', onMessage)
+            })
+
+            await capture()
           }
 
-          if (!popup) throw new Error('O navegador bloqueou a janela de conexão. Permita pop-ups para o Mavuri e tente novamente.')
-          popup.location.href = connectPayload.auth_url
-
-          await new Promise((resolve, reject) => {
-            const timeout = window.setTimeout(() => {
-              window.removeEventListener('message', onMessage)
-              reject(new Error('A conexão com o Mercado Livre demorou mais que o esperado.'))
-            }, 120000)
-
-            function onMessage(event) {
-              if (event.data?.type !== 'mavuri-meli-auth') return
-              window.clearTimeout(timeout)
-              window.removeEventListener('message', onMessage)
-              if (event.data.ok) resolve()
-              else reject(new Error('Não foi possível concluir a conexão com o Mercado Livre.'))
-            }
-
-            window.addEventListener('message', onMessage)
-          })
-
-          await captureMercadoLivreOffer(productUrl, { accessToken, affiliateUrl })
           flowState = { ...flowState, loaded: false, notice: 'Oferta capturada e registrada no Flow.', error: '' }
           await render()
         } catch (error) {
