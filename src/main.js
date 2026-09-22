@@ -3695,8 +3695,14 @@ function bindEvents() {
         if (maxDiscount > 0) conditions.maxDiscount = maxDiscount
         if (minPrice > 0) conditions.minPrice = minPrice
         if (maxPrice > 0) conditions.maxPrice = maxPrice
-        if (category) conditions.category = category
-        if (seller) conditions.seller = seller
+        if (category) {
+          if (/^\d+$/.test(category)) conditions.categoryId = category
+          else conditions.category = category
+        }
+        if (seller) {
+          if (/^\d+$/.test(seller)) conditions.sellerId = seller
+          else conditions.seller = seller
+        }
         if (keywords.length) conditions.keywords = keywords
         if (deniedKeywords.length) conditions.deniedKeywords = deniedKeywords
         if (couponRequired) conditions.couponRequired = couponRequired === 'true'
