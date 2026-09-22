@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
       ].filter(Boolean)
       const text = messageLines.join("\n")
 
-      const imageUrl = /^https?:\\/\\//i.test(String(offer?.image_url || "").trim())
+      const imageUrl = /^https?:\/\//i.test(String(offer?.image_url || "").trim())
         ? String(offer.image_url).trim()
         : ""
       const telegramMethod = imageUrl ? "sendPhoto" : "sendMessage"
