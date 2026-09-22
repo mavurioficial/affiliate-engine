@@ -95,4 +95,5 @@ assert.equal(calculateDiscount('invalid', 200), 0)
 // Re-enrichment of an existing offer with an affiliate URL must be supported by the persistence layer.
 
 
+// Delivery retry exhaustion is enforced at the persistence query boundary (attempts < 5).
 console.log('Flow domain QA: OK')
