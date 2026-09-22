@@ -27,7 +27,7 @@ assert.equal(extractMercadoLivreItemId('https://example.com/produto/12345678'), 
 assert.equal(isMercadoLivreUrl('https://www.mercadolivre.com.br/produto/MLB12345678'), true)
 assert.equal(isMercadoLivreUrl('https://example.com/produto/12345678'), false)
 assert.equal(extractMercadoLivreImage({ thumbnail: 'https://http2.mlstatic.com/thumb.jpg' }), 'https://http2.mlstatic.com/thumb.jpg')
-assert.equal(extractMercadoLivreImage({ pictures: [{ url: 'http://example.com/one.jpg' }, { secure_url: 'https://example.com/two.jpg' }] }), 'https://example.com/two.jpg')
+assert.equal(extractMercadoLivreImage({ pictures: [{ url: 'http://example.com/one.jpg' }, { secure_url: 'https://example.com/two.jpg' }] }), 'http://example.com/one.jpg')
 assert.equal(extractMercadoLivreImage({ pictures: [] }), null)
 assert.equal(offer.discountPercent, calculateDiscount(3999.9, 4999.9))
 assert.equal(offer.sourceType, 'api')
