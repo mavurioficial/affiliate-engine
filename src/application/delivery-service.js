@@ -11,9 +11,9 @@ export async function enqueueOfferDeliveries(offer) {
 
   const jobs = channelIds.map(channelId => ({
     user_id:user.id, offer_id:offer.id, channel_id:channelId,
-    status:'queued', attempts:0, scheduled_for:new Date().toISOString()
+    status:'queued', attempts:0, scheduled_for:new Date().toISOString(), delivery_key:`${offer.id}:${channelId}`
   }))
-  const { data, error } = await supabase.from('flow_delivery_jobs').insert(jobs).select()
+  const { data, error } = await supabase.from('flow_delivery_jobs').upsert(jobs, { onConflict: 'user_id,delivery_key', ignoreDuplicates: true }).select()
   if (error) throw error
   return data || []
 }
