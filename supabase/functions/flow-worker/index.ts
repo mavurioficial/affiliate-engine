@@ -72,7 +72,20 @@ Deno.serve(async (req) => {
       const discount = Number(offer?.discount_percent || 0)
       const discountText = discount > 0 ? `\n🔥 ${discount}% OFF` : ""
       const escapeHtml = (value: unknown) => String(value || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")
-      const text = `🛍️ <b>${escapeHtml(offer?.title)}</b>${oldText}\n💰 <b>${price}</b>${discountText}${offer?.coupon ? `\n🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : ""}\n\n👉 <a href="${escapeHtml(offer?.affiliate_url || offer?.product_url || "#")}">Comprar</a>`
+      const destination = String(offer?.affiliate_url || offer?.product_url || "")
+      if (!/^https?:\\/\\//i.test(destination)) throw new Error("A oferta não possui um link de destino válido.")
+
+      const trackingId = crypto.randomUUID()
+      const { error: clickError } = await supabase.from("flow_clicks").insert({
+        user_id: userData.user.id,
+        offer_id: job.offer_id,
+        channel_id: job.channel_id,
+        tracking_id: trackingId
+      })
+      if (clickError) throw new Error(`Falha ao criar tracking: ${clickError.message}`)
+
+      const trackedUrl = `${supabaseUrl}/functions/v1/track-click?t=${encodeURIComponent(trackingId)}`
+      const text = `🛍️ <b>${escapeHtml(offer?.title)}</b>${oldText}\n💰 <b>${price}</b>${discountText}${offer?.coupon ? `\n🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : ""}\n\n👉 <a href="${trackedUrl}">Comprar</a>`
 
       const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
