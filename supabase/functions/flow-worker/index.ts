@@ -205,7 +205,8 @@ Deno.serve(async (req) => {
       results.push({ id: job.id, status: "sent", attempts: nextAttempt })
     } catch (error) {
       if (trackingId) {
-        await supabase.from("flow_clicks").delete().eq("tracking_id", trackingId)
+        const { error: cleanupError } = await supabase.from("flow_clicks").delete().eq("tracking_id", trackingId)
+        if (cleanupError) console.error("Falha ao limpar tracking após erro de entrega:", cleanupError.message)
       }
 
       const message = error instanceof Error ? error.message : String(error)
@@ -213,11 +214,18 @@ Deno.serve(async (req) => {
 
       if (canRetry) {
         const scheduledFor = new Date(Date.now() + retryDelayMinutes(nextAttempt) * 60 * 1000).toISOString()
-        await supabase.from("flow_delivery_jobs")
+        const { error: retryUpdateError } = await supabase.from("flow_delivery_jobs")
           .update({ status: "queued", scheduled_for: scheduledFor, error_message: message })
           .eq("id", job.id)
           .eq("status", "processing")
-        await supabase.from("flow_delivery_logs").insert({
+
+        if (retryUpdateError) {
+          console.error("Falha ao reencaminhar job para retry:", retryUpdateError.message)
+          results.push({ id: job.id, status: "deferred", attempts: nextAttempt, error: message, state_error: retryUpdateError.message })
+          continue
+        }
+
+        const { error: retryLogError } = await supabase.from("flow_delivery_logs").insert({
           user_id: job.user_id,
           delivery_job_id: job.id,
           offer_id: job.offer_id,
@@ -225,14 +233,23 @@ Deno.serve(async (req) => {
           status: "retry",
           metadata: { provider: "telegram", attempt: nextAttempt, next_attempt_at: scheduledFor, error: message }
         })
+        if (retryLogError) console.error("Falha ao registrar tentativa de retry:", retryLogError.message)
+
         retried += 1
         results.push({ id: job.id, status: "retry", attempts: nextAttempt, next_attempt_at: scheduledFor, error: message })
       } else {
-        await supabase.from("flow_delivery_jobs")
+        const { error: failedUpdateError } = await supabase.from("flow_delivery_jobs")
           .update({ status: "failed", error_message: message })
           .eq("id", job.id)
           .eq("status", "processing")
-        await supabase.from("flow_delivery_logs").insert({
+
+        if (failedUpdateError) {
+          console.error("Falha ao marcar job como failed:", failedUpdateError.message)
+          results.push({ id: job.id, status: "deferred", attempts: nextAttempt, error: message, state_error: failedUpdateError.message })
+          continue
+        }
+
+        const { error: failedLogError } = await supabase.from("flow_delivery_logs").insert({
           user_id: job.user_id,
           delivery_job_id: job.id,
           offer_id: job.offer_id,
@@ -240,6 +257,8 @@ Deno.serve(async (req) => {
           status: "failed",
           metadata: { provider: "telegram", attempt: nextAttempt, error: message }
         })
+        if (failedLogError) console.error("Falha ao registrar falha de entrega:", failedLogError.message)
+
         failed += 1
         results.push({ id: job.id, status: "failed", attempts: nextAttempt, error: message })
       }
