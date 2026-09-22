@@ -5,6 +5,7 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!
 const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}")
 const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}")
 const publishableKey = publishableKeys.default || Deno.env.get("SUPABASE_ANON_KEY") || ""
+const schedulerSecret = Deno.env.get("MAVURI_FLOW_SCHEDULER_SECRET") || ""
 const MAX_ATTEMPTS = 5
 const BACKOFF_MINUTES = [1, 2, 5, 10, 20]
 
@@ -17,6 +18,11 @@ function json(body: unknown, status = 200) {
 
 function isSecretKey(value: string) {
   return Object.values(secretKeys).some((key) => key && key === value)
+}
+
+function isSchedulerRequest(authorization: string | null) {
+  if (!schedulerSecret || !authorization) return false
+  return authorization === `Bearer ${schedulerSecret}`
 }
 
 function retryDelayMinutes(attempts: number) {
@@ -50,7 +56,8 @@ Deno.serve(async (req) => {
 
   const authorization = req.headers.get("authorization")
   const apiKey = req.headers.get("apikey") || ""
-  const serviceToService = isSecretKey(apiKey)
+  const schedulerRequest = isSchedulerRequest(authorization)
+  const serviceToService = schedulerRequest || isSecretKey(apiKey)
 
   if (!serviceToService && !authorization) return json({ error: "Authentication required" }, 401)
 
