@@ -587,6 +587,19 @@ function flowPage() {
       ${flowState.jobs.slice(0,8).map((job) => `<div class="flow-row"><div><strong>${escapeHtml(flowState.channels.find((channel) => channel.id === job.channel_id)?.name || 'Canal')}</strong><small>${escapeHtml(job.status)} · tentativa ${Number(job.attempts || 0)}</small></div><span class="status-dot">${escapeHtml(job.error_message || job.status)}</span></div>`).join('') || '<div class="empty">A fila está vazia.</div>'}
     </section>
     <section class="flow-columns">
+      <div class="flow-panel"><div class="section-title"><h2>Performance</h2><p>Produtos e canais que já geraram cliques.</p></div>
+        ${(() => {
+          const topOffers = [...flowState.clicks]
+            .filter((click) => Number(click.click_count || 0) > 0)
+            .sort((a, b) => Number(b.click_count || 0) - Number(a.click_count || 0))
+            .slice(0, 5)
+          return topOffers.map((click) => {
+            const offer = flowState.offers.find((item) => item.id === click.offer_id)
+            const channel = flowState.channels.find((item) => item.id === click.channel_id)
+            return `<div class="flow-row"><div><strong>${escapeHtml(offer?.title || 'Oferta')}</strong><small>${escapeHtml(channel?.name || 'Canal')}</small></div><strong>${Number(click.click_count || 0)} clique(s)</strong></div>`
+          }).join('') || '<div class="empty">Ainda não há cliques registrados.</div>'
+        })()}
+      </div>
       <div class="flow-panel"><div class="section-title"><h2>Últimas ofertas</h2><p>Produtos processados pelo mecanismo.</p></div>
         ${flowState.offers.slice(0,5).map((offer) => `<div class="flow-row"><div><strong>${escapeHtml(offer.title)}</strong><small>${escapeHtml(offer.source_type || 'manual')}</small></div><strong>${formatMoney(offer.price)}</strong></div>`).join('') || '<div class="empty">Nenhuma oferta capturada ainda.</div>'}
       </div>
