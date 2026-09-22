@@ -4,13 +4,14 @@ import { developmentCatalogs } from '../infrastructure/development/catalog.js'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs } from './application/delivery-service.js'
+import { captureMercadoLivreOffer } from './application/mercadolivre-offer-service.js'
 
 const root =
   document.querySelector('#app')
 
 let session = null
 let page = 'dashboard'
-let flowState = { loading: false, offers: [], rules: [], jobs: [], error: '' }
+let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], error: '', notice: '' }
 let catalogsLoaded = false
 
 const catalogs = {}
@@ -268,6 +269,11 @@ function navigation() {
       id: 'divulgacao',
       label: 'Divulgação',
       icon: '✦'
+    },
+    {
+      id: 'flow',
+      label: 'Mavuri Flow',
+      icon: '⚡'
     }
   ]
 
@@ -479,9 +485,9 @@ async function loadFlowState() {
       listRules(),
       listDeliveryJobs()
     ])
-    flowState = { loading: false, offers, rules, jobs, error: '' }
+    flowState = { loading: false, loaded: true, offers, rules, jobs, error: '', notice: '' }
   } catch (error) {
-    flowState = { ...flowState, loading: false, error: error.message || 'Não foi possível carregar o Flow.' }
+    flowState = { ...flowState, loading: false, loaded: true, error: error.message || 'Não foi possível carregar o Flow.' }
   }
 }
 
@@ -493,9 +499,20 @@ function flowPage() {
     <header class="page-heading">
       <p class="eyebrow">AUTOMAÇÃO</p>
       <h1>Mavuri Flow</h1>
-      <p>O centro operacional do Mavuri: ofertas, regras e publicações em um único fluxo.</p>
+      <p>O centro operacional do Mavuri: captura, oferta, regras e distribuição.</p>
     </header>
+    ${flowState.notice ? `<section class="notice flow-success">${escapeHtml(flowState.notice)}</section>` : ''}
     ${flowState.error ? `<section class="notice">${escapeHtml(flowState.error)}</section>` : ''}
+    <section class="flow-capture-panel">
+      <div class="section-title"><h2>Capturar oferta</h2><p>Cole uma URL do Mercado Livre e o Flow tenta identificar o produto e registrar a oferta.</p></div>
+      <form data-flow-capture>
+        <div class="flow-capture-grid">
+          <label><span>URL do produto</span><input name="productUrl" type="url" required placeholder="https://www.mercadolivre.com.br/..." /></label>
+          <label><span>Link de afiliado (opcional)</span><input name="affiliateUrl" type="url" placeholder="Cole aqui se já tiver um link afiliado" /></label>
+        </div>
+        <div class="form-actions"><button class="primary" type="submit">⚡ Capturar no Flow</button></div>
+      </form>
+    </section>
     <section class="flow-pipeline">
       <div class="flow-node"><span>01</span><strong>Captura</strong><small>Mercado Livre</small></div>
       <div class="flow-arrow">→</div>
@@ -3085,6 +3102,12 @@ function currentPage() {
     return buscarOfertasPage()
   }
 
+  if (
+    page === 'flow'
+  ) {
+    return flowPage()
+  }
+
   const section =
     sections.find(
       (item) =>
@@ -3113,7 +3136,7 @@ async function render() {
     return
   }
 
-  if (page === 'flow' && !flowState.offers.length && !flowState.error && !flowState.loading) {
+  if (page === 'flow' && !flowState.loaded && !flowState.loading) {
     await loadFlowState()
   }
 
@@ -3528,6 +3551,54 @@ function bindEvents() {
       }
     )
 
+  const flowCaptureForm =
+    document.querySelector(
+      '[data-flow-capture]'
+    )
+
+  if (flowCaptureForm) {
+    flowCaptureForm.addEventListener(
+      'submit',
+      async (event) => {
+        event.preventDefault()
+        const data = new FormData(flowCaptureForm)
+        const productUrl = String(data.get('productUrl') || '').trim()
+        const affiliateUrl = String(data.get('affiliateUrl') || '').trim() || null
+        const button = flowCaptureForm.querySelector('button[type="submit"]')
+        const originalText = button?.textContent || '⚡ Capturar no Flow'
+
+        if (button) {
+          button.disabled = true
+          button.textContent = 'Capturando...'
+        }
+
+        try {
+          let accessToken = ''
+          try {
+            accessToken = window.sessionStorage.getItem('mavuri.meli.access-token') || ''
+          } catch {
+            // fallback para prompt abaixo
+          }
+          if (!accessToken) {
+            accessToken = String(window.prompt('Cole o Access Token do Mercado Livre para esta sessão.') || '').trim()
+            if (accessToken) {
+              try { window.sessionStorage.setItem('mavuri.meli.access-token', accessToken) } catch {}
+            }
+          }
+          if (!accessToken) throw new Error('É necessário informar um Access Token do Mercado Livre.')
+
+          await captureMercadoLivreOffer(productUrl, { accessToken, affiliateUrl })
+          flowState = { ...flowState, loaded: false, notice: 'Oferta capturada e registrada no Flow.', error: '' }
+          await render()
+        } catch (error) {
+          console.error(error)
+          flowState = { ...flowState, error: error.message || 'Não foi possível capturar a oferta.', notice: '' }
+          await render()
+        }
+      }
+    )
+  }
+
   const buscarOfertasForm =
     document.querySelector(
       '[data-buscar-ofertas]'
@@ -3728,6 +3799,8 @@ async function bootstrap() {
           }
 
           resetDivulgacao()
+
+          flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], error: '', notice: '' }
         }
 
         await render()
