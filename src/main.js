@@ -504,8 +504,9 @@ function flowPage() {
   const processing = flowState.jobs.filter((job) => job.status === 'processing').length
   const failed = flowState.jobs.filter((job) => job.status === 'failed').length
   const clickCount = flowState.clicks.reduce((total, click) => total + Number(click.click_count || 0), 0)
+  const clickedDeliveries = flowState.clicks.filter((click) => Number(click.click_count || 0) > 0).length
   const clickedOffers = new Set(flowState.clicks.filter((click) => Number(click.click_count || 0) > 0).map((click) => click.offer_id)).size
-  const ctr = sent > 0 ? ((clickCount / sent) * 100).toFixed(1) : '0.0'
+  const ctr = sent > 0 ? ((clickedDeliveries / sent) * 100).toFixed(1) : '0.0'
   const enabledRules = flowState.rules.filter((rule) => rule.enabled).length
   const describeRule = (rule) => {
     const c = rule.conditions || {}
@@ -589,14 +590,21 @@ function flowPage() {
     <section class="flow-columns">
       <div class="flow-panel"><div class="section-title"><h2>Performance</h2><p>Produtos e canais que já geraram cliques.</p></div>
         ${(() => {
-          const topOffers = [...flowState.clicks]
-            .filter((click) => Number(click.click_count || 0) > 0)
-            .sort((a, b) => Number(b.click_count || 0) - Number(a.click_count || 0))
+          const grouped = new Map()
+          for (const click of flowState.clicks) {
+            const key = `${click.offer_id}:${click.channel_id}`
+            const current = grouped.get(key) || { offer_id: click.offer_id, channel_id: click.channel_id, clicks: 0 }
+            current.clicks += Number(click.click_count || 0)
+            grouped.set(key, current)
+          }
+          const topOffers = [...grouped.values()]
+            .filter((item) => item.clicks > 0)
+            .sort((a, b) => b.clicks - a.clicks)
             .slice(0, 5)
-          return topOffers.map((click) => {
-            const offer = flowState.offers.find((item) => item.id === click.offer_id)
-            const channel = flowState.channels.find((item) => item.id === click.channel_id)
-            return `<div class="flow-row"><div><strong>${escapeHtml(offer?.title || 'Oferta')}</strong><small>${escapeHtml(channel?.name || 'Canal')}</small></div><strong>${Number(click.click_count || 0)} clique(s)</strong></div>`
+          return topOffers.map((item) => {
+            const offer = flowState.offers.find((candidate) => candidate.id === item.offer_id)
+            const channel = flowState.channels.find((candidate) => candidate.id === item.channel_id)
+            return `<div class="flow-row"><div><strong>${escapeHtml(offer?.title || 'Oferta')}</strong><small>${escapeHtml(channel?.name || 'Canal')}</small></div><strong>${item.clicks} clique(s)</strong></div>`
           }).join('') || '<div class="empty">Ainda não há cliques registrados.</div>'
         })()}
       </div>
