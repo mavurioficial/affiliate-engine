@@ -6,6 +6,7 @@ import {
   matchesRule,
   normalizeOffer
 } from '../src/domain/offer-engine.js'
+import { extractMercadoLivreItemId, isMercadoLivreUrl } from '../src/integrations/mercadolivre-client.js'
 
 const offer = normalizeOffer({
   product_url: 'https://www.mercadolivre.com.br/produto/MLB123',
@@ -20,6 +21,11 @@ const offer = normalizeOffer({
 })
 
 assert.equal(detectMarketplace(offer.productUrl), 'mercadolivre')
+assert.equal(extractMercadoLivreItemId('https://www.mercadolivre.com.br/notebook-xyz/p/MLB12345678'), 'MLB12345678')
+assert.equal(extractMercadoLivreItemId('https://produto.mercadolivre.com.br/MLB-987654321'), 'MLB987654321')
+assert.equal(extractMercadoLivreItemId('https://example.com/produto/12345678'), null)
+assert.equal(isMercadoLivreUrl('https://www.mercadolivre.com.br/produto/MLB12345678'), true)
+assert.equal(isMercadoLivreUrl('https://example.com/produto/12345678'), false)
 assert.equal(offer.discountPercent, calculateDiscount(3999.9, 4999.9))
 assert.equal(offer.sourceType, 'api')
 assert.equal(offer.coupon, 'MAVURI10')
