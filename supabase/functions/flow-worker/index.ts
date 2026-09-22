@@ -175,12 +175,15 @@ Deno.serve(async (req) => {
       if (clickError) throw new Error(`Falha ao criar tracking: ${clickError.message}`)
 
       const trackedUrl = `${supabaseUrl}/functions/v1/track-click?t=${encodeURIComponent(trackingId)}`
-      const text = `🛍️ <b>${escapeHtml(offer?.title)}</b>${oldText}\\n💰 <b>${price}</b>${discountText}${offer?.coupon ? `\\n🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : ""}\\n\\n👉 <a href="${trackedUrl}">Comprar</a>`
+      const text = `🛍️ <b>${escapeHtml(offer?.title)}</b>${oldText}\n💰 <b>${price}</b>${discountText}${offer?.coupon ? `\n🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : ""}\n\n👉 <a href="${trackedUrl}">Comprar</a>`
 
-      const imageUrl = String(offer?.image_url || "").trim()
+      const imageUrl = /^https?:\\/\\//i.test(String(offer?.image_url || "").trim())
+        ? String(offer.image_url).trim()
+        : ""
       const telegramMethod = imageUrl ? "sendPhoto" : "sendMessage"
+      const telegramCaption = text.length > 1024 ? `${text.slice(0, 1000)}…` : text
       const telegramBody = imageUrl
-        ? { chat_id: channel.external_ref, photo: imageUrl, caption: text, parse_mode: "HTML" }
+        ? { chat_id: channel.external_ref, photo: imageUrl, caption: telegramCaption, parse_mode: "HTML" }
         : { chat_id: channel.external_ref, text, parse_mode: "HTML", disable_web_page_preview: false }
 
       let response: Response
