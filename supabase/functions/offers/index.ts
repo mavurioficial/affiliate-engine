@@ -1,3 +1,13 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from "npm:@supabase/supabase-js@2"
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!
+const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}")
+const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}")
+const publishableKey = publishableKeys.default || ""
+const secretKey = secretKeys.default || ""
+const admin = createClient(supabaseUrl, secretKey)
+
 Deno.serve(async (req) => {
   const headers = {
     'Content-Type': 'application/json',
@@ -24,7 +34,58 @@ Deno.serve(async (req) => {
   const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit')) || 10))
   const itemId = (url.searchParams.get('id') || '').trim().toUpperCase()
   const authHeader = req.headers.get('authorization') || ''
-  const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim()
+  let accessToken = authHeader.replace(/^Bearer\s+/i, '').trim()
+
+  if (!accessToken.startsWith('APP_USR-')) {
+    const userClient = createClient(supabaseUrl, publishableKey, { global: { headers: { Authorization: authHeader } } })
+    const { data: userData } = await userClient.auth.getUser()
+    const userId = userData.user?.id || null
+    if (userId) {
+      const { data: marketplace } = await admin.from('flow_marketplaces').select('id').eq('slug', 'mercadolivre').maybeSingle()
+      if (marketplace) {
+        const { data: stored } = await admin.rpc('mavuri_get_meli_token', { p_user_id: userId, p_marketplace_id: marketplace.id })
+        const token = Array.isArray(stored) ? stored[0] : stored
+        if (token?.access_token) {
+          const expiresAt = token.expires_at ? new Date(token.expires_at).getTime() : 0
+          accessToken = token.access_token
+          if (expiresAt <= Date.now() + 60_000 && token.refresh_token) {
+            const clientId = Deno.env.get('MELI_CLIENT_ID')
+            const clientSecret = Deno.env.get('MELI_CLIENT_SECRET')
+            if (clientId && clientSecret) {
+              const refreshBody = new URLSearchParams({
+                grant_type: 'refresh_token',
+                client_id: clientId,
+                client_secret: clientSecret,
+                refresh_token: token.refresh_token
+              })
+              const refreshResponse = await fetch('https://api.mercadolibre.com/oauth/token', {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: refreshBody.toString()
+              })
+              const refreshed = await refreshResponse.json()
+              if (refreshResponse.ok && refreshed.access_token) {
+                accessToken = refreshed.access_token
+                await admin.rpc('mavuri_store_meli_token', {
+                  p_user_id: userId,
+                  p_marketplace_id: marketplace.id,
+                  p_external_account_id: refreshed.user_id ? String(refreshed.user_id) : token.external_account_id,
+                  p_access_token: refreshed.access_token,
+                  p_refresh_token: refreshed.refresh_token || token.refresh_token,
+                  p_expires_in: Number(refreshed.expires_in || 0),
+                  p_scopes: String(refreshed.scope || (token.scopes || []).join(' ')).split(/\s+/).filter(Boolean)
+                })
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (!accessToken || !accessToken.startsWith('APP_USR-')) {
+    return new Response(JSON.stringify({ error: 'Mercado Livre não conectado ao Mavuri.' }), { status: 401, headers })
+  }
 
   if (action === 'search' && !query) {
     return new Response(JSON.stringify({ results: [] }), { headers })
