@@ -12,7 +12,7 @@ async function resolveMarketplaceId(slug) {
   return data?.id || null
 }
 
-export async function saveOffer(input) {
+export async function saveOfferDetailed(input) {
   const user = (await supabase.auth.getUser()).data.user
   if (!user) throw new Error('Usuário não autenticado.')
 
@@ -28,7 +28,7 @@ export async function saveOffer(input) {
     .limit(1)
     .maybeSingle()
 
-  if (existing) return existing
+  if (existing) return { offer: existing, created: false }
 
   const { data, error } = await supabase
     .from('flow_offers')
@@ -51,7 +51,12 @@ export async function saveOffer(input) {
     .single()
 
   if (error) throw error
-  return data
+  return { offer: data, created: true }
+}
+
+export async function saveOffer(input) {
+  const result = await saveOfferDetailed(input)
+  return result.offer
 }
 
 export async function listOffers({ limit = 50, status } = {}) {
