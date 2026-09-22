@@ -7,6 +7,7 @@ import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-
 import { captureMercadoLivreOffer } from './application/mercadolivre-offer-service.js'
 import { createRule } from './application/rule-service.js'
 import { createChannel, listChannels } from './application/channel-service.js'
+import { createFlowCaptureDraftStorage } from './application/flow-capture-draft.js'
 
 const root =
   document.querySelector('#app')
@@ -14,6 +15,16 @@ const root =
 let session = null
 let page = 'dashboard'
 let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
+
+function getFlowCaptureDraftStorage() {
+  const userId = session?.user?.id
+  if (!userId || typeof window === 'undefined' || !window.localStorage) return null
+
+  return createFlowCaptureDraftStorage(
+    window.localStorage,
+    `mavuri.flow.captureDraft.v1:${userId}`
+  )
+}
 let catalogsLoaded = false
 
 const catalogs = {}
@@ -499,6 +510,7 @@ async function loadFlowState() {
 }
 
 function flowPage() {
+  const flowCaptureDraft = getFlowCaptureDraftStorage()?.read() || ''
   const sent = flowState.jobs.filter((job) => job.status === 'sent').length
   const queued = flowState.jobs.filter((job) => job.status === 'queued').length
   const processing = flowState.jobs.filter((job) => job.status === 'processing').length
@@ -526,7 +538,7 @@ function flowPage() {
     <section class="flow-capture-panel">
       <div class="section-title"><h2>Capturar oferta</h2><p>Cole somente o link de afiliado do Mercado Livre. O Flow identifica o produto automaticamente, consulta os dados reais e avalia as regras.</p><div class="flow-connection-hint">🔐 A conexão com o Mercado Livre é feita com OAuth; o Mavuri não pede seu token para colar no navegador.</div></div>
       <form data-flow-capture><div class="flow-capture-grid">
-        <label><span>Link de afiliado oficial</span><input name="affiliateUrl" type="url" required placeholder="https://meli.la/..." /><small class="flow-field-hint">O Mavuri resolve o destino, identifica o produto e mantém este link como link de monetização.</small></label>
+        <label><span>Link de afiliado oficial</span><input name="affiliateUrl" type="url" required placeholder="https://meli.la/..." value="${escapeHtml(flowCaptureDraft)}" autocomplete="off" /><small class="flow-field-hint">O Mavuri resolve o destino, identifica o produto e mantém este link como link de monetização.</small></label>
       </div><div class="form-actions"><button class="primary" type="submit">⚡ Capturar no Flow</button></div></form>
     </section>
     <section class="flow-pipeline">
@@ -3634,6 +3646,15 @@ function bindEvents() {
     )
 
   if (flowCaptureForm) {
+    const flowCaptureInput = flowCaptureForm.querySelector('[name="affiliateUrl"]')
+    const flowCaptureDraftStorage = getFlowCaptureDraftStorage()
+
+    if (flowCaptureInput && flowCaptureDraftStorage) {
+      flowCaptureInput.addEventListener('input', () => {
+        flowCaptureDraftStorage.write(flowCaptureInput.value)
+      })
+    }
+
     flowCaptureForm.addEventListener(
       'submit',
       async (event) => {
@@ -3702,6 +3723,7 @@ function bindEvents() {
             capturedOffer = await capture()
           }
 
+          getFlowCaptureDraftStorage()?.clear()
           const notice = capturedOffer?.affiliate_url
             ? 'Oferta capturada e pronta para distribuição monetizada.'
             : 'Oferta capturada, mas sem link afiliado. Ela não será enviada automaticamente até receber um link oficial de afiliado.'
@@ -4021,6 +4043,7 @@ async function bootstrap() {
           }
 
           resetDivulgacao()
+          getFlowCaptureDraftStorage()?.clear()
 
           flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
         }
