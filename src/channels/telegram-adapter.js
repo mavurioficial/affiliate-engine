@@ -17,9 +17,16 @@ function escapeHtml(value) {
 
 export async function sendTelegramOffer({ botToken, chatId, offer }) {
   if (!botToken || !chatId) throw new Error('botToken e chatId são obrigatórios.')
-  const response = await fetch(telegramUrl(botToken,'sendMessage'),{
+  const text = formatTelegramOffer(offer)
+  const imageUrl = String(offer.image_url || offer.imageUrl || '').trim()
+  const method = imageUrl ? 'sendPhoto' : 'sendMessage'
+  const body = imageUrl
+    ? { chat_id: chatId, photo: imageUrl, caption: text, parse_mode: 'HTML' }
+    : { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: false }
+
+  const response = await fetch(telegramUrl(botToken, method),{
     method:'POST',headers:{'content-type':'application/json'},
-    body:JSON.stringify({chat_id:chatId,text:formatTelegramOffer(offer),parse_mode:'HTML',disable_web_page_preview:false})
+    body:JSON.stringify(body)
   })
   const data=await response.json()
   if(!response.ok || !data.ok) throw new Error(data?.description || `Telegram HTTP ${response.status}`)
