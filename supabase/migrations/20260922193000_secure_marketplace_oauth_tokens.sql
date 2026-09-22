@@ -63,3 +63,19 @@ create table if not exists public.flow_oauth_states (
 );
 alter table public.flow_oauth_states enable row level security;
 revoke all on public.flow_oauth_states from public, anon, authenticated;
+
+create or replace function public.mavuri_store_meli_token(
+  p_user_id uuid, p_marketplace_id uuid, p_external_account_id text,
+  p_access_token text, p_refresh_token text, p_expires_in integer, p_scopes text[]
+) returns void language sql security definer set search_path = public
+as $$ select mavuri_internal.upsert_flow_meli_token(p_user_id,p_marketplace_id,p_external_account_id,p_access_token,p_refresh_token,p_expires_in,p_scopes); $$;
+
+create or replace function public.mavuri_get_meli_token(p_user_id uuid, p_marketplace_id uuid)
+returns table (access_token text, refresh_token text, external_account_id text, expires_at timestamptz, scopes text[])
+language sql security definer set search_path = public
+as $$ select * from mavuri_internal.get_flow_meli_token(p_user_id,p_marketplace_id); $$;
+
+revoke all on function public.mavuri_store_meli_token(uuid,uuid,text,text,text,integer,text[]) from public, anon, authenticated;
+revoke all on function public.mavuri_get_meli_token(uuid,uuid) from public, anon, authenticated;
+grant execute on function public.mavuri_store_meli_token(uuid,uuid,text,text,text,integer,text[]) to service_role;
+grant execute on function public.mavuri_get_meli_token(uuid,uuid) to service_role;
