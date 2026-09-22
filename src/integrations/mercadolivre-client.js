@@ -49,8 +49,14 @@ export async function resolveMercadoLivreProduct(productUrl, options = {}) {
       const item = await getMercadoLivreItem(itemId, options)
       return { ...item, resolvedItemId: itemId, resolution: 'item_id' }
     } catch (error) {
-      if (error.status !== 404) throw error
+      if (error.status !== 404 && error.status !== 400) throw error
     }
+
+    const directSearch = await searchMercadoLivre(itemId, options)
+    const exact = Array.isArray(directSearch?.results)
+      ? directSearch.results.find(item => String(item?.id || '').toUpperCase() === itemId)
+      : null
+    if (exact) return { ...exact, resolvedItemId: itemId, resolution: 'item_id_search' }
   }
 
   if (!isMercadoLivreUrl(productUrl)) throw new Error('URL não reconhecida como Mercado Livre.')
