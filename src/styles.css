@@ -149,3 +149,5 @@
 @media(max-width:700px){.flow-form-grid{grid-template-columns:1fr}}
 
 .flow-connection-hint{margin-top:8px;color:#66756b;font-size:13px;line-height:1.45}
+
+.flow-field-hint{color:#6b786f;font-size:12px;line-height:1.35}
