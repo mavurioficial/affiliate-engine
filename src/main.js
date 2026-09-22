@@ -609,7 +609,13 @@ function flowPage() {
         })()}
       </div>
       <div class="flow-panel"><div class="section-title"><h2>Últimas ofertas</h2><p>Produtos processados pelo mecanismo.</p></div>
-        ${flowState.offers.slice(0,5).map((offer) => `<div class="flow-row"><div><strong>${escapeHtml(offer.title)}</strong><small>${escapeHtml(offer.source_type || 'manual')}</small></div><strong>${formatMoney(offer.price)}</strong></div>`).join('') || '<div class="empty">Nenhuma oferta capturada ainda.</div>'}
+        <div class="flow-offer-list">
+        ${flowState.offers.slice(0,5).map((offer) => {
+          const monetized = Boolean(offer.affiliate_url)
+          const image = String(offer.image_url || '').trim()
+          return `<div class="flow-offer-row"><div class="flow-offer-thumb">${image ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" />` : '🛍️'}</div><div class="flow-offer-main"><strong>${escapeHtml(offer.title)}</strong><small>${escapeHtml(offer.source_type || 'manual')} · ${formatMoney(offer.price)}</small></div><span class="flow-offer-status ${monetized ? 'is-ready' : 'is-pending'}">${monetized ? 'Monetizável' : 'Sem afiliado'}</span></div>`
+        }).join('') || '<div class="empty">Nenhuma oferta capturada ainda.</div>'}
+        </div>
       </div>
       <div class="flow-panel"><div class="section-title"><h2>Fluxo operacional</h2><p>Capture → avalie → enfileire → publique.</p></div>
         <ol class="flow-hint-list"><li>Cadastre o canal Telegram.</li><li>Crie a regra.</li><li>Capture uma oferta que atenda às condições.</li><li>O job é criado automaticamente.</li><li>Processe a fila para publicar.</li></ol>
