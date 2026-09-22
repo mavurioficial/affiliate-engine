@@ -3963,7 +3963,7 @@ async function bootstrap() {
 
           resetDivulgacao()
 
-          flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], error: '', notice: '' }
+          flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
         }
 
         await render()
