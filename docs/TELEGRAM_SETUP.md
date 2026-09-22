@@ -31,11 +31,11 @@ Para ativar a chamada automática, é necessário cadastrar uma vez no Supabase 
 
 ```sql
 select vault.create_secret('https://otikoxnfotyjgphrdudn.supabase.co', 'mavuri_flow_project_url');
-select vault.create_secret('<SUPABASE_SECRET_KEY>', 'mavuri_flow_supabase_secret_key');
+select vault.create_secret('<SCHEDULER_SECRET>', 'mavuri_flow_scheduler_secret');
 ```
 
-A secret key é usada apenas pelo Cron → Edge Function e nunca deve ser colocada no frontend, no Git ou em `flow_channels.settings`.
+O scheduler usa essa credencial dedicada somente para autenticar a chamada Cron → Edge Function. Ela nunca deve ser colocada no frontend, no Git ou em `flow_channels.settings`. A secret key do Supabase não precisa ser armazenada no Vault para esse fluxo.
 
-O worker continua aceitando a sessão normal do usuário para o botão **Processar fila**. Quando chamado pelo Cron, ele usa a secret key server-side e processa jobs de todos os usuários.
+O worker continua aceitando a sessão normal do usuário para o botão **Processar fila**. Quando chamado pelo Cron, ele usa a credencial dedicada server-side e processa jobs de todos os usuários.
 
 O Cron foi desenhado para não fazer nada enquanto essas duas secrets não existirem. Depois de cadastradas, o processamento passa a ocorrer automaticamente a cada minuto.
