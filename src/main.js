@@ -527,7 +527,7 @@ function flowPage() {
       <div class="section-title"><h2>Capturar oferta</h2><p>Cole uma URL do Mercado Livre e o Flow registra a oferta e avalia as regras.</p><div class="flow-connection-hint">🔐 A conexão com o Mercado Livre é feita com OAuth; o Mavuri não pede seu token para colar no navegador.</div></div>
       <form data-flow-capture><div class="flow-capture-grid">
         <label><span>URL do produto</span><input name="productUrl" type="url" required placeholder="https://www.mercadolivre.com.br/..." /></label>
-        <label><span>Link de afiliado (opcional)</span><input name="affiliateUrl" type="url" placeholder="Cole aqui se já tiver um link afiliado" /></label>
+        <label><span>Link de afiliado oficial</span><input name="affiliateUrl" type="url" placeholder="Cole o link gerado pela Central de Afiliados do Mercado Livre" /><small class="flow-field-hint">Necessário para distribuição automática e atribuição da comissão.</small></label>
       </div><div class="form-actions"><button class="primary" type="submit">⚡ Capturar no Flow</button></div></form>
     </section>
     <section class="flow-pipeline">
@@ -3695,7 +3695,10 @@ function bindEvents() {
             await capture()
           }
 
-          flowState = { ...flowState, loaded: false, notice: 'Oferta capturada e registrada no Flow.', error: '' }
+          const notice = offer?.affiliate_url
+            ? 'Oferta capturada e pronta para distribuição monetizada.'
+            : 'Oferta capturada, mas sem link afiliado. Ela não será enviada automaticamente até receber um link oficial de afiliado.'
+          flowState = { ...flowState, loaded: false, notice, error: '' }
           await render()
         } catch (error) {
           console.error(error)
