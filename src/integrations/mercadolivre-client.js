@@ -33,10 +33,10 @@ export function isMercadoLivreUrl(url) {
 
 export function extractMercadoLivreImage(product) {
   const direct = String(product?.thumbnail || product?.secure_thumbnail || '').trim()
-  if (/^https?:\\/\\//i.test(direct)) return direct
+  if (/^https?:\/\//i.test(direct)) return direct
 
   const pictures = Array.isArray(product?.pictures) ? product.pictures : []
-  const picture = pictures.find((entry) => /^https?:\\/\\//i.test(String(entry?.secure_url || entry?.url || '').trim()))
+  const picture = pictures.find((entry) => /^https?:\/\//i.test(String(entry?.secure_url || entry?.url || '').trim()))
   return String(picture?.secure_url || picture?.url || '').trim() || null
 }
 
