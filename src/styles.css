@@ -151,3 +151,17 @@
 .flow-connection-hint{margin-top:8px;color:#66756b;font-size:13px;line-height:1.45}
 
 .flow-field-hint{color:#6b786f;font-size:12px;line-height:1.35}
+
+
+.flow-offer-list{display:grid;gap:10px}
+.flow-offer-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border,#e5e7eb)}
+.flow-offer-row:last-child{border-bottom:0}
+.flow-offer-thumb{width:48px;height:48px;border-radius:10px;display:grid;place-items:center;overflow:hidden;background:var(--surface-muted,#f3f4f6);font-size:22px}
+.flow-offer-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.flow-offer-main{min-width:0;display:grid;gap:4px}
+.flow-offer-main strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.flow-offer-main small{opacity:.7}
+.flow-offer-status{font-size:12px;font-weight:700;white-space:nowrap}
+.flow-offer-status.is-ready{color:#16803c}
+.flow-offer-status.is-pending{color:#9a6700}
+@media (max-width:700px){.flow-offer-row{grid-template-columns:44px minmax(0,1fr)}.flow-offer-status{grid-column:2}.flow-offer-thumb{width:44px;height:44px}}
