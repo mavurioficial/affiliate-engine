@@ -1,4 +1,4 @@
-const DEFAULT_PROXY = '/api/offers'
+const DEFAULT_PROXY = 'https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/offers'
 
 function authHeaders(accessToken) {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
