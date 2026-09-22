@@ -27,6 +27,7 @@ create index if not exists flow_delivery_logs_channel_idx on public.flow_deliver
 create index if not exists flow_clicks_user_idx on public.flow_clicks(user_id);
 create index if not exists flow_clicks_offer_idx on public.flow_clicks(offer_id);
 create index if not exists flow_clicks_channel_idx on public.flow_clicks(channel_id);
+create unique index if not exists flow_clicks_tracking_id_uidx on public.flow_clicks(tracking_id) where tracking_id is not null;
 
 alter table public.flow_marketplaces enable row level security;
 alter table public.flow_affiliate_accounts enable row level security;
