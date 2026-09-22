@@ -110,6 +110,8 @@ Deno.serve(async (req) => {
     if (claimError || !claimed) continue
     processed += 1
 
+    let trackingId: string | null = null
+
     try {
       const channel = job.channel
       const offer = job.offer
@@ -132,7 +134,7 @@ Deno.serve(async (req) => {
       }
       if (!["http:", "https:"].includes(destinationUrl.protocol)) throw new Error("A oferta não possui um link de destino válido.")
 
-      const trackingId = crypto.randomUUID()
+      trackingId = crypto.randomUUID()
       const { error: clickError } = await supabase.from("flow_clicks").insert({
         user_id: job.user_id,
         offer_id: job.offer_id,
@@ -181,6 +183,10 @@ Deno.serve(async (req) => {
       sent += 1
       results.push({ id: job.id, status: "sent", attempts: nextAttempt })
     } catch (error) {
+      if (trackingId) {
+        await supabase.from("flow_clicks").delete().eq("tracking_id", trackingId)
+      }
+
       const message = error instanceof Error ? error.message : String(error)
       const canRetry = ((error as Error & { retryable?: boolean })?.retryable ?? retryableError(message)) && nextAttempt < MAX_ATTEMPTS
 
