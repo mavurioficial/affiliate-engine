@@ -28,7 +28,7 @@ export function extractMercadoLivreItemId(url) {
 }
 
 export function isMercadoLivreUrl(url) {
-  return /(?:mercadolivre|mercadolibre)\\.com/i.test(String(url || ''))
+  return /(?:mercadolivre|mercadolibre)\.com/i.test(String(url || ''))
 }
 
 export async function searchMercadoLivre(query, { accessToken, limit = 20, proxy = DEFAULT_PROXY } = {}) {
