@@ -28,7 +28,20 @@ export async function saveOfferDetailed(input) {
     .limit(1)
     .maybeSingle()
 
-  if (existing) return { offer: existing, created: false }
+  if (existing) {
+    if (offer.affiliateUrl && offer.affiliateUrl !== existing.affiliate_url) {
+      const { data: updated, error: updateError } = await supabase
+        .from('flow_offers')
+        .update({ affiliate_url: offer.affiliateUrl })
+        .eq('id', existing.id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+      if (updateError) throw updateError
+      return { offer: updated, created: false, affiliateUpdated: true }
+    }
+    return { offer: existing, created: false, affiliateUpdated: false }
+  }
 
   const { data, error } = await supabase
     .from('flow_offers')
