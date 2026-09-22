@@ -3,7 +3,7 @@ import { sections } from '../domain/catalog.js'
 import { developmentCatalogs } from '../infrastructure/development/catalog.js'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
-import { listDeliveryJobs } from './application/delivery-service.js'
+import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
 import { captureMercadoLivreOffer } from './application/mercadolivre-offer-service.js'
 import { createRule } from './application/rule-service.js'
 import { createChannel, listChannels } from './application/channel-service.js'
@@ -13,7 +13,7 @@ const root =
 
 let session = null
 let page = 'dashboard'
-let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], error: '', notice: '' }
+let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
 let catalogsLoaded = false
 
 const catalogs = {}
@@ -482,12 +482,17 @@ async function loadFlowState() {
   flowState.loading = true
   flowState.error = ''
   try {
-    const [offers, rules, jobs] = await Promise.all([
+    const user = (await supabase.auth.getUser()).data.user
+    if (!user) throw new Error('Usuário não autenticado.')
+    const [offers, rules, jobs, channels, clicksResult] = await Promise.all([
       listOffers({ limit: 50 }),
       listRules(),
-      listDeliveryJobs()
+      listDeliveryJobs(),
+      listChannels(),
+      supabase.from('flow_clicks').select('id,offer_id,channel_id,tracking_id,click_count,last_clicked_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1000)
     ])
-    flowState = { loading: false, loaded: true, offers, rules, jobs, error: '', notice: flowState.notice }
+    if (clicksResult.error) throw clicksResult.error
+    flowState = { loading: false, loaded: true, offers, rules, jobs, channels, clicks: clicksResult.data || [], error: '', notice: flowState.notice }
   } catch (error) {
     flowState = { ...flowState, loading: false, loaded: true, error: error.message || 'Não foi possível carregar o Flow.' }
   }
@@ -498,6 +503,9 @@ function flowPage() {
   const queued = flowState.jobs.filter((job) => job.status === 'queued').length
   const processing = flowState.jobs.filter((job) => job.status === 'processing').length
   const failed = flowState.jobs.filter((job) => job.status === 'failed').length
+  const clickCount = flowState.clicks.reduce((total, click) => total + Number(click.click_count || 0), 0)
+  const clickedOffers = new Set(flowState.clicks.filter((click) => Number(click.click_count || 0) > 0).map((click) => click.offer_id)).size
+  const ctr = sent > 0 ? ((clickCount / sent) * 100).toFixed(1) : '0.0'
   const enabledRules = flowState.rules.filter((rule) => rule.enabled).length
   const describeRule = (rule) => {
     const c = rule.conditions || {}
@@ -533,6 +541,8 @@ function flowPage() {
       <article><span>Na fila</span><strong>${queued}</strong><small>${processing} processando</small></article>
       <article><span>Enviadas</span><strong>${sent}</strong><small>concluídas</small></article>
       <article><span>Falhas</span><strong>${failed}</strong><small>para investigar</small></article>
+      <article><span>Cliques</span><strong>${clickCount}</strong><small>${clickedOffers} oferta(s) clicada(s)</small></article>
+      <article><span>CTR</span><strong>${ctr}%</strong><small>cliques / envios</small></article>
     </section>
     <section class="flow-columns">
       <div class="flow-panel"><div class="section-title"><h2>Regras do Flow</h2><p>Automação baseada nas características da oferta.</p></div>
@@ -549,7 +559,14 @@ function flowPage() {
           <label><span>Prioridade</span><input name="priority" type="number" min="1" value="100" /></label>
           <label><span>Mercado</span><select name="marketplace"><option value="mercadolivre">Mercado Livre</option><option value="">Qualquer</option></select></label>
           <label><span>Desconto mínimo (%)</span><input name="minDiscount" type="number" min="0" max="100" value="20" /></label>
+          <label><span>Desconto máximo (%)</span><input name="maxDiscount" type="number" min="0" max="100" placeholder="Sem limite" /></label>
           <label><span>Preço máximo (R$)</span><input name="maxPrice" type="number" min="0" step="0.01" value="500" /></label>
+          <label><span>Preço mínimo (R$)</span><input name="minPrice" type="number" min="0" step="0.01" placeholder="Sem mínimo" /></label>
+          <label><span>Categoria</span><input name="category" placeholder="Ex.: Eletrônicos" /></label>
+          <label><span>Vendedor</span><input name="seller" placeholder="Nome exato (opcional)" /></label>
+          <label><span>Palavras-chave</span><input name="keywords" placeholder="tv, notebook, gamer" /></label>
+          <label><span>Excluir palavras</span><input name="deniedKeywords" placeholder="usado, quebrado" /></label>
+          <label><span>Exigir cupom</span><select name="couponRequired"><option value="">Indiferente</option><option value="true">Sim</option><option value="false">Não</option></select></label>
           <label><span>Canal</span><select name="channelId" required><option value="">Selecione um canal</option>${flowState.channels.map((channel) => `<option value="${channel.id}">${escapeHtml(channel.name)} · ${escapeHtml(channel.type)}</option>`).join('')}</select></label>
         </div><div class="form-actions"><button class="primary" type="submit" ${flowState.channels.length ? '' : 'disabled'}>＋ Criar regra</button></div>
         ${!flowState.channels.length ? '<small class="flow-hint">Cadastre um canal abaixo antes de criar a regra.</small>' : ''}</form>
@@ -563,8 +580,11 @@ function flowPage() {
       </div>
     </section>
     <section class="flow-panel"><div class="section-title"><h2>Fila de distribuição</h2><p>Acompanhe e processe os jobs pendentes.</p></div>
-      <div class="form-actions"><button data-flow-worker class="primary" ${queued || processing ? '' : 'disabled'}>▶ Processar fila</button></div>
-      ${flowState.jobs.slice(0,8).map((job) => `<div class="flow-row"><div><strong>${escapeHtml(job.channel_id || 'Canal')}</strong><small>${escapeHtml(job.status)} · tentativa ${Number(job.attempts || 0)}</small></div><span class="status-dot">${escapeHtml(job.error_message || job.status)}</span></div>`).join('') || '<div class="empty">A fila está vazia.</div>'}
+      <div class="form-actions">
+        <button data-flow-worker class="primary" ${queued || processing ? '' : 'disabled'}>▶ Processar fila</button>
+        <button data-flow-retry ${failed ? '' : 'disabled'}>↻ Reenfileirar falhas (${failed})</button>
+      </div>
+      ${flowState.jobs.slice(0,8).map((job) => `<div class="flow-row"><div><strong>${escapeHtml(flowState.channels.find((channel) => channel.id === job.channel_id)?.name || 'Canal')}</strong><small>${escapeHtml(job.status)} · tentativa ${Number(job.attempts || 0)}</small></div><span class="status-dot">${escapeHtml(job.error_message || job.status)}</span></div>`).join('') || '<div class="empty">A fila está vazia.</div>'}
     </section>
     <section class="flow-columns">
       <div class="flow-panel"><div class="section-title"><h2>Últimas ofertas</h2><p>Produtos processados pelo mecanismo.</p></div>
@@ -3641,10 +3661,24 @@ function bindEvents() {
         const conditions = {}
         const marketplace = String(data.get('marketplace') || '').trim()
         const minDiscount = Number(data.get('minDiscount') || 0)
+        const maxDiscount = Number(data.get('maxDiscount') || 0)
+        const minPrice = Number(data.get('minPrice') || 0)
         const maxPrice = Number(data.get('maxPrice') || 0)
+        const category = String(data.get('category') || '').trim()
+        const seller = String(data.get('seller') || '').trim()
+        const keywords = String(data.get('keywords') || '').split(',').map((item) => item.trim()).filter(Boolean)
+        const deniedKeywords = String(data.get('deniedKeywords') || '').split(',').map((item) => item.trim()).filter(Boolean)
+        const couponRequired = String(data.get('couponRequired') || '').trim()
         if (marketplace) conditions.marketplace = marketplace
         if (minDiscount > 0) conditions.minDiscount = minDiscount
+        if (maxDiscount > 0) conditions.maxDiscount = maxDiscount
+        if (minPrice > 0) conditions.minPrice = minPrice
         if (maxPrice > 0) conditions.maxPrice = maxPrice
+        if (category) conditions.category = category
+        if (seller) conditions.seller = seller
+        if (keywords.length) conditions.keywords = keywords
+        if (deniedKeywords.length) conditions.deniedKeywords = deniedKeywords
+        if (couponRequired) conditions.couponRequired = couponRequired === 'true'
         await createRule({
           name: String(data.get('name') || '').trim(),
           priority: Number(data.get('priority') || 100),
@@ -3674,6 +3708,23 @@ function bindEvents() {
       } catch (error) {
         console.error(error)
         flowState = { ...flowState, error: error.message || 'Não foi possível cadastrar o canal.', notice: '' }
+        await render()
+      }
+    })
+  }
+
+  const flowRetryButton = document.querySelector('[data-flow-retry]')
+  if (flowRetryButton) {
+    flowRetryButton.addEventListener('click', async () => {
+      flowRetryButton.disabled = true
+      flowRetryButton.textContent = 'Reenfileirando...'
+      try {
+        const jobs = await retryFailedDeliveries()
+        flowState = { ...flowState, loaded: false, notice: jobs.length ? `${jobs.length} job(s) reenfileirado(s).` : 'Nenhuma falha para reenfileirar.', error: '' }
+        await render()
+      } catch (error) {
+        console.error(error)
+        flowState = { ...flowState, error: error.message || 'Não foi possível reenfileirar as falhas.', notice: '' }
         await render()
       }
     })
