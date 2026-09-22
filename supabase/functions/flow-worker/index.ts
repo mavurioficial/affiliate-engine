@@ -113,6 +113,25 @@ Deno.serve(async (req) => {
     let trackingId: string | null = null
 
     try {
+      const { data: priorSuccess, error: priorSuccessError } = await supabase
+        .from("flow_delivery_logs")
+        .select("id, external_message_id")
+        .eq("delivery_job_id", job.id)
+        .eq("status", "sent")
+        .limit(1)
+        .maybeSingle()
+      if (priorSuccessError) throw new Error("Falha ao verificar entrega anterior: " + priorSuccessError.message)
+      if (priorSuccess) {
+        const { error: reconcileError } = await supabase.from("flow_delivery_jobs")
+          .update({ status: "sent", sent_at: new Date().toISOString(), error_message: null })
+          .eq("id", job.id)
+          .eq("status", "processing")
+        if (reconcileError) throw new Error("Falha ao reconciliar entrega anterior: " + reconcileError.message)
+        sent += 1
+        results.push({ id: job.id, status: "reconciled", attempts: Number(job.attempts || 0), external_message_id: priorSuccess.external_message_id })
+        continue
+      }
+
       const channel = job.channel
       const offer = job.offer
       if (!channel || channel.type !== "telegram") throw new Error("Canal Telegram inválido ou não encontrado.")
@@ -165,12 +184,7 @@ Deno.serve(async (req) => {
         throw error
       }
 
-      await supabase.from("flow_delivery_jobs")
-        .update({ status: "sent", sent_at: new Date().toISOString(), error_message: null })
-        .eq("id", job.id)
-        .eq("status", "processing")
-
-      await supabase.from("flow_delivery_logs").insert({
+      const { error: deliveryLogError } = await supabase.from("flow_delivery_logs").insert({
         user_id: job.user_id,
         delivery_job_id: job.id,
         offer_id: job.offer_id,
@@ -179,6 +193,13 @@ Deno.serve(async (req) => {
         external_message_id: String(telegram.result?.message_id || ""),
         metadata: { provider: "telegram", attempt: nextAttempt }
       })
+      if (deliveryLogError) throw new Error("Falha ao registrar entrega confirmada: " + deliveryLogError.message)
+
+      const { error: sentUpdateError } = await supabase.from("flow_delivery_jobs")
+        .update({ status: "sent", sent_at: new Date().toISOString(), error_message: null })
+        .eq("id", job.id)
+        .eq("status", "processing")
+      if (sentUpdateError) throw new Error("Falha ao finalizar job entregue: " + sentUpdateError.message)
 
       sent += 1
       results.push({ id: job.id, status: "sent", attempts: nextAttempt })
