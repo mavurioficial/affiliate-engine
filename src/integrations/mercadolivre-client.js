@@ -58,7 +58,7 @@ export async function resolveMercadoLivreProduct(productUrl, options = {}) {
       const item = await getMercadoLivreItem(itemId, options)
       return { ...item, thumbnail: extractMercadoLivreImage(item), resolvedItemId: itemId, resolution: 'item_id' }
     } catch (error) {
-      if (error.status !== 404 && error.status !== 400) throw error
+      if (![400, 403, 404].includes(error.status)) throw error
     }
 
     const directSearch = await searchMercadoLivre(itemId, options)
