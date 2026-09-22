@@ -96,6 +96,12 @@ assert.equal(calculateDiscount(100, 0), 0)
 assert.equal(calculateDiscount('invalid', 200), 0)
 // Monetization invariant: an offer without an affiliate URL must not be considered ready for automatic delivery.
 // Re-enrichment of an existing offer with an affiliate URL must be supported by the persistence layer.
+const monetizedOffer = normalizeOffer({
+  ...offer,
+  affiliate_url: 'https://mercadolivre.com.br/afiliado/exemplo'
+})
+assert.equal(Boolean(monetizedOffer.affiliateUrl), true)
+assert.equal(Boolean(persistedOffer.affiliateUrl), false)
 
 
 // Delivery retry exhaustion is enforced at the persistence query boundary (attempts < 5).
