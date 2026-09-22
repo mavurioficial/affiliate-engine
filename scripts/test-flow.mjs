@@ -50,6 +50,15 @@ assert.equal(matchesRule(offer, {
   couponRequired: true
 }), true)
 
+const identifiedOffer = normalizeOffer({
+  ...offer,
+  metadata: { categoryId: 'MLB1234', sellerId: '998877' }
+})
+
+assert.equal(matchesRule(identifiedOffer, { categoryId: 'MLB1234' }), true)
+assert.equal(matchesRule(identifiedOffer, { sellerId: '998877' }), true)
+assert.equal(matchesRule(identifiedOffer, { categoryId: 'MLB9999' }), false)
+
 const sameOffer = normalizeOffer({
   marketplace: 'mercadolivre',
   title: 'Outro título',
