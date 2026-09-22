@@ -5,6 +5,15 @@ import { enqueueOfferDeliveries } from './delivery-service.js'
 import { calculateDiscount } from '../domain/offer-engine.js'
 import { resolveMercadoLivreAffiliateUrl } from '../integrations/affiliate-resolver-client.js'
 
+function hasUsableLandingProduct(product) {
+  return Boolean(
+    product &&
+    product.title &&
+    Number(product.price) > 0 &&
+    product.permalink
+  )
+}
+
 export async function captureMercadoLivreOffer(productUrl, {
   accessToken,
   affiliateUrl = null,
@@ -12,15 +21,32 @@ export async function captureMercadoLivreOffer(productUrl, {
 } = {}) {
   let resolvedProductUrl = productUrl
   let resolvedAffiliateUrl = affiliateUrl
+  let resolvedAffiliatePayload = null
 
-  if (!resolvedProductUrl && resolvedAffiliateUrl) {
-    const resolved = await resolveMercadoLivreAffiliateUrl(resolvedAffiliateUrl, { accessToken })
-    resolvedProductUrl = resolved.product_url
+  if (resolvedAffiliateUrl) {
+    resolvedAffiliatePayload = await resolveMercadoLivreAffiliateUrl(resolvedAffiliateUrl, { accessToken })
+    if (!resolvedProductUrl) {
+      resolvedProductUrl = resolvedAffiliatePayload.product_url
+    }
   }
 
   if (!resolvedProductUrl) throw new Error('Informe um link de afiliado do Mercado Livre.')
 
-  const product = await resolveMercadoLivreProduct(resolvedProductUrl, { accessToken })
+  let product
+  try {
+    product = await resolveMercadoLivreProduct(resolvedProductUrl, { accessToken })
+  } catch (error) {
+    if (!resolvedAffiliatePayload || !hasUsableLandingProduct(resolvedAffiliatePayload.product) || ![400, 403, 404].includes(error?.status)) {
+      throw error
+    }
+
+    product = {
+      ...resolvedAffiliatePayload.product,
+      resolvedItemId: resolvedAffiliatePayload.item_id,
+      resolution: resolvedAffiliatePayload.product.resolution || 'affiliate_landing_html',
+      raw_source: 'affiliate-resolver'
+    }
+  }
 
   resolvedAffiliateUrl = await resolveAffiliateUrl(product.permalink || resolvedProductUrl, {
     marketplace: 'mercadolivre',
