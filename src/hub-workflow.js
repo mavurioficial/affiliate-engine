@@ -350,10 +350,8 @@ function bindHubEvents(container) {
 }
 
 function decorateNavigation() {
-  document.querySelectorAll('[data-page="buscar-ofertas"]').forEach((button) => {
-    const text = button.textContent.trim()
-    if (text !== 'Hub de Afiliados') button.textContent = 'Hub de Afiliados'
-  })
+  // A navegação mantém "Buscar ofertas" para os testes da API.
+  // O Hub de Afiliados usa uma rota própria.
 }
 
 function syncUi() {
@@ -361,7 +359,7 @@ function syncUi() {
 
   const title = document.querySelector('.page-content .page-heading h1')?.textContent.trim()
 
-  if (title === 'Buscar ofertas') {
+  if (title === 'Hub de Afiliados') {
     const content = document.querySelector('.page-content')
     if (content && lastMode !== 'hub') {
       lastMode = 'hub'
