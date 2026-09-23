@@ -261,6 +261,11 @@ function navigation() {
       icon: '⌕'
     },
     {
+      id: 'hub-afiliados',
+      label: 'Hub de Afiliados',
+      icon: '↗'
+    },
+    {
       id: 'divulgacao',
       label: 'Divulgação',
       icon: '✦'
@@ -3020,6 +3025,18 @@ function currentPage() {
     page === 'buscar-ofertas'
   ) {
     return buscarOfertasPage()
+  }
+
+  if (
+    page === 'hub-afiliados'
+  ) {
+    return `
+      <header class="page-heading">
+        <p class="eyebrow">MERCADO LIVRE AFILIADOS</p>
+        <h1>Hub de Afiliados</h1>
+        <p>Carregando o Hub de Afiliados...</p>
+      </header>
+    `
   }
 
   const section =
