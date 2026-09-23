@@ -1,13 +1,14 @@
 const HUB_URL = 'https://mercadolivre.com.br/afiliados/hub?is_affiliate=true#menu-user'
-const RESOLVER_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/resolve3'
+import { getSession } from './auth.js'
+
+const RESOLVER_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/resolve6'
 const STORAGE_KEY = 'mavuri.hub.capture'
 const DRAFT_STORAGE_KEY = 'mavuri.hub.draft'
 
 let lastMode = ''
 
-// A aplicação nova começa limpa. Depois disso, a captura permanece em
-// sessionStorage para sobreviver à navegação entre abas internas do Mavuri.
-clearHubState()
+// A captura fica em sessionStorage para sobreviver à navegação interna do Mavuri.
+// O estado só é apagado pelo botão Limpar ou depois de concluir a prévia.
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -225,7 +226,10 @@ async function resolveAffiliateLink(container) {
   try {
     const url = new URL(RESOLVER_ENDPOINT)
     url.searchParams.set('url', affiliateUrl)
-    const response = await fetch(url.toString(), { cache: 'no-store' })
+    const session = await getSession()
+    const headers = { accept: 'application/json' }
+    if (session?.access_token) headers.authorization = `Bearer ${session.access_token}`
+    const response = await fetch(url.toString(), { cache: 'no-store', headers })
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok || !payload.ok || !payload.productUrl) {
