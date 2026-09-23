@@ -1,14 +1,13 @@
 const HUB_URL = 'https://mercadolivre.com.br/afiliados/hub?is_affiliate=true#menu-user'
-import { getSession } from './auth.js'
-
-const RESOLVER_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/resolve6'
+const RESOLVER_ENDPOINT = 'https://mavuri-api-test.vercel.app/api/resolve3'
 const STORAGE_KEY = 'mavuri.hub.capture'
 const DRAFT_STORAGE_KEY = 'mavuri.hub.draft'
 
 let lastMode = ''
 
-// A captura fica em sessionStorage para sobreviver à navegação interna do Mavuri.
-// O estado só é apagado pelo botão Limpar ou depois de concluir a prévia.
+// A aplicação nova começa limpa. Depois disso, a captura permanece em
+// sessionStorage para sobreviver à navegação entre abas internas do Mavuri.
+clearHubState()
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -226,10 +225,7 @@ async function resolveAffiliateLink(container) {
   try {
     const url = new URL(RESOLVER_ENDPOINT)
     url.searchParams.set('url', affiliateUrl)
-    const session = await getSession()
-    const headers = { accept: 'application/json' }
-    if (session?.access_token) headers.authorization = `Bearer ${session.access_token}`
-    const response = await fetch(url.toString(), { cache: 'no-store', headers })
+    const response = await fetch(url.toString(), { cache: 'no-store' })
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok || !payload.ok || !payload.productUrl) {
@@ -350,8 +346,10 @@ function bindHubEvents(container) {
 }
 
 function decorateNavigation() {
-  // A navegação mantém "Buscar ofertas" para os testes da API.
-  // O Hub de Afiliados usa uma rota própria.
+  document.querySelectorAll('[data-page="buscar-ofertas"]').forEach((button) => {
+    const text = button.textContent.trim()
+    if (text !== 'Hub de Afiliados') button.textContent = 'Hub de Afiliados'
+  })
 }
 
 function syncUi() {
@@ -359,7 +357,7 @@ function syncUi() {
 
   const title = document.querySelector('.page-content .page-heading h1')?.textContent.trim()
 
-  if (title === 'Hub de Afiliados') {
+  if (title === 'Buscar ofertas') {
     const content = document.querySelector('.page-content')
     if (content && lastMode !== 'hub') {
       lastMode = 'hub'

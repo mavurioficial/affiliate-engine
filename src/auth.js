@@ -1,1 +1,1 @@
-export { getSession, onAuthChange, signIn, signOut } from './app/auth.js'
+export { getSession, onAuthChange, signIn, signOut, supabase } from './app/auth.js'
