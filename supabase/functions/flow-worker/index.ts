@@ -34,6 +34,41 @@ function retryDelayMinutes(attempts: number) {
   return BACKOFF_MINUTES[Math.min(Math.max(attempts - 1, 0), BACKOFF_MINUTES.length - 1)]
 }
 
+const TITLE_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\bsmart\s+tv\b/gi, "Smart TV"], [/\btv\b/gi, "TV"], [/\bled\b/gi, "LED"],
+  [/\bfull\s+hd\b/gi, "Full HD"], [/\bhdmi\b/gi, "HDMI"], [/\busb\b/gi, "USB"],
+  [/\bwi[\s-]*fi\b/gi, "Wi-Fi"], [/\bbluetooth\b/gi, "Bluetooth"], [/\b4k\b/gi, "4K"],
+  [/\b8k\b/gi, "8K"], [/\bqled\b/gi, "QLED"], [/\bamoled\b/gi, "AMOLED"],
+  [/\b60hz\b/gi, "60Hz"], [/\b120hz\b/gi, "120Hz"], [/\b180hz\b/gi, "180Hz"],
+  [/\bml\b/gi, "ml"], [/\bl\b/gi, "L"], [/\bkg\b/gi, "kg"], [/\bgb\b/gi, "GB"],
+  [/\bmb\b/gi, "MB"], [/\bmah\b/gi, "mAh"], [/\baoc\b/gi, "AOC"],
+  [/\bbuba\b/gi, "Buba"], [/\bsamsung\b/gi, "Samsung"], [/\biphone\b/gi, "iPhone"],
+  [/\bgalaxy\b/gi, "Galaxy"], [/\bleao\b/gi, "Leão"], [/\beletrica\b/gi, "elétrica"],
+  [/\beletrico\b/gi, "elétrico"], [/\bhermetico\b/gi, "hermético"], [/\bhermetica\b/gi, "hermética"],
+  [/\brefeicoes\b/gi, "refeições"], [/\bsodio\b/gi, "sódio"], [/\bpre\s*[- ]?treino\b/gi, "PRÉ-TREINO"]
+];
+
+function normalizeTitle(value: unknown) {
+  let title = String(value || "").replace(/\s+/g, " ").trim();
+  for (const [pattern, replacement] of TITLE_REPLACEMENTS) title = title.replace(pattern, replacement);
+  return title;
+}
+
+const CATEGORY_RULES: Array<{ emoji: string; name: string; patterns: RegExp[] }> = [
+  { emoji: "👶", name: "infantil", patterns: [/\binfantil\b/i, /\bbeb[eê]\b/i, /\bcrian[cç]a/i, /\bbrinquedo/i, /\bboneca/i, /\bboneco/i, /\bbuba\b/i, /\bmamadeira/i, /\bfralda/i, /\bchupeta/i] },
+  { emoji: "💪", name: "suplementos", patterns: [/\bsuplement/i, /\bwhey\b/i, /\bcreatina\b/i, /\bpr[eé][ -]?treino\b/i, /\bhipercal[oó]rico/i, /\bvitamina/i, /\bprote[ií]na/i, /\btermog[eê]nico/i] },
+  { emoji: "🔧", name: "ferramentas", patterns: [/\bferrament/i, /\bsoquete/i, /\bcatraca/i, /\bchave(s)?\b/i, /\balicate/i, /\bfuradeira/i, /\bparafusadeira/i, /\bserra\b/i, /\bmartelete/i, /\btorqu[ií]metro/i, /\bmult[ií]metro/i] },
+  { emoji: "👕", name: "roupas", patterns: [/\bjaqueta/i, /\bcamiseta/i, /\bcamisa\b/i, /\bcal[cç]a/i, /\bvestido/i, /\bblusa/i, /\bshort/i, /\bbermuda/i, /\bmoletom/i, /\bt[eê]nis/i, /\bsapato/i, /\bsand[aá]lia/i, /\bchinelo/i, /\bmeia(s)?\b/i, /\broupa/i] },
+  { emoji: "📺", name: "eletrônicos", patterns: [/\bsmart\s*tv\b/i, /\btelevis[aã]o/i, /\btv\b/i, /\bcelular/i, /\bsmartphone/i, /\btablet/i, /\bnotebook/i, /\blaptop/i, /\bmonitor/i, /\bteclado/i, /\bmouse\b/i, /\bfone(s)?\b/i, /\bheadphone/i, /\bc[aâ]mera/i, /\bimpressora/i, /\broteador/i, /\bvideogame/i, /\bconsole/i, /\bsmartwatch/i, /\bcaixa de som/i, /\bsoundbar/i, /\bdrone/i] },
+  { emoji: "🍳", name: "cozinha", patterns: [/\bchaleira/i, /\bpanela/i, /\bfrigideira/i, /\bair\s*fryer/i, /\bliquidificador/i, /\bmixer\b/i, /\bcafeteira/i, /\bforno/i, /\bmarmita/i, /\bpote(s)?\b/i, /\bgarrafa/i, /\bgarrafinha/i, /\bcaneca/i, /\bcopo/i, /\btalher/i, /\bprato/i, /\btravessa/i, /\bassadeira/i] },
+  { emoji: "🏠", name: "casa", patterns: [/\bcasa\b/i, /\blimpeza/i, /\balvejante/i, /\btira\s+manchas/i, /\bpercarbonato/i, /\borganizador/i, /\bbanheiro/i, /\bquarto/i, /\bcama\b/i, /\bsof[aá]/i, /\bcortina/i, /\btapete/i, /\bdecora[cç][aã]o/i, /\bjardim/i] }
+];
+
+function classifyProduct(title: unknown) {
+  const normalized = normalizeTitle(title);
+  return CATEGORY_RULES.find((rule) => rule.patterns.some((pattern) => pattern.test(normalized))) || { emoji: "🛍️", name: "ofertas" };
+}
+
 function retryableError(message: string) {
   return ![
     "Canal Telegram inválido ou não encontrado.",
@@ -175,8 +210,10 @@ Deno.serve(async (req) => {
       const trackedUrl = `${supabaseUrl}/functions/v1/track-click?t=${encodeURIComponent(trackingId)}`
       const shipping = offer?.metadata?.shipping
       const freeShipping = shipping?.free_shipping === true || shipping?.freeShipping === true
+      const displayTitle = normalizeTitle(offer?.title)
+      const category = classifyProduct(displayTitle)
       const messageLines = [
-        `🛍️ <b>${escapeHtml(offer?.title)}</b>`,
+        `${category.emoji} <b>${escapeHtml(displayTitle)}</b>`,
         discount > 0 ? `🔥 <b>${discount.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% OFF</b>` : "",
         old > Number(offer?.price || 0) ? `De: <s>${old.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</s>` : "",
         `💰 <b>${price}</b>`,
