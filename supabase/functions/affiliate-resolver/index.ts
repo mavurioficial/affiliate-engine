@@ -307,6 +307,31 @@ Deno.serve(async (req) => {
       } catch {}
     }
 
+    // If Mercado Livre serves the product page differently to server-side fetches,
+    // use the Vercel resolver as a second-stage enrichment even when we already
+    // found an item URL from the social profile.
+    if (productUrl && (!landingProduct?.title || Number(landingProduct?.price) <= 0)) {
+      try {
+        const fallbackUrl = new URL("https://mavuri-api-test.vercel.app/api/resolve6")
+        fallbackUrl.searchParams.set("url", affiliateUrl)
+        const fallbackResponse = await fetch(fallbackUrl.toString(), {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"
+          }
+        })
+        const fallbackPayload = await fallbackResponse.json().catch(() => null)
+        if (fallbackPayload?.product) {
+          landingProduct = {
+            ...fallbackPayload.product,
+            id: fallbackPayload.product.id || itemId,
+            permalink: fallbackPayload.product.permalink || fallbackPayload.product.url || productUrl,
+            resolution: fallbackPayload.product.resolution || "vercel-resolver"
+          }
+        }
+      } catch {}
+    }
+
     if (!productUrl) {
       return new Response(JSON.stringify({
         error: "O link de afiliado foi aberto, mas o Mavuri não encontrou o produto na página de destino.",
