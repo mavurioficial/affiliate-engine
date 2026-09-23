@@ -1,41 +1,35 @@
 # Telegram no Mavuri Flow
 
-O token do bot não deve ser salvo em flow_channels.settings, no navegador ou no Git.
+O token do bot não deve ser salvo em `flow_channels.settings`, no navegador ou no Git.
 
-Configure o segredo no projeto Supabase:
-
-```bash
-supabase secrets set TELEGRAM_BOT_TOKEN="<TOKEN_DO_BOT>" --project-ref otikoxnfotyjgphrdudn
-```
-
-Também é possível cadastrar o segredo pela área de Secrets das Edge Functions no Dashboard do Supabase.
-
-O worker flow-worker lê esse segredo somente no backend. O canal guarda apenas o Chat ID.
-
-## Fluxo
+## Canal
 
 1. Cadastre o canal Telegram no Mavuri.
-2. Crie uma regra apontando para esse canal.
-3. Capture uma oferta.
-4. O Flow cria o job automaticamente quando a oferta atende à regra.
-5. Clique em Processar fila.
-6. O worker envia a mensagem e registra o resultado.
-7. O link enviado passa pelo track-click, que registra o clique e redireciona para o link afiliado/produto.
+2. Informe apenas o Chat ID no cadastro do canal.
+3. O `TELEGRAM_BOT_TOKEN` fica como secret da Edge Function.
+4. Crie uma regra apontando para o canal.
+5. Capture uma oferta.
+6. Quando a oferta atender à regra e possuir link oficial de afiliado, o Flow cria o job.
+7. O worker envia a mensagem e registra o resultado.
+8. O link enviado passa pelo `track-click`, que registra o clique e redireciona para o destino armazenado.
 
+## Token do bot
 
-## Processamento automático do Flow
+Configure `TELEGRAM_BOT_TOKEN` como secret do projeto Supabase. O worker lê o valor somente no backend.
 
-O projeto também possui um job Supabase Cron chamado `mavuri-flow-worker`, executado a cada minuto. Ele chama o Edge Function `flow-worker` por meio do `pg_net`.
+## Processamento automático
 
-Para ativar a chamada automática, é necessário cadastrar uma vez no Supabase Vault:
+O projeto possui o job Supabase Cron `mavuri-flow-worker`, executado a cada minuto. Ele chama o Edge Function `flow-worker` por meio do `pg_net`.
 
-```sql
-select vault.create_secret('https://otikoxnfotyjgphrdudn.supabase.co', 'mavuri_flow_project_url');
-select vault.create_secret('<SCHEDULER_SECRET>', 'mavuri_flow_scheduler_secret');
-```
+Para ativar a chamada automática, o scheduler precisa das duas secrets server-side usadas pela migration:
 
-O scheduler usa essa credencial dedicada somente para autenticar a chamada Cron → Edge Function. Ela nunca deve ser colocada no frontend, no Git ou em `flow_channels.settings`. A secret key do Supabase não precisa ser armazenada no Vault para esse fluxo.
+- `mavuri_flow_project_url`
+- `mavuri_flow_supabase_secret_key`
 
-O worker continua aceitando a sessão normal do usuário para o botão **Processar fila**. Quando chamado pelo Cron, ele usa a credencial dedicada server-side e processa jobs de todos os usuários.
+Essas secrets ficam no Supabase Vault e nunca devem ser colocadas no frontend, no Git ou em `flow_channels.settings`.
 
-O Cron foi desenhado para não fazer nada enquanto essas duas secrets não existirem. Depois de cadastradas, o processamento passa a ocorrer automaticamente a cada minuto.
+O botão **Processar fila** continua disponível no painel para execução manual autenticada.
+
+## Observação comercial
+
+Suporte técnico a Telegram não significa autorização comercial do programa de afiliados. Antes de escalar distribuição monetizada, confirme as regras aplicáveis à conta e aos canais utilizados.
