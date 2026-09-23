@@ -150,6 +150,43 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (!response.ok && action === 'search' && (response.status === 401 || response.status === 403)) {
+      // Some Mercado Livre OAuth accounts can be authenticated but still be
+      // denied access to the authenticated search endpoint. The public catalog
+      // search remains available and is enough to identify a product; the
+      // affiliate URL is kept separately by the Flow for monetization.
+      try {
+        const fallback = new URL('https://api.mercadolibre.com/sites/MLB/search')
+        fallback.searchParams.set('q', query)
+        fallback.searchParams.set('limit', String(limit))
+        const fallbackResponse = await fetch(fallback.toString(), {
+          headers: { Accept: 'application/json' }
+        })
+        if (fallbackResponse.ok) {
+          const fallbackPayload = await fallbackResponse.json()
+          const results = (fallbackPayload.results || []).map((item) => ({
+            id: item.id,
+            title: item.title,
+            price: item.price,
+            original_price: item.original_price,
+            thumbnail: item.thumbnail,
+            permalink: item.permalink,
+            category: item.category_id || '',
+            seller: item.seller?.nickname || '',
+            installments: item.installments?.quantity || 0,
+            installmentInterest: item.installments?.rate === 0 ? 'no-interest' : 'with-interest',
+            platform: 'mercadolivre'
+          }))
+          return new Response(JSON.stringify({ results, source: 'public-search-fallback' }), {
+            status: 200,
+            headers
+          })
+        }
+      } catch (fallbackError) {
+        console.error(String(fallbackError?.message || fallbackError))
+      }
+    }
+
     if (!response.ok) {
       console.error(JSON.stringify({ source: 'mercadolivre', status: response.status, payload }))
       return new Response(JSON.stringify({
