@@ -1,4 +1,4 @@
-import { resolveMercadoLivreProduct, searchMercadoLivre } from '../integrations/mercadolivre-client.js'
+import { resolveMercadoLivreProduct, searchMercadoLivre, getMercadoLivreSalePrice, extractMercadoLivreItemId } from '../integrations/mercadolivre-client.js'
 import { saveOfferDetailed } from './offer-service.js'
 import { resolveAffiliateUrl } from './affiliate-link-service.js'
 import { enqueueOfferDeliveries } from './delivery-service.js'
@@ -100,6 +100,26 @@ export async function captureMercadoLivreOffer(productUrl, {
     // A promoted seller's /items/{id} endpoint can legitimately return 403
     // for the affiliate user's token. Before falling back to that endpoint,
     // enrich a title-only landing result through the public listing search.
+    if (!hasUsableLandingProduct(product)) {
+      const itemId = product.resolvedItemId || product.id || extractMercadoLivreItemId(resolvedProductUrl)
+      if (itemId) {
+        try {
+          const salePrice = await getMercadoLivreSalePrice(itemId, { accessToken })
+          if (Number(salePrice?.amount) > 0) {
+            product = {
+              ...product,
+              price: Number(salePrice.amount),
+              original_price: Number(salePrice.regular_amount) > 0 ? Number(salePrice.regular_amount) : product.original_price,
+              resolvedItemId: itemId,
+              resolution: 'affiliate-resolver-sale-price'
+            }
+          }
+        } catch {
+          // Fall through to public search/item resolution.
+        }
+      }
+    }
+
     if (!hasUsableLandingProduct(product)) {
       try {
         const searchResult = await searchMercadoLivre(product.title, {
