@@ -133,9 +133,9 @@ function extractMeta(html: string, names: string[]) {
   for (const tagMatch of tags) {
     const tag = tagMatch[0]
     const name = tag.match(/(?:name|property)=["']([^"']+)["']/i)?.[1]?.toLowerCase()
-    if (!name || !names.some((candidate) => candidate.toLowerCase() === name)) continue
     const content = tag.match(/content=["']([^"']*)["']/i)?.[1]
-    if (content) return decodeHtml(content)
+    if (!name || !content) continue
+    if (names.some((candidate) => candidate.toLowerCase() === name)) return decodeHtml(content)
   }
   return null
 }
