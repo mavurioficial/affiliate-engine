@@ -125,8 +125,33 @@ Deno.serve(async (req) => {
       payload = { raw: bodyText.slice(0, 500) }
     }
 
+    if (!response.ok && action === 'item' && (response.status === 401 || response.status === 403)) {
+      try {
+        const fallback = new URL('https://api.mercadolibre.com/sites/MLB/search')
+        fallback.searchParams.set('q', itemId)
+        fallback.searchParams.set('limit', '10')
+        const fallbackResponse = await fetch(fallback.toString(), {
+          headers: { Accept: 'application/json' }
+        })
+        if (fallbackResponse.ok) {
+          const fallbackPayload = await fallbackResponse.json()
+          const exact = (fallbackPayload.results || []).find((item) => String(item.id || '').toUpperCase() === itemId)
+          if (exact) {
+            return new Response(JSON.stringify({
+              ...exact,
+              platform: 'mercadolivre',
+              resolvedItemId: exact.id,
+              source: 'public-search-fallback'
+            }), { status: 200, headers })
+          }
+        }
+      } catch (fallbackError) {
+        console.error(String(fallbackError?.message || fallbackError))
+      }
+    }
+
     if (!response.ok) {
-      console.error(JSON.stringify({ source: 'mercadolibre', status: response.status, payload }))
+      console.error(JSON.stringify({ source: 'mercadolivre', status: response.status, payload }))
       return new Response(JSON.stringify({
         error: 'Mercado Livre recusou a consulta.',
         sourceStatus: response.status,
