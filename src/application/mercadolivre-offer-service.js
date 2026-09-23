@@ -15,10 +15,27 @@ function hasUsableLandingProduct(product) {
 }
 
 function normalizeLandingProduct(product, itemId) {
+  // The affiliate resolver may return its normalized Vercel shape
+  // (previousPrice/image/url/currency) instead of the ML API shape
+  // (original_price/thumbnail/permalink). Normalize both here so the
+  // Flow can use the resolver result directly and avoid restricted ML
+  // /items and /sites/MLB/search endpoints.
   return {
     ...product,
-    resolvedItemId: itemId || product.id,
-    resolution: product.resolution || 'affiliate_landing_html',
+    id: product.id || itemId || product.itemId || null,
+    resolvedItemId: itemId || product.itemId || product.id,
+    title: product.title || product.name || null,
+    price: Number(product.price) > 0 ? Number(product.price) : product.price,
+    original_price: Number(product.original_price) > 0
+      ? Number(product.original_price)
+      : (Number(product.previousPrice) > 0 ? Number(product.previousPrice) : product.original_price ?? product.previousPrice ?? null),
+    thumbnail: product.thumbnail || product.image || null,
+    permalink: product.permalink || product.url || null,
+    currency_id: product.currency_id || product.currency || 'BRL',
+    category_id: product.category_id || product.category || null,
+    seller_id: product.seller_id || product.sellerId || null,
+    shipping: product.shipping || null,
+    resolution: product.resolution || product.source || 'affiliate_landing_html',
     raw_source: 'affiliate-resolver'
   }
 }
