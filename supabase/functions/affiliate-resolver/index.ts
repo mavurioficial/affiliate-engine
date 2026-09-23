@@ -216,20 +216,20 @@ function findProductUrlsInBody(html: string, baseUrl: string) {
     .replaceAll("\\u002F","/")
     .replaceAll("&amp;","&")
 
-  const attributePattern = /(?:href|data-href|data-url|url)\\s*=\\s*["']([^"']*(?:\\/p\\/MLB[-_]?\\d{6,}|\\/up\\/MLB[-_]?\\d{6,})[^"']*)["']/gi
+  const attributePattern = /(?:href|data-href|data-url|url)\s*=\s*["']([^"']*(?:\/p\/MLB[-_]?\d{6,}|\/up\/MLB[-_]?\d{6,})[^"']*)["']/gi
   for (const match of normalized.matchAll(attributePattern)) {
     const absolute = absoluteUrl(match[1], baseUrl)
     const cleaned = absolute ? cleanProductUrl(absolute) : null
     if (cleaned) urls.push(cleaned)
   }
 
-  const absolutePattern = /https?:\\/\\/[^"'\\s<>]+\\/(?:p|up)\\/MLB[-_]?\\d{6,}[^"'\\s<>]*/gi
+  const absolutePattern = /https?:\/\/[^"'\s<>]+\/(?:p|up)\/MLB[-_]?\d{6,}[^"'\s<>]*/gi
   for (const match of normalized.matchAll(absolutePattern)) {
     const cleaned = cleanProductUrl(match[0])
     if (cleaned) urls.push(cleaned)
   }
 
-  for (const match of normalized.matchAll(/\\bMLB[-_]?([0-9]{6,})\\b/gi)) {
+  for (const match of normalized.matchAll(/\bMLB[-_]?([0-9]{6,})\b/gi)) {
     urls.push("https://www.mercadolivre.com.br/p/MLB" + match[1])
   }
 
