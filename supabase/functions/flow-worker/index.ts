@@ -35,16 +35,16 @@ function retryDelayMinutes(attempts: number) {
 }
 
 const TITLE_PHRASE_REPLACEMENTS: Array<[RegExp, string]> = [
-  [/\\bcasaco\\s+de?\\s*couro\\s+masculina\\s+forrada\\b/gi, "Casaco de Couro Masculino Forrado"],
-  [/\\bcasaco\\s+couro\\s+masculina\\s+forrada\\b/gi, "Casaco de Couro Masculino Forrado"],
-  [/\\bcadeira\\s+de\\s+escritorio\\b/gi, "Cadeira de Escritório"],
-  [/\\bmasculina\\b/gi, "Masculino"],
-  [/\\bescritorio\\b/gi, "escritório"],
-  [/\\bergonomica\\b/gi, "ergonômica"],
-  [/\\bergonomico\\b/gi, "ergonômico"],
-  [/\\beletrica\\b/gi, "elétrica"],
-  [/\\beletrico\\b/gi, "elétrico"],
-  [/\\bprotetor\\s+solar\\b/gi, "Protetor Solar"]
+  [/\bcasaco\s+de?\s*couro\s+masculina\s+forrada\b/gi, "Casaco de Couro Masculino Forrado"],
+  [/\bcasaco\s+couro\s+masculina\s+forrada\b/gi, "Casaco de Couro Masculino Forrado"],
+  [/\bcadeira\s+de\s+escritorio\b/gi, "Cadeira de Escritório"],
+  [/\bmasculina\b/gi, "Masculino"],
+  [/\bescritorio\b/gi, "escritório"],
+  [/\bergonomica\b/gi, "ergonômica"],
+  [/\bergonomico\b/gi, "ergonômico"],
+  [/\beletrica\b/gi, "elétrica"],
+  [/\beletrico\b/gi, "elétrico"],
+  [/\bprotetor\s+solar\b/gi, "Protetor Solar"]
 ];
 
 const TITLE_REPLACEMENTS: Array<[RegExp, string]> = [
@@ -65,8 +65,8 @@ function normalizeTitle(value: unknown) {
   let title = String(value || "").replace(/\s+/g, " ").trim();
   for (const [pattern, replacement] of TITLE_PHRASE_REPLACEMENTS) title = title.replace(pattern, replacement);
   for (const [pattern, replacement] of TITLE_REPLACEMENTS) title = title.replace(pattern, replacement);
-  title = title.replace(/\\b(De|Do|Da|Dos|Das|E|Para|Com|Sem|Em|No|Na|Nos|Nas|Por|Ao|Aos)\\b/g, (match) => match.toLowerCase());
-  title = title.replace(/\\s+/g, " ").trim();
+  title = title.replace(/\b(De|Do|Da|Dos|Das|E|Para|Com|Sem|Em|No|Na|Nos|Nas|Por|Ao|Aos)\b/g, (match) => match.toLowerCase());
+  title = title.replace(/\s+/g, " ").trim();
   return title;
 }
 
@@ -74,10 +74,11 @@ const CATEGORY_RULES: Array<{ emoji: string; name: string; patterns: RegExp[] }>
   { emoji: "👶", name: "infantil", patterns: [/\binfantil\b/i, /\bbeb[eê]\b/i, /\bcrian[cç]a/i, /\bbrinquedo/i, /\bboneca/i, /\bboneco/i, /\bbuba\b/i, /\bmamadeira/i, /\bfralda/i, /\bchupeta/i] },
   { emoji: "💪", name: "suplementos", patterns: [/\bsuplement/i, /\bwhey\b/i, /\bcreatina\b/i, /\bpr[eé][ -]?treino\b/i, /\bhipercal[oó]rico/i, /\bvitamina/i, /\bprote[ií]na/i, /\btermog[eê]nico/i] },
   { emoji: "🔧", name: "ferramentas", patterns: [/\bferrament/i, /\bsoquete/i, /\bcatraca/i, /\bchave(s)?\b/i, /\balicate/i, /\bfuradeira/i, /\bparafusadeira/i, /\bserra\b/i, /\bmartelete/i, /\btorqu[ií]metro/i, /\bmult[ií]metro/i] },
+  { emoji: "💄", name: "beleza", patterns: [/\bmaquiagem/i, /\bpincel(es)?\s+de\s+maquiagem/i, /\bbatom/i, /\bgloss/i, /\br[ií]mel/i, /\bbase\s+facial/i, /\bcorretivo/i, /\bsombra/i, /\bblush/i, /\bperfume/i, /\bcosm[eé]tico/i, /\bskincare/i, /\bprotetor\s+solar/i] },
   { emoji: "👕", name: "roupas", patterns: [/\bjaqueta/i, /\bcamiseta/i, /\bcamisa\b/i, /\bcal[cç]a/i, /\bvestido/i, /\bblusa/i, /\bshort/i, /\bbermuda/i, /\bmoletom/i, /\bt[eê]nis/i, /\bsapato/i, /\bsand[aá]lia/i, /\bchinelo/i, /\bmeia(s)?\b/i, /\broupa/i] },
   { emoji: "📺", name: "eletrônicos", patterns: [/\bsmart\s*tv\b/i, /\btelevis[aã]o/i, /\btv\b/i, /\bcelular/i, /\bsmartphone/i, /\btablet/i, /\bnotebook/i, /\blaptop/i, /\bmonitor/i, /\bteclado/i, /\bmouse\b/i, /\bfone(s)?\b/i, /\bheadphone/i, /\bc[aâ]mera/i, /\bimpressora/i, /\broteador/i, /\bvideogame/i, /\bconsole/i, /\bsmartwatch/i, /\bcaixa de som/i, /\bsoundbar/i, /\bdrone/i] },
   { emoji: "🍳", name: "cozinha", patterns: [/\bchaleira/i, /\bpanela/i, /\bfrigideira/i, /\bair\s*fryer/i, /\bliquidificador/i, /\bmixer\b/i, /\bcafeteira/i, /\bforno/i, /\bmarmita/i, /\bpote(s)?\b/i, /\bgarrafa/i, /\bgarrafinha/i, /\bcaneca/i, /\bcopo/i, /\btalher/i, /\bprato/i, /\btravessa/i, /\bassadeira/i] },
-  { emoji: "🏠", name: "casa", patterns: [/\bcasa\b/i, /\blimpeza/i, /\balvejante/i, /\btira\s+manchas/i, /\bpercarbonato/i, /\borganizador/i, /\bbanheiro/i, /\bquarto/i, /\bcama\b/i, /\bsof[aá]/i, /\bcortina/i, /\btapete/i, /\bdecora[cç][aã]o/i, /\bjardim/i] }
+  { emoji: "🏠", name: "casa", patterns: [/\bcasa\b/i, /\blimpeza/i, /\balvejante/i, /\btira\s+manchas/i, /\bpercarbonato/i, /\borganizador/i, /\bbanheiro/i, /\bquarto/i, /\bcama\b/i, /\bsof[aá, /\bpapel\s+de\s+parede/i, /\brevestimento/i, /\bm[aá]rmore/i, /\bmadeira/i, /\bripa/i]/i, /\bcortina/i, /\btapete/i, /\bdecora[cç][aã]o/i, /\bjardim/i] }
 ];
 
 function classifyProduct(title: unknown) {
