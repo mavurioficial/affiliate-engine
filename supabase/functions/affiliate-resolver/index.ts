@@ -208,20 +208,28 @@ function extractProductPage(html: string, itemId: string | null, productUrl: str
   }
 }
 
-function findProductUrlsInBody(html: string) {
+function findProductUrlsInBody(html: string, baseUrl: string) {
   const urls: string[] = []
   const normalized = html
-    .replaceAll("\\/", "/")
-    .replaceAll("\\u002F", "/")
-    .replaceAll("&amp;", "&")
+    .replaceAll("\\/","/")
+    .replaceAll("\\\\/","/")
+    .replaceAll("\\u002F","/")
+    .replaceAll("&amp;","&")
 
-  const absolutePattern = /https?:\/\/[^"'\s<>]+(?:MLB[-_]?\d{6,})[^"'\s<>]*/gi
+  const attributePattern = /(?:href|data-href|data-url|url)\\s*=\\s*["']([^"']*(?:\\/p\\/MLB[-_]?\\d{6,}|\\/up\\/MLB[-_]?\\d{6,})[^"']*)["']/gi
+  for (const match of normalized.matchAll(attributePattern)) {
+    const absolute = absoluteUrl(match[1], baseUrl)
+    const cleaned = absolute ? cleanProductUrl(absolute) : null
+    if (cleaned) urls.push(cleaned)
+  }
+
+  const absolutePattern = /https?:\\/\\/[^"'\\s<>]+\\/(?:p|up)\\/MLB[-_]?\\d{6,}[^"'\\s<>]*/gi
   for (const match of normalized.matchAll(absolutePattern)) {
     const cleaned = cleanProductUrl(match[0])
     if (cleaned) urls.push(cleaned)
   }
 
-  for (const match of normalized.matchAll(/MLB[-_]?([0-9]{6,})/gi)) {
+  for (const match of normalized.matchAll(/\\bMLB[-_]?([0-9]{6,})\\b/gi)) {
     urls.push("https://www.mercadolivre.com.br/p/MLB" + match[1])
   }
 
@@ -269,6 +277,24 @@ Deno.serve(async (req) => {
     if (direct && (extractItemId(direct) || /\/(?:p|up)\//i.test(direct))) candidates.push(direct)
     candidates.push(...findProductLinks(first.body, first.finalUrl))
     candidates.push(...findProductUrlsInBody(first.body, first.finalUrl))
+
+    // Fallback to the previously validated Vercel resolver. Some Mercado Livre
+    // social pages are rendered without the promoted MLB id in the server HTML.
+    let fallbackPayload: any = null
+    if (!candidates.length) {
+      try {
+        const fallbackUrl = new URL("https://mavuri-api-test.vercel.app/api/resolve6")
+        fallbackUrl.searchParams.set("url", affiliateUrl)
+        const fallbackResponse = await fetch(fallbackUrl.toString(), {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"
+          }
+        })
+        fallbackPayload = await fallbackResponse.json().catch(() => null)
+        if (fallbackPayload?.productUrl) candidates.push(cleanProductUrl(fallbackPayload.productUrl) || fallbackPayload.productUrl)
+      } catch {}
+    }
 
     const productUrl = candidates.find((url) => extractItemId(url)) || candidates[0] || null
     const itemId = extractItemId(productUrl || "")
