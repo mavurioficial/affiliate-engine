@@ -2,34 +2,35 @@
 
 ## Objetivo
 
-Transformar uma URL de produto do Mercado Livre em uma oferta normalizada do Mavuri, preservando o identificador da publicação e os dados de preço/imagem necessários para o pipeline.
+Transformar um link oficial de afiliado do Mercado Livre em uma oferta normalizada do Mavuri, preservando o link de monetização e os dados comerciais necessários para o pipeline.
 
 ## Fluxo
 
-1. Receber URL.
-2. Detectar Mercado Livre.
-3. Extrair o identificador MLB quando disponível.
-4. Consultar o proxy existente /api/offers.
-5. Quando necessário, usar busca por ID como fallback.
+1. Receber URL de afiliado.
+2. Validar que o domínio é Mercado Livre/meli.la.
+3. Resolver o destino e identificar o produto/anúncio.
+4. Quando disponível, preferir os dados da página de destino do afiliado.
+5. Usar a conexão OAuth server-side para consultas autenticadas do Mercado Livre.
 6. Normalizar preço, preço anterior, título, permalink, imagem, seller e categoria.
 7. Calcular desconto.
-8. Persistir em flow_offers.
-9. Resolver link de afiliado por adapter/configuração da conta.
+8. Persistir em `flow_offers`.
+9. Avaliar regras e, quando elegível, enfileirar distribuição.
 
 ## Autenticação
 
-Tokens de Mercado Livre não devem ser persistidos no frontend como credenciais permanentes. A API oficial usa OAuth 2.0 e access tokens de duração limitada, com refresh token de uso único para renovação. O desenho do Mavuri mantém a credencial fora do domínio de apresentação sempre que a integração server-side estiver disponível.
+O Mavuri usa OAuth 2.0 e mantém as credenciais fora do frontend. A documentação do Mercado Livre orienta o uso do access token no header `Authorization: Bearer` e descreve o fluxo server-side com authorization code e refresh token. citeturn4search1turn4search0
+
+A implementação do Mavuri guarda a conexão no Supabase e pode renovar o access token server-side quando necessário.
 
 ## Afiliados
 
-A camada affiliate-link-service.js foi criada como adapter. Ela aceita URL afiliada já resolvida, template configurado em flow_affiliate_accounts.settings.link_template ou parâmetros configurados em flow_affiliate_accounts.settings.query_params.
+O link de afiliado recebido pelo Flow é preservado como `affiliate_url`. A camada `affiliate-link-service.js` permanece como adapter para mecanismos oficiais de geração/resolução de links.
 
-Isso evita acoplar o Offer Engine a um formato específico de link de afiliado.
+O Mavuri não inventa uma API de deep-link. A monetização depende de um link oficial do programa e da configuração efetiva da conta.
 
-## Limitação atual
+## Limitações
 
-A API pública consultada do Mercado Livre documenta autenticação e recursos de catálogo/itens, mas não foi encontrada uma operação pública genérica para gerar link de afiliado equivalente a uma API de deep-link. Portanto, o Mavuri não inventa um endpoint: a geração do link permanece atrás do adapter até definirmos o mecanismo oficial da conta de afiliado.
-
-## Próxima etapa
-
-Adicionar a conta de afiliado real e o adapter correspondente, seguido do preview e dos workers de distribuição.
+- A captura não deve pedir ao operador para colar um access token.
+- O navegador não deve armazenar credenciais permanentes do Mercado Livre.
+- A autorização comercial de canais de distribuição deve ser tratada separadamente da capacidade técnica do adapter.
+- A aplicação Mercado Livre deve permanecer compatível com as regras atuais de separação entre aplicações do Mercado Livre e Mercado Pago. citeturn4search4
