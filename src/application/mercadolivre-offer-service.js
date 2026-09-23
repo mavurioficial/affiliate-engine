@@ -118,6 +118,19 @@ export async function captureMercadoLivreOffer(productUrl, {
     // for the affiliate user's token. Before falling back to that endpoint,
     // enrich a title-only landing result through the public listing search.
     if (!hasUsableLandingProduct(product)) {
+      // The resolver is authoritative when it has title + price. A permalink
+      // may be absent on some social landing responses, so use the resolved
+      // product URL rather than reopening restricted Mercado Livre APIs.
+      if (product?.title && Number(product?.price) > 0) {
+        product = {
+          ...product,
+          permalink: product.permalink || resolvedProductUrl,
+          resolution: product.resolution || 'affiliate-resolver'
+        }
+      }
+    }
+
+    if (!hasUsableLandingProduct(product)) {
       const itemId = product.resolvedItemId || product.id || extractMercadoLivreItemId(resolvedProductUrl)
       if (itemId) {
         try {
