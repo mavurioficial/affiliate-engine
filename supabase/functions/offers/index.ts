@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       payload = { raw: bodyText.slice(0, 500) }
     }
 
-    if (!response.ok && action === 'item' && (response.status === 401 || response.status === 403)) {
+    if (!response.ok && action === 'item' && [400, 401, 403, 429, 500, 502, 503].includes(response.status)) {
       try {
         const fallback = new URL('https://api.mercadolibre.com/sites/MLB/search')
         fallback.searchParams.set('q', itemId)
@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!response.ok && action === 'search' && (response.status === 401 || response.status === 403)) {
+    if (!response.ok && action === 'search' && [400, 401, 403, 429, 500, 502, 503].includes(response.status)) {
       // Some Mercado Livre OAuth accounts can be authenticated but still be
       // denied access to the authenticated search endpoint. The public catalog
       // search remains available and is enough to identify a product; the
