@@ -3704,22 +3704,28 @@ function bindEvents() {
             }
             popup.location.href = connectPayload.auth_url
 
+            // Do not depend exclusively on postMessage: some browsers/extensions
+            // may render the OAuth callback as plain text and suppress its script.
+            // The authoritative signal is the connection saved by the backend.
             await new Promise((resolve, reject) => {
+              const startedAt = Date.now()
+              const poll = async () => {
+                try {
+                  const status = await getMeliConnectionStatus()
+                  if (status.connected) {
+                    window.clearInterval(timer)
+                    window.clearTimeout(timeout)
+                    if (!popup.closed) popup.close()
+                    resolve()
+                  }
+                } catch {}
+              }
+              const timer = window.setInterval(poll, 1500)
               const timeout = window.setTimeout(() => {
-                window.removeEventListener('message', onMessage)
+                window.clearInterval(timer)
                 reject(new Error('A conexão com o Mercado Livre demorou mais que o esperado.'))
               }, 120000)
-
-              function onMessage(event) {
-                if (event.origin !== 'https://otikoxnfotyjgphrdudn.supabase.co') return
-                if (event.data?.type !== 'mavuri-meli-auth') return
-                window.clearTimeout(timeout)
-                window.removeEventListener('message', onMessage)
-                if (event.data.ok) resolve()
-                else reject(new Error('Não foi possível concluir a conexão com o Mercado Livre.'))
-              }
-
-              window.addEventListener('message', onMessage)
+              poll()
             })
 
             const status = await getMeliConnectionStatus()
