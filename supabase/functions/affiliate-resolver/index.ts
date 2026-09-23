@@ -233,7 +233,8 @@ async function fetchAffiliate(url: string) {
     redirect: "follow",
     headers: {
       Accept: "text/html,application/xhtml+xml,application/json",
-      "User-Agent": "Mozilla/5.0 (compatible; MavuriAffiliateResolver/1.0)"
+      "Accept-Language": "pt-BR,pt;q=0.9",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     }
   })
   const finalUrl = response.url || url
@@ -267,7 +268,7 @@ Deno.serve(async (req) => {
     const direct = cleanProductUrl(first.finalUrl)
     if (direct && (extractItemId(direct) || /\/(?:p|up)\//i.test(direct))) candidates.push(direct)
     candidates.push(...findProductLinks(first.body, first.finalUrl))
-    candidates.push(...findProductUrlsInBody(first.body))
+    candidates.push(...findProductUrlsInBody(first.body, first.finalUrl))
 
     const productUrl = candidates.find((url) => extractItemId(url)) || candidates[0] || null
     const itemId = extractItemId(productUrl || "")
