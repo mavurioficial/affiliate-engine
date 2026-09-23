@@ -45,6 +45,12 @@ export async function searchMercadoLivre(query, { accessToken, limit = 20, proxy
   return requestJson(`${proxy}?${params}`, accessToken)
 }
 
+export async function getMercadoLivreSalePrice(itemId, { accessToken, proxy = DEFAULT_PROXY } = {}) {
+  if (!itemId) throw new Error('itemId é obrigatório.')
+  const params = new URLSearchParams({ action: 'sale_price', id: itemId })
+  return requestJson(`${proxy}?${params}`, accessToken)
+}
+
 export async function getMercadoLivreItem(itemId, { accessToken, proxy = DEFAULT_PROXY } = {}) {
   if (!itemId) throw new Error('itemId é obrigatório.')
   const params = new URLSearchParams({ action: 'item', id: itemId })
