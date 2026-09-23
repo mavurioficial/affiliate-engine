@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feat/mavuri-flow-v1
   workflow_dispatch:
 
 permissions:
@@ -38,13 +37,13 @@ jobs:
         run: npm run build
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: dist
 
   deploy:
     environment:
-      name: mavuri-flow-preview
+      name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     needs: build
     runs-on: ubuntu-latest
