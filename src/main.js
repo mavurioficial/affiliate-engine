@@ -3739,9 +3739,17 @@ function bindEvents() {
             capturedOffer = await capture()
           } catch (captureError) {
             const message = captureError?.message || ''
-            if (!/Mercado Livre não conectado ao Mavuri|conexão do Mercado Livre expirou/i.test(message)) throw captureError
-            await connectMercadoLivre()
-            capturedOffer = await capture()
+            if (/Mercado Livre recusou esta consulta \(HTTP 403\)/i.test(message)) {
+              // A 403 can mean the Mercado Livre grant/token is no longer
+              // accepted even though the local connection status still exists.
+              // Reauthorize once instead of exposing a raw API error to the user.
+              await connectMercadoLivre()
+              capturedOffer = await capture()
+            } else {
+              if (!/Mercado Livre não conectado ao Mavuri|conexão do Mercado Livre expirou/i.test(message)) throw captureError
+              await connectMercadoLivre()
+              capturedOffer = await capture()
+            }
           }
 
           getFlowCaptureDraftStorage()?.clear()
