@@ -538,7 +538,7 @@ function flowPage() {
     <section class="flow-capture-panel">
       <div class="section-title"><h2>Capturar oferta</h2><p>Cole somente o link de afiliado do Mercado Livre. O Flow identifica o produto automaticamente, consulta os dados reais e avalia as regras.</p><div class="flow-connection-hint">🔐 A conexão com o Mercado Livre é feita com OAuth; o Mavuri não pede seu token para colar no navegador.</div></div>
       <form data-flow-capture><div class="flow-capture-grid">
-        <label><span>Link de afiliado oficial</span><input name="affiliateUrl" type="url" required placeholder="https://meli.la/..." value="${escapeHtml(flowCaptureDraft)}" autocomplete="off" /><small class="flow-field-hint">O Mavuri resolve o destino, identifica o produto e mantém este link como link de monetização.</small></label>
+        <label><span>Links de afiliado oficiais</span><textarea name="affiliateUrl" rows="4" required placeholder="Cole 1 ou vários links https://meli.la/... separados por espaço ou nova linha" autocomplete="off">${escapeHtml(flowCaptureDraft)}</textarea><small class="flow-field-hint">Você pode colar vários links do Mercado Livre de uma vez, separados por espaço ou por nova linha. O Mavuri processa cada link individualmente.</small></label>
       </div><div class="form-actions"><button class="primary" type="submit">⚡ Capturar no Flow</button></div></form>
     </section>
     <section class="flow-pipeline">
@@ -3659,16 +3659,40 @@ function bindEvents() {
       'submit',
       async (event) => {
         event.preventDefault()
+
         const data = new FormData(flowCaptureForm)
-        const affiliateUrl = String(data.get('affiliateUrl') || '').trim() || null
+        const rawAffiliateInput = String(data.get('affiliateUrl') || '').trim()
+        const affiliateUrls = [...new Set(
+          rawAffiliateInput
+            .split(/\s+/)
+            .map((item) => item.trim())
+            .filter(Boolean)
+        )]
         const productUrl = null
-        if (!affiliateUrl) throw new Error('Cole o link de afiliado oficial do Mercado Livre.')
+
+        if (!affiliateUrls.length) {
+          throw new Error('Cole pelo menos um link de afiliado oficial do Mercado Livre.')
+        }
+
+        const invalidUrls = affiliateUrls.filter((url) => {
+          try {
+            const parsed = new URL(url)
+            return !['meli.la', 'www.meli.la', 'mercadolivre.com.br', 'www.mercadolivre.com.br'].includes(parsed.hostname.toLowerCase())
+          } catch {
+            return true
+          }
+        })
+
+        if (invalidUrls.length) {
+          throw new Error(`Links inválidos ou fora do Mercado Livre: ${invalidUrls.join(', ')}`)
+        }
+
         const button = flowCaptureForm.querySelector('button[type="submit"]')
         const originalText = button?.textContent || '⚡ Capturar no Flow'
 
         if (button) {
           button.disabled = true
-          button.textContent = 'Capturando...'
+          button.textContent = `Preparando 0/${affiliateUrls.length}...`
         }
 
         try {
@@ -3704,11 +3728,7 @@ function bindEvents() {
             }
             popup.location.href = connectPayload.auth_url
 
-            // Do not depend exclusively on postMessage: some browsers/extensions
-            // may render the OAuth callback as plain text and suppress its script.
-            // The authoritative signal is the connection saved by the backend.
             await new Promise((resolve, reject) => {
-              const startedAt = Date.now()
               const poll = async () => {
                 try {
                   const status = await getMeliConnectionStatus()
@@ -3732,7 +3752,7 @@ function bindEvents() {
             if (!status.connected) throw new Error('O Mercado Livre não confirmou a conexão. Tente autorizar novamente.')
           }
 
-          const capture = () => captureMercadoLivreOffer(productUrl, {
+          const capture = (affiliateUrl) => captureMercadoLivreOffer(productUrl, {
             accessToken: session.access_token,
             affiliateUrl
           })
@@ -3740,29 +3760,68 @@ function bindEvents() {
           let connection = await getMeliConnectionStatus()
           if (!connection.connected) await connectMercadoLivre()
 
-          let capturedOffer
-          try {
-            capturedOffer = await capture()
-          } catch (captureError) {
-            const message = captureError?.message || ''
-            if (/Mercado Livre recusou esta consulta \(HTTP 403\)/i.test(message)) {
-              throw new Error('O Mercado Livre recusou a consulta pela API. A conexão do Mercado Livre está ativa, mas este tipo de consulta não é autorizado para esta conta.')
+          const capturedOffers = []
+          const failures = []
+
+          for (let index = 0; index < affiliateUrls.length; index += 1) {
+            const affiliateUrl = affiliateUrls[index]
+
+            if (button) {
+              button.textContent = `Capturando ${index + 1}/${affiliateUrls.length}...`
             }
-            if (!/Mercado Livre não conectado ao Mavuri|conexão do Mercado Livre expirou/i.test(message)) throw captureError
-            await connectMercadoLivre()
-            capturedOffer = await capture()
+
+            try {
+              let capturedOffer
+              try {
+                capturedOffer = await capture(affiliateUrl)
+              } catch (captureError) {
+                const message = captureError?.message || ''
+                if (/Mercado Livre recusou esta consulta \(HTTP 403\)/i.test(message)) {
+                  throw new Error('O Mercado Livre recusou a consulta pela API. A conexão do Mercado Livre está ativa, mas este tipo de consulta não é autorizado para esta conta.')
+                }
+                if (!/Mercado Livre não conectado ao Mavuri|conexão do Mercado Livre expirou/i.test(message)) throw captureError
+                await connectMercadoLivre()
+                capturedOffer = await capture(affiliateUrl)
+              }
+
+              capturedOffers.push({ affiliateUrl, offer: capturedOffer })
+            } catch (captureError) {
+              failures.push({
+                affiliateUrl,
+                message: captureError?.message || 'Não foi possível capturar esta oferta.'
+              })
+            }
           }
 
-          getFlowCaptureDraftStorage()?.clear()
-          const notice = capturedOffer?.affiliate_url
-            ? 'Oferta capturada e pronta para distribuição monetizada.'
-            : 'Oferta capturada, mas sem link afiliado. Ela não será enviada automaticamente até receber um link oficial de afiliado.'
-          flowState = { ...flowState, loaded: false, notice, error: '' }
+          if (failures.length) {
+            getFlowCaptureDraftStorage()?.write(failures.map((item) => item.affiliateUrl).join('\n'))
+          } else {
+            getFlowCaptureDraftStorage()?.clear()
+          }
+
+          const successCount = capturedOffers.length
+          const failureCount = failures.length
+          const notice = failureCount === 0
+            ? `${successCount} oferta(s) capturada(s) e pronta(s) para distribuição monetizada.`
+            : successCount
+              ? `${successCount} oferta(s) capturada(s). ${failureCount} link(s) ficaram pendentes para nova tentativa.`
+              : ''
+
+          const error = failureCount
+            ? failures.map((item) => `${item.affiliateUrl}: ${item.message}`).join(' | ')
+            : ''
+
+          flowState = { ...flowState, loaded: false, notice, error }
           await render()
         } catch (error) {
           console.error(error)
-          flowState = { ...flowState, error: error.message || 'Não foi possível capturar a oferta.', notice: '' }
+          flowState = { ...flowState, error: error.message || 'Não foi possível capturar as ofertas.', notice: '' }
           await render()
+        } finally {
+          if (button && document.body.contains(button)) {
+            button.disabled = false
+            button.textContent = originalText
+          }
         }
       }
     )
