@@ -34,6 +34,19 @@ function retryDelayMinutes(attempts: number) {
   return BACKOFF_MINUTES[Math.min(Math.max(attempts - 1, 0), BACKOFF_MINUTES.length - 1)]
 }
 
+const TITLE_PHRASE_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\\bcasaco\\s+de?\\s*couro\\s+masculina\\s+forrada\\b/gi, "Casaco de Couro Masculino Forrado"],
+  [/\\bcasaco\\s+couro\\s+masculina\\s+forrada\\b/gi, "Casaco de Couro Masculino Forrado"],
+  [/\\bcadeira\\s+de\\s+escritorio\\b/gi, "Cadeira de Escritório"],
+  [/\\bmasculina\\b/gi, "Masculino"],
+  [/\\bescritorio\\b/gi, "escritório"],
+  [/\\bergonomica\\b/gi, "ergonômica"],
+  [/\\bergonomico\\b/gi, "ergonômico"],
+  [/\\beletrica\\b/gi, "elétrica"],
+  [/\\beletrico\\b/gi, "elétrico"],
+  [/\\bprotetor\\s+solar\\b/gi, "Protetor Solar"]
+];
+
 const TITLE_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bsmart\s+tv\b/gi, "Smart TV"], [/\btv\b/gi, "TV"], [/\bled\b/gi, "LED"],
   [/\bfull\s+hd\b/gi, "Full HD"], [/\bhdmi\b/gi, "HDMI"], [/\busb\b/gi, "USB"],
@@ -50,7 +63,10 @@ const TITLE_REPLACEMENTS: Array<[RegExp, string]> = [
 
 function normalizeTitle(value: unknown) {
   let title = String(value || "").replace(/\s+/g, " ").trim();
+  for (const [pattern, replacement] of TITLE_PHRASE_REPLACEMENTS) title = title.replace(pattern, replacement);
   for (const [pattern, replacement] of TITLE_REPLACEMENTS) title = title.replace(pattern, replacement);
+  title = title.replace(/\\b(De|Do|Da|Dos|Das|E|Para|Com|Sem|Em|No|Na|Nos|Nas|Por|Ao|Aos)\\b/g, (match) => match.toLowerCase());
+  title = title.replace(/\\s+/g, " ").trim();
   return title;
 }
 
