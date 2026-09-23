@@ -1,60 +1,54 @@
 # Mavuri Affiliate Engine
 
-Fundação executável do MVP para administrar, inicialmente de forma local, o domínio de ofertas afiliadas da Mavuri.
+Plataforma operacional da Mavuri para captura, normalização, curadoria e distribuição de ofertas afiliadas.
 
-## Estado atual
+## Mavuri Flow V1
 
-Esta etapa entrega uma interface administrativa navegável com dados demonstrativos para:
+A direção atual do produto é o **Mavuri Flow V1**. O fluxo principal é:
 
-- Mercados;
-- Marcas / operações;
-- Plataformas de afiliados;
-- Produtos;
-- Ofertas;
-- Affiliate Links;
-- Canais de distribuição.
+1. **Capturar** — o usuário cola um link oficial de afiliado do Mercado Livre.
+2. **Resolver** — o Mavuri identifica o produto e recupera os dados comerciais usando a conexão OAuth da conta.
+3. **Persistir** — a oferta é normalizada, recebe fingerprint e é gravada em `flow_offers`, com deduplicação.
+4. **Aplicar regras** — regras de marketplace, desconto, preço, categoria, vendedor, palavras-chave e cupom determinam elegibilidade.
+5. **Enfileirar** — ofertas elegíveis geram jobs idempotentes por canal.
+6. **Distribuir** — o worker publica no canal configurado, hoje com adapter de Telegram.
+7. **Rastrear** — os links publicados passam pelo tracking do Mavuri e registram cliques/CTR.
 
-Não há autenticação, banco de dados, integração com plataformas afiliadas, Telegram, scraping, automações ou publicação real. Os dados são mantidos em memória no navegador e servem exclusivamente à validação inicial da estrutura.
+O caminho antigo **Buscar ofertas → Divulgação** continua disponível como funcionalidade auxiliar/legada, mas **não é o fluxo principal do produto V1**.
 
-## Executar localmente
+## Segurança e integrações
 
-### Pré-requisitos
+- Mercado Livre usa OAuth; o navegador não recebe nem armazena o access token da conta.
+- Tokens de integração são mantidos no backend/Supabase.
+- A URL de afiliado precisa ser oficial para que a oferta seja elegível para monetização.
+- Canal tecnicamente configurado não significa, por si, autorização comercial do programa de afiliados.
+- Telegram usa segredo do bot somente no backend.
 
-- Node.js 20 ou superior;
-- npm 10 ou superior (para os scripts locais).
+## Validação local
 
-### Comandos
+Pré-requisitos:
 
-```bash
-npm run dev
-```
+- Node.js 20+
+- npm 10+
 
-Abra `http://localhost:5173`.
-
-Para validar a sintaxe e gerar a versão de produção:
+Comandos:
 
 ```bash
 npm run check
+npm test
 npm run build
-```
-
-Para servir o build localmente:
-
-```bash
 npm run preview
 ```
 
-## Organização do código
+## Estrutura
 
 ```text
 src/
-├── application/     Contrato de acesso aos catálogos
-├── infrastructure/  Implementação local de desenvolvimento
-└── app/             Configuração das áreas administrativas
+├── application/     casos de uso e serviços
+├── domain/          regras do Offer Engine
+├── integrations/    adapters Mercado Livre/afiliados
+├── infrastructure/  persistência e infraestrutura
+└── app/             interface e autenticação
 ```
 
-O código da interface consome contratos da camada de aplicação. Assim, o catálogo local pode ser substituído futuramente por adaptadores de API ou persistência sem acoplar as telas a detalhes de infraestrutura.
-
-## Documentação e decisões
-
-A visão, arquitetura, modelo conceitual e roadmap estão em [`docs/`](docs/). As escolhas habilitadoras desta etapa e os pontos que requerem validação estão registrados em [`docs/TECHNICAL_DECISIONS.md`](docs/TECHNICAL_DECISIONS.md).
+O contrato de aceitação do V1 está em `docs/PRODUCT_V1_ACCEPTANCE.md`.
