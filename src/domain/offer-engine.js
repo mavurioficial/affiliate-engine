@@ -40,7 +40,7 @@ export function normalizeOffer(input = {}) {
 
 export function createOfferFingerprint(offer) {
   const marketplace = offer.marketplace || 'unknown'
-  const product = offer.externalProductId || offer.productId || offer.productUrl || offer.title
+  const product = offer.externalProductId || offer.metadata?.externalProductId || offer.productId || offer.productUrl || offer.title
   const price = Number(offer.price || 0).toFixed(2)
   return [marketplace, String(product).trim().toLowerCase(), price].join('|')
 }
