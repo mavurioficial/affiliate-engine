@@ -274,6 +274,11 @@ function navigation() {
       icon: '⌂'
     },
     {
+      id: 'flow',
+      label: 'Mavuri Flow',
+      icon: '⚡'
+    },
+    {
       id: 'buscar-ofertas',
       label: 'Buscar ofertas',
       icon: '⌕'
@@ -282,11 +287,6 @@ function navigation() {
       id: 'divulgacao',
       label: 'Divulgação',
       icon: '✦'
-    },
-    {
-      id: 'flow',
-      label: 'Mavuri Flow',
-      icon: '⚡'
     }
   ]
 
@@ -691,16 +691,16 @@ function dashboard() {
       </h2>
 
       <p>
-        Comece pesquisando produtos em Buscar ofertas ou organize os cadastros do catálogo.
+        Comece pelo Mavuri Flow para capturar e distribuir uma oferta, ou organize os cadastros do catálogo.
       </p>
 
       <div class="form-actions">
 
         <button
           class="primary"
-          data-page="buscar-ofertas"
+          data-page="flow"
         >
-          Buscar ofertas
+          Abrir Mavuri Flow
         </button>
 
         <button
