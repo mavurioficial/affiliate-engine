@@ -185,7 +185,7 @@ function extractProductPage(html: string, itemId: string | null, productUrl: str
   let price = priceMeta ? Number(priceMeta.replace(",", ".")) : null
   if (!Number.isFinite(price)) price = jsonLd?.price ?? extractMoneyAfter(html, 0)
 
-  const previousMatch = html.match(/(?:Antes:|pre[cç]o\s+anterior|previous_price|old_price)[^0-9]{0,120}([0-9][0-9.]*)[,\.]([0-9]{2})/i)
+  const previousMatch = html.match(/(?:Antes:|pre[cç]o\s+anterior|previous_price|old_price)[^0-9]{0,120}([0-9][0-9.]*)[,.]([0-9]{2})/i)
   const previousPrice = previousMatch
     ? Number(previousMatch[1].replaceAll(".", "")) + Number(previousMatch[2]) / 100
     : jsonLd?.original_price ?? null
@@ -222,111 +222,13 @@ function findProductUrlsInBody(html: string) {
   }
 
   for (const match of normalized.matchAll(/MLB[-_]?([0-9]{6,})/gi)) {
-    urls.push(`https://www.mercadolivre.com.br/p/MLB${match[1]}`)
+    urls.push("https://www.mercadolivre.com.br/p/MLB" + match[1])
   }
 
   return [...new Set(urls)]
 }
 
-async function fetchAffiliate(url: string) {") +
-      '["\\\\'][^>]*content=["\\\\']([^"\\\\']+)["\\\\']',
-      "i"
-    )
-    const match = html.match(pattern)
-    if (match?.[1]) return decodeHtml(match[1])
-  }
-  return null
-}
-
-function extractJsonLdProduct(html: string, itemId: string | null, fallbackUrl: string) {
-  const scripts = [...html.matchAll(/<script\\\\b[^>]*type=["\\\\']application\\\\/ld\\\\+json["\\\\'][^>]*>([\\\\s\\\\S]*?)<\\\\/script>/gi)]
-  for (const match of scripts) {
-    try {
-      const raw = decodeHtml(match[1]).trim()
-      const parsed = JSON.parse(raw)
-      const nodes = Array.isArray(parsed) ? parsed : [parsed]
-      for (const node of nodes) {
-        const candidates = Array.isArray(node?.["@graph"]) ? node["@graph"] : [node]
-        for (const product of candidates) {
-          if (!product || !/(product|item)/i.test(String(product["@type"] || ""))) continue
-          const name = String(product.name || "").trim()
-          const image = Array.isArray(product.image) ? product.image[0] : product.image
-          const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers
-          const price = Number(offer?.price)
-          if (!name && !Number.isFinite(price) && !image) continue
-          return {
-            id: itemId,
-            title: name || null,
-            price: Number.isFinite(price) ? price : null,
-            original_price: null,
-            thumbnail: typeof image === "string" ? image : null,
-            permalink: cleanProductUrl(String(product.url || fallbackUrl)) || fallbackUrl,
-            currency_id: String(offer?.priceCurrency || "BRL"),
-            shipping: null,
-            resolution: "product_page_jsonld"
-          }
-        }
-      }
-    } catch {}
-  }
-  return null
-}
-
-function extractProductPage(html: string, itemId: string | null, productUrl: string) {
-  const jsonLd = extractJsonLdProduct(html, itemId, productUrl)
-  const title = extractMeta(html, ["og:title", "twitter:title"]) ||
-    html.match(/<h1\\\\b[^>]*>([\\\\s\\\\S]*?)<\\\\/h1>/i)?.[1] ||
-    null
-  const image = extractMeta(html, ["og:image", "twitter:image"])
-  const priceMeta = extractMeta(html, ["product:price:amount", "og:price:amount"])
-  const currency = extractMeta(html, ["product:price:currency", "og:price:currency"]) || "BRL"
-
-  let price = priceMeta ? Number(priceMeta.replace(",", ".")) : null
-  if (!Number.isFinite(price)) price = jsonLd?.price ?? extractMoneyAfter(html, 0)
-
-  const previousMatch = html.match(/(?:Antes:|pre[cç]o\\\\s+anterior|previous_price|old_price)[^0-9]{0,120}([0-9][0-9.]*)[,\\\\.]([0-9]{2})/i)
-  const previousPrice = previousMatch
-    ? Number(previousMatch[1].replaceAll(".", "")) + Number(previousMatch[2]) / 100
-    : jsonLd?.original_price ?? null
-
-  const cleanTitle = title ? stripTags(title) : jsonLd?.title || null
-  const cleanImage = image || jsonLd?.thumbnail || null
-
-  if (!cleanTitle && !Number.isFinite(price) && !cleanImage) return null
-
-  return {
-    id: itemId,
-    title: cleanTitle,
-    price: Number.isFinite(price) ? price : null,
-    original_price: Number.isFinite(previousPrice) ? previousPrice : null,
-    thumbnail: cleanImage,
-    permalink: productUrl,
-    currency_id: currency,
-    shipping: /frete\\\\s+gr[aá]tis/i.test(html) ? "free" : null,
-    resolution: "product_page_html"
-  }
-}
-
-function findProductUrlsInBody(html: string, baseUrl: string) {
-  const urls: string[] = []
-  const normalized = html
-    .replaceAll("\\\\/","/")
-    .replaceAll("\\\\u002F","/")
-    .replaceAll("&amp;","&")
-  const absolutePattern = /https?:\\\\/\\\\/[^"'\\\\s<>]+(?:MLB[-_]?\\\\d{6,})[^"'\\\\s<>]*/gi
-  for (const match of normalized.matchAll(absolutePattern)) {
-    const cleaned = cleanProductUrl(match[0])
-    if (cleaned) urls.push(cleaned)
-  }
-
-  const idMatches = normalized.matchAll(/MLB[-_]?([0-9]{6,})/gi)
-  for (const match of idMatches) {
-    urls.push(`https://www.mercadolivre.com.br/p/MLB${match[1]}`)
-  }
-
-  return [...new Set(urls)]
-}
-\nasync function fetchAffiliate(url: string) {
+async function fetchAffiliate(url: string) {
   const response = await fetch(url, {
     redirect: "follow",
     headers: {
