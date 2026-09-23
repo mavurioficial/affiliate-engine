@@ -61,7 +61,7 @@ function findProductLinks(html: string, baseUrl: string) {
     if (!url) continue
     const cleaned = cleanProductUrl(url)
     if (!cleaned) continue
-    if (extractItemId(cleaned) || /\/(?:p|up)\//i.test(cleaned)) links.push(cleaned)
+    if (extractItemId(cleaned) || /\/(?:p|up)\/MLB[A-Z0-9_-]*\d+/i.test(cleaned)) links.push(cleaned)
   }
   return [...new Set(links)]
 }
@@ -216,14 +216,14 @@ function findProductUrlsInBody(html: string, baseUrl: string) {
     .replaceAll("\\u002F","/")
     .replaceAll("&amp;","&")
 
-  const attributePattern = /(?:href|data-href|data-url|url)\s*=\s*["']([^"']*(?:\/p\/MLB[-_]?\d{6,}|\/up\/MLB[-_]?\d{6,})[^"']*)["']/gi
+  const attributePattern = /(?:href|data-href|data-url|url)\s*=\s*["']([^"']*(?:\/p\/MLB[-_]?\d{6,}|\/up\/MLB[A-Z0-9_-]*\d{6,})[^"']*)["']/gi
   for (const match of normalized.matchAll(attributePattern)) {
     const absolute = absoluteUrl(match[1], baseUrl)
     const cleaned = absolute ? cleanProductUrl(absolute) : null
     if (cleaned) urls.push(cleaned)
   }
 
-  const absolutePattern = /https?:\/\/[^"'\s<>]+\/(?:p|up)\/MLB[-_]?\d{6,}[^"'\s<>]*/gi
+  const absolutePattern = /https?:\/\/[^"'\s<>]+\/(?:p\/MLB[-_]?\d{6,}|up\/MLB[A-Z0-9_-]*\d{6,})[^"'\s<>]*/gi
   for (const match of normalized.matchAll(absolutePattern)) {
     const cleaned = cleanProductUrl(match[0])
     if (cleaned) urls.push(cleaned)
