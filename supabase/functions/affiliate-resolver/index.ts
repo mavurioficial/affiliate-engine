@@ -317,6 +317,7 @@ Deno.serve(async (req) => {
         const fallbackResponse = await fetch(fallbackUrl.toString(), {
           headers: {
             Accept: "application/json",
+            ...(authorization ? { Authorization: authorization } : {}),
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"
           }
         })
