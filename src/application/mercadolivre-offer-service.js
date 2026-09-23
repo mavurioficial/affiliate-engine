@@ -1,4 +1,3 @@
-import { resolveMercadoLivreProduct, searchMercadoLivre, getMercadoLivreSalePrice, extractMercadoLivreItemId } from '../integrations/mercadolivre-client.js'
 import { saveOfferDetailed } from './offer-service.js'
 import { resolveAffiliateUrl } from './affiliate-link-service.js'
 import { enqueueOfferDeliveries } from './delivery-service.js'
@@ -97,79 +96,28 @@ export async function captureMercadoLivreOffer(productUrl, {
 
   if (resolvedAffiliateUrl) {
     resolvedAffiliatePayload = await resolveMercadoLivreAffiliateUrl(resolvedAffiliateUrl, { accessToken })
-    if (!resolvedProductUrl) {
-      resolvedProductUrl = resolvedAffiliatePayload.product_url
-    }
+    resolvedProductUrl = resolvedProductUrl || resolvedAffiliatePayload.product_url || resolvedAffiliatePayload.resolved_url
   }
 
-  if (!resolvedProductUrl) throw new Error('Informe um link de afiliado do Mercado Livre.')
-
-  // The affiliate landing page already contains the product identity and
-  // commercial data needed to capture an offer. Prefer it when available:
-  // Mercado Livre may reject item API reads for seller-scoped OAuth tokens.
-  let product
-  if (resolvedAffiliatePayload?.product?.title) {
-    product = normalizeLandingProduct(
-      resolvedAffiliatePayload.product,
-      resolvedAffiliatePayload.item_id
-    )
-
-    // A promoted seller's /items/{id} endpoint can legitimately return 403
-    // for the affiliate user's token. Before falling back to that endpoint,
-    // enrich a title-only landing result through the public listing search.
-    if (!hasUsableLandingProduct(product)) {
-      // The resolver is authoritative when it has title + price. A permalink
-      // may be absent on some social landing responses, so use the resolved
-      // product URL rather than reopening restricted Mercado Livre APIs.
-      if (product?.title && Number(product?.price) > 0) {
-        product = {
-          ...product,
-          permalink: product.permalink || resolvedProductUrl,
-          resolution: product.resolution || 'affiliate-resolver'
-        }
-      }
-    }
-
-    if (!hasUsableLandingProduct(product)) {
-      const itemId = product.resolvedItemId || product.id || extractMercadoLivreItemId(resolvedProductUrl)
-      if (itemId) {
-        try {
-          const salePrice = await getMercadoLivreSalePrice(itemId, { accessToken })
-          if (Number(salePrice?.amount) > 0) {
-            product = {
-              ...product,
-              price: Number(salePrice.amount),
-              original_price: Number(salePrice.regular_amount) > 0 ? Number(salePrice.regular_amount) : product.original_price,
-              resolvedItemId: itemId,
-              resolution: 'affiliate-resolver-sale-price'
-            }
-          }
-        } catch {
-          // Fall through to public search/item resolution.
-        }
-      }
-    }
-
-    if (!hasUsableLandingProduct(product)) {
-      try {
-        const searchResult = await searchMercadoLivre(product.title, {
-          accessToken,
-          limit: 20
-        })
-        product = enrichLandingProductFromSearch(product, searchResult?.results)
-      } catch {
-        // Keep the existing item-id resolver as the final fallback.
-      }
-    }
-
-    if (!hasUsableLandingProduct(product)) {
-      product = await resolveMercadoLivreProduct(resolvedProductUrl, { accessToken })
-    }
-  } else {
-    product = await resolveMercadoLivreProduct(resolvedProductUrl, { accessToken })
+  if (!resolvedProductUrl) {
+    throw new Error('O Mavuri não conseguiu identificar o produto no link de afiliado.')
   }
 
-  resolvedAffiliateUrl = await resolveAffiliateUrl(product.permalink || resolvedProductUrl, {
+  // IMPORTANT: for affiliate capture, the resolver is the source of truth.
+  // Do not fall back to Mercado Livre /items, /search or /sale_price APIs:
+  // affiliate/seller-scoped OAuth can legitimately receive HTTP 403 there.
+  let product = normalizeLandingProduct(
+    resolvedAffiliatePayload?.product || {},
+    resolvedAffiliatePayload?.item_id || null
+  )
+
+  if (!product.title || Number(product.price) <= 0) {
+    throw new Error('O Mavuri encontrou o produto, mas não conseguiu obter título e preço. O link permanece válido; nenhum dado incompleto foi salvo.')
+  }
+
+  product.permalink = product.permalink || resolvedProductUrl
+
+  resolvedAffiliateUrl = await resolveAffiliateUrl(product.permalink, {
     marketplace: 'mercadolivre',
     affiliateUrl: resolvedAffiliateUrl
   })
@@ -184,7 +132,7 @@ export async function captureMercadoLivreOffer(productUrl, {
     price,
     previousPrice,
     discountPercent,
-    productUrl: product.permalink || resolvedProductUrl,
+    productUrl: product.permalink,
     affiliateUrl: resolvedAffiliateUrl,
     imageUrl: product.thumbnail,
     sourceType,
@@ -203,3 +151,4 @@ export async function captureMercadoLivreOffer(productUrl, {
   if (resolvedAffiliateUrl) await enqueueOfferDeliveries(result.offer)
   return result.offer
 }
+
