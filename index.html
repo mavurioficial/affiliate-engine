@@ -21,6 +21,6 @@
     <script>
       (()=>{const showBootError=(message)=>{const box=document.querySelector('#mavuri-boot-error');if(!box)return;box.textContent=message;box.style.display='block'};window.addEventListener('error',event=>showBootError('Erro ao carregar a aplicação: '+(event.message||'falha de JavaScript')));window.addEventListener('unhandledrejection',event=>{const reason=event.reason;showBootError('Erro ao iniciar a aplicação: '+(reason?.message||String(reason||'Promise rejeitada')))})})()
     </script>
-    <script type="module" src="./src/main.js?v=0.1.28"></script>
+    <script type="module" src="./src/main.js?v=0.1.30"></script>
   </body>
 </html>
