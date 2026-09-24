@@ -3195,32 +3195,6 @@ async function render() {
     await loadFlowState()
   }
 
-  if (!catalogsLoaded) {
-    root.innerHTML = `
-      <main class="app-shell">
-        <section class="loading-page">
-          Carregando Mavuri...
-        </section>
-      </main>
-    `
-
-    try {
-      await loadCatalogs()
-    } catch (error) {
-      console.error(error)
-
-      root.innerHTML = `
-        <main class="app-shell">
-          <section class="loading-page">
-            Não foi possível carregar os dados.
-          </section>
-        </main>
-      `
-
-      return
-    }
-  }
-
   root.innerHTML = `
     <main class="app-shell">
 
