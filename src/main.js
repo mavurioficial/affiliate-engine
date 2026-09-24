@@ -1,6 +1,4 @@
 import { getSession, onAuthChange, signIn, signOut, supabase } from './auth.js'
-import { sections } from '../domain/catalog.js'
-import { developmentCatalogs } from '../infrastructure/development/catalog.js'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
@@ -1937,171 +1935,6 @@ function normalizeOffer(
   }
 }
 
-async function persistOfferInSupabase(
-  offer
-) {
-  const productRepository =
-    developmentCatalogs.products
-
-  const offerRepository =
-    developmentCatalogs.offers
-
-  const affiliateRepository =
-    developmentCatalogs.affiliateLinks
-
-  const productName =
-    String(
-      offer.name || ''
-    ).trim()
-
-  if (!productName) {
-    throw new Error(
-      'A oferta não possui um nome válido.'
-    )
-  }
-
-  const products =
-    await productRepository.list()
-
-  let product =
-    products.find(
-      (item) =>
-        String(
-          item.name || ''
-        )
-          .trim()
-          .toLowerCase() ===
-        productName.toLowerCase()
-    )
-
-  const productPayload = {
-    name: productName,
-    description:
-      offer.description || ''
-  }
-
-  if (
-    offer.platform
-  ) {
-    productPayload.platform =
-      offer.platform
-  }
-
-  if (
-    offer.category
-  ) {
-    productPayload.category =
-      offer.category
-  }
-
-  if (!product) {
-    product =
-      await productRepository.create(
-        productPayload
-      )
-  }
-
-  const offers =
-    await offerRepository.list()
-
-  let savedOffer =
-    offers.find(
-      (item) =>
-        String(
-          item.name || ''
-        )
-          .trim()
-          .toLowerCase() ===
-        productName.toLowerCase()
-    )
-
-  const offerPayload = {
-    name: productName,
-    description:
-      offer.description ||
-      '',
-    product:
-      product.id,
-    status:
-      'active'
-  }
-
-  if (
-    offer.market
-  ) {
-    offerPayload.market =
-      offer.market
-  }
-
-  if (savedOffer) {
-    savedOffer =
-      await offerRepository.update(
-        savedOffer.id,
-        offerPayload
-      )
-  } else {
-    savedOffer =
-      await offerRepository.create(
-        offerPayload
-      )
-  }
-
-  const destination =
-    String(
-      offer.affiliateUrl ||
-      offer.productUrl ||
-      ''
-    ).trim()
-
-  if (destination) {
-    const links =
-      await affiliateRepository.list()
-
-    const existingLink =
-      links.find(
-        (item) =>
-          String(
-            item.destination || ''
-          ).trim() ===
-          destination
-      )
-
-    const linkPayload = {
-      name:
-        `Link - ${productName}`,
-
-      description:
-        `Link da oferta ${productName}`,
-
-      offer:
-        savedOffer.id,
-
-      platform:
-        offer.platform || '',
-
-      destination
-    }
-
-    if (existingLink) {
-      await affiliateRepository.update(
-        existingLink.id,
-        linkPayload
-      )
-    } else {
-      await affiliateRepository.create(
-        linkPayload
-      )
-    }
-  }
-
-  await loadCatalogs()
-
-  return {
-    product,
-    offer: savedOffer
-  }
-}
-
 async function sendOfferToDivulgacao(
   offer
 ) {
@@ -2110,10 +1943,6 @@ async function sendOfferToDivulgacao(
       'Oferta inválida.'
     )
   }
-
-  await persistOfferInSupabase(
-    offer
-  )
 
   divulgacaoDraft = {
     ...divulgacaoDraft,
