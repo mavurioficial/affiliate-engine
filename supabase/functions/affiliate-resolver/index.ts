@@ -236,6 +236,19 @@ function findProductUrlsInBody(html: string, baseUrl: string) {
   return [...new Set(urls)]
 }
 
+function isAllowedMercadoLivreHost(value: string) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase()
+    return hostname === "meli.la" ||
+      hostname === "mercadolivre.com.br" ||
+      hostname.endsWith(".mercadolivre.com.br") ||
+      hostname === "mercadolibre.com" ||
+      hostname.endsWith(".mercadolibre.com")
+  } catch {
+    return false
+  }
+}
+
 async function fetchAffiliate(url: string) {
   const response = await fetch(url, {
     redirect: "follow",
@@ -246,6 +259,9 @@ async function fetchAffiliate(url: string) {
     }
   })
   const finalUrl = response.url || url
+  if (!isAllowedMercadoLivreHost(finalUrl)) {
+    throw new Error("O link do Mercado Livre redirecionou para um domínio não permitido.")
+  }
   const body = await response.text()
   return { response, finalUrl, body }
 }
