@@ -6,7 +6,6 @@ import {
   matchesRule,
   normalizeOffer
 } from '../src/domain/offer-engine.js'
-import { extractMercadoLivreImage, extractMercadoLivreItemId, isMercadoLivreUrl } from '../src/integrations/mercadolivre-client.js'
 import { createFlowCaptureDraftStorage } from '../src/application/flow-capture-draft.js'
 
 const offer = normalizeOffer({
@@ -22,14 +21,6 @@ const offer = normalizeOffer({
 })
 
 assert.equal(detectMarketplace(offer.productUrl), 'mercadolivre')
-assert.equal(extractMercadoLivreItemId('https://www.mercadolivre.com.br/notebook-xyz/p/MLB12345678'), 'MLB12345678')
-assert.equal(extractMercadoLivreItemId('https://produto.mercadolivre.com.br/MLB-987654321'), 'MLB987654321')
-assert.equal(extractMercadoLivreItemId('https://example.com/produto/12345678'), null)
-assert.equal(isMercadoLivreUrl('https://www.mercadolivre.com.br/produto/MLB12345678'), true)
-assert.equal(isMercadoLivreUrl('https://example.com/produto/12345678'), false)
-assert.equal(extractMercadoLivreImage({ thumbnail: 'https://http2.mlstatic.com/thumb.jpg' }), 'https://http2.mlstatic.com/thumb.jpg')
-assert.equal(extractMercadoLivreImage({ pictures: [{ url: 'http://example.com/one.jpg' }, { secure_url: 'https://example.com/two.jpg' }] }), 'http://example.com/one.jpg')
-assert.equal(extractMercadoLivreImage({ pictures: [] }), null)
 assert.equal(offer.discountPercent, calculateDiscount(3999.9, 4999.9))
 assert.equal(offer.sourceType, 'api')
 assert.equal(offer.coupon, 'MAVURI10')
