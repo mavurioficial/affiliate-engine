@@ -6,7 +6,9 @@ const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || 
 const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}")
 const publishableKey = publishableKeys.default || ""
 const secretKey = secretKeys.default || ""
+const userClient = (authorization: string) => createClient(supabaseUrl, publishableKey, { global: { headers: { Authorization: authorization } } })
 const admin = createClient(supabaseUrl, secretKey)
+
 const headers = {
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Origin": "*",
@@ -16,7 +18,81 @@ const headers = {
 
 function html(message: string, ok = true) {
   const safe = String(message).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")
-  return new Response(`<!doctype html><html><head><meta charset="utf-8"><title>Mavuri Mercado Livre</title></head><body><p>${safe}</p><script>window.opener?.postMessage({type:"mavuri-meli-auth",ok:${ok}},"*");setTimeout(()=>window.close(),700)</script></body></html>`, { status: ok ? 200 : 400, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } })
+  return new Response(`<!doctype html><html><head><meta charset="utf-8"><title>Mavuri Mercado Livre</title></head><body><p>${safe}</p><script>window.opener?.postMessage({type:"mavuri-meli-auth",ok:${ok}}, "https://mavurioficial.github.io"); setTimeout(()=>window.close(), 700);</script></body></html>`, {
+    status: ok ? 200 : 400,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" }
+  })
+}
+
+async function getAuthenticatedUser(authorization: string) {
+  if (!authorization) return null
+  const { data, error } = await userClient(authorization).auth.getUser()
+  if (error) return null
+  return data.user || null
+}
+
+async function getMarketplaceId() {
+  const { data } = await admin.from("flow_marketplaces").select("id").eq("slug", "mercadolivre").maybeSingle()
+  return data?.id || null
+}
+
+async function getStoredConnection(userId: string, marketplaceId: string) {
+  const { data, error } = await admin.rpc("mavuri_get_meli_token", { p_user_id: userId, p_marketplace_id: marketplaceId })
+  if (error) throw new Error("Falha ao verificar a conexão do Mercado Livre.")
+
+  const row = Array.isArray(data) ? data[0] || null : data || null
+  if (!row?.access_token) return null
+
+  const expiresAt = row.expires_at ? new Date(row.expires_at).getTime() : 0
+  if (expiresAt > Date.now() + 60_000) return row
+  if (!row.refresh_token) return null
+
+  const clientId = Deno.env.get("MELI_CLIENT_ID")
+  const clientSecret = Deno.env.get("MELI_CLIENT_SECRET")
+  if (!clientId || !clientSecret) return null
+
+  const refreshBody = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: row.refresh_token
+  })
+
+  const refreshResponse = await fetch("https://api.mercadolibre.com/oauth/token", {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+    body: refreshBody.toString()
+  })
+  const refreshed = await refreshResponse.json().catch(() => ({}))
+
+  if (!refreshResponse.ok || !refreshed.access_token) {
+    console.error(JSON.stringify({ source: "meli-auth", event: "refresh_failed", status: refreshResponse.status }))
+    return null
+  }
+
+  const { error: storeError } = await admin.rpc("mavuri_store_meli_token", {
+    p_user_id: userId,
+    p_marketplace_id: marketplaceId,
+    p_external_account_id: refreshed.user_id ? String(refreshed.user_id) : row.external_account_id,
+    p_access_token: refreshed.access_token,
+    p_refresh_token: refreshed.refresh_token || row.refresh_token,
+    p_expires_in: Number(refreshed.expires_in || 0),
+    p_scopes: String(refreshed.scope || (row.scopes || []).join(" ")).split(/\s+/).filter(Boolean)
+  })
+
+  if (storeError) {
+    console.error(JSON.stringify({ source: "meli-auth", event: "refresh_store_failed", message: storeError.message }))
+    return null
+  }
+
+  return {
+    ...row,
+    access_token: refreshed.access_token,
+    refresh_token: refreshed.refresh_token || row.refresh_token,
+    external_account_id: refreshed.user_id ? String(refreshed.user_id) : row.external_account_id,
+    expires_at: new Date(Date.now() + Number(refreshed.expires_in || 0) * 1000).toISOString(),
+    scopes: String(refreshed.scope || (row.scopes || []).join(" ")).split(/\s+/).filter(Boolean)
+  }
 }
 
 Deno.serve(async (req) => {
@@ -27,6 +103,7 @@ Deno.serve(async (req) => {
   const code = url.searchParams.get("code")
   const state = url.searchParams.get("state")
   const oauthError = url.searchParams.get("error")
+  const action = (url.searchParams.get("action") || "").trim()
 
   try {
     const clientId = Deno.env.get("MELI_CLIENT_ID")
@@ -34,51 +111,94 @@ Deno.serve(async (req) => {
     const redirectUri = Deno.env.get("MELI_REDIRECT_URI")
     if (!clientId || !clientSecret || !redirectUri) return new Response(JSON.stringify({ error: "Configuração do Mercado Livre incompleta." }), { status: 500, headers })
 
+    if (action === "status" && !code) {
+      const authorization = req.headers.get("authorization") || ""
+      const user = await getAuthenticatedUser(authorization)
+      if (!user) return new Response(JSON.stringify({ error: "Usuário não autenticado." }), { status: 401, headers })
+
+      const marketplaceId = await getMarketplaceId()
+      if (!marketplaceId) return new Response(JSON.stringify({ error: "Marketplace Mercado Livre não configurado no Flow." }), { status: 500, headers })
+
+      const stored = await getStoredConnection(user.id, marketplaceId)
+      return new Response(JSON.stringify({
+        connected: Boolean(stored?.access_token),
+        external_account_id: stored?.external_account_id || null,
+        expires_at: stored?.expires_at || null,
+        scopes: stored?.scopes || []
+      }), { status: 200, headers })
+    }
+
     if (!code) {
       const authorization = req.headers.get("authorization") || ""
-      if (!authorization) return new Response(JSON.stringify({ error: "Authentication required" }), { status: 401, headers })
-      const { data: userData } = await createClient(supabaseUrl, publishableKey, { global: { headers: { Authorization: authorization } } }).auth.getUser()
-      if (!userData.user) return new Response(JSON.stringify({ error: "Invalid session" }), { status: 401, headers })
+      const user = await getAuthenticatedUser(authorization)
+      if (!user) return new Response(JSON.stringify({ error: "Invalid session" }), { status: 401, headers })
+
       const stateValue = crypto.randomUUID()
-      const { error } = await admin.from("flow_oauth_states").insert({ state: stateValue, user_id: userData.user.id, provider: "mercadolivre", expires_at: new Date(Date.now()+600000).toISOString() })
-      if (error) return new Response(JSON.stringify({ error: "Não foi possível iniciar a autorização." }), { status: 500, headers })
+      const { error: stateError } = await admin.from("flow_oauth_states").insert({
+        state: stateValue,
+        user_id: user.id,
+        provider: "mercadolivre",
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+      })
+      if (stateError) return new Response(JSON.stringify({ error: "Não foi possível iniciar a autorização.", details: stateError.message }), { status: 500, headers })
+
       const authUrl = new URL("https://auth.mercadolivre.com.br/authorization")
-      authUrl.searchParams.set("response_type","code")
-      authUrl.searchParams.set("client_id",clientId)
-      authUrl.searchParams.set("redirect_uri",redirectUri)
-      authUrl.searchParams.set("state",stateValue)
-      return new Response(JSON.stringify({ auth_url: authUrl.toString() }), { headers })
+      authUrl.searchParams.set("response_type", "code")
+      authUrl.searchParams.set("client_id", clientId)
+      authUrl.searchParams.set("redirect_uri", redirectUri)
+      authUrl.searchParams.set("state", stateValue)
+      return new Response(JSON.stringify({ auth_url: authUrl.toString() }), { status: 200, headers })
     }
 
     if (oauthError) return html(`Autorização cancelada: ${oauthError}`, false)
     if (!state) return html("Resposta OAuth sem state.", false)
 
-    const { data: stateRow } = await admin.from("flow_oauth_states").select("state,user_id,provider,expires_at").eq("state",state).eq("provider","mercadolivre").gt("expires_at",new Date().toISOString()).maybeSingle()
-    if (!stateRow) return html("Sessão OAuth inválida ou expirada.", false)
+    const { data: stateRow, error: stateError } = await admin
+      .from("flow_oauth_states")
+      .select("state,user_id,provider,expires_at")
+      .eq("state", state)
+      .eq("provider", "mercadolivre")
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle()
 
-    const body = new URLSearchParams({ grant_type:"authorization_code", client_id:clientId, client_secret:clientSecret, code, redirect_uri:redirectUri })
-    const response = await fetch("https://api.mercadolibre.com/oauth/token", { method:"POST", headers:{Accept:"application/json","Content-Type":"application/x-www-form-urlencoded"}, body:body.toString() })
-    const token = await response.json()
-    if (!response.ok || !token.access_token) {
-      await admin.from("flow_oauth_states").delete().eq("state",state)
+    if (stateError || !stateRow) return html("Sessão OAuth inválida ou expirada.", false)
+
+    const body = new URLSearchParams()
+    body.set("grant_type", "authorization_code")
+    body.set("client_id", clientId)
+    body.set("client_secret", clientSecret)
+    body.set("code", code)
+    body.set("redirect_uri", redirectUri)
+
+    const response = await fetch("https://api.mercadolibre.com/oauth/token", {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString()
+    })
+    const tokenPayload = await response.json()
+    if (!response.ok || !tokenPayload.access_token) {
+      await admin.from("flow_oauth_states").delete().eq("state", state)
       return html("O Mercado Livre não autorizou a conexão.", false)
     }
 
-    const { data: marketplace } = await admin.from("flow_marketplaces").select("id").eq("slug","mercadolivre").maybeSingle()
-    if (!marketplace) return html("Marketplace Mercado Livre não configurado no Flow.", false)
+    const marketplaceId = await getMarketplaceId()
+    if (!marketplaceId) return html("Marketplace Mercado Livre não configurado no Flow.", false)
 
     const { error: storeError } = await admin.rpc("mavuri_store_meli_token", {
-      p_user_id: stateRow.user_id, p_marketplace_id: marketplace.id,
-      p_external_account_id: token.user_id ? String(token.user_id) : null,
-      p_access_token: token.access_token, p_refresh_token: token.refresh_token || null,
-      p_expires_in: Number(token.expires_in || 0),
-      p_scopes: String(token.scope || "").split(/\s+/).filter(Boolean)
+      p_user_id: stateRow.user_id,
+      p_marketplace_id: marketplaceId,
+      p_external_account_id: tokenPayload.user_id ? String(tokenPayload.user_id) : null,
+      p_access_token: tokenPayload.access_token,
+      p_refresh_token: tokenPayload.refresh_token || null,
+      p_expires_in: Number(tokenPayload.expires_in || 0),
+      p_scopes: String(tokenPayload.scope || "").split(/\s+/).filter(Boolean)
     })
-    await admin.from("flow_oauth_states").delete().eq("state",state)
+    await admin.from("flow_oauth_states").delete().eq("state", state)
     if (storeError) return html("Autorização concluída, mas não foi possível salvar a conexão com segurança.", false)
-    return html("Mercado Livre conectado ao Mavuri.")
+
+    return html("Mercado Livre conectado ao Mavuri. Esta janela será fechada automaticamente.")
   } catch (error) {
     console.error(error)
-    return code ? html("Erro interno ao concluir a autorização.", false) : new Response(JSON.stringify({ error:"Erro interno." }), { status:500, headers })
+    return code ? html("Erro interno ao concluir a autorização.", false) : new Response(JSON.stringify({ error: error?.message || "Erro interno." }), { status: 500, headers })
   }
 })
