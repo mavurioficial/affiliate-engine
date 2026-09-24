@@ -776,7 +776,7 @@ function bindEvents() {
           const successCount = capturedOffers.length
           const failureCount = failures.length
           const notice = failureCount === 0
-            ? `${successCount} oferta(s) capturada(s) e pronta(s) para distribuição monetizada.`
+            ? `${successCount} oferta(s) capturada(s); regras de distribuição avaliadas.`
             : successCount
               ? `${successCount} oferta(s) capturada(s). ${failureCount} link(s) ficaram pendentes para nova tentativa.`
               : ''
