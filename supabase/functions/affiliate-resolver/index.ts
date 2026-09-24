@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2"
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!
 const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}")
 const publishableKey = publishableKeys.default || ""
+const resolverSecret = Deno.env.get("MAVURI_RESOLVER_SECRET") || ""
 
 const headers = {
   "Content-Type": "application/json; charset=utf-8",
@@ -304,7 +305,8 @@ Deno.serve(async (req) => {
         const fallbackResponse = await fetch(fallbackUrl.toString(), {
           headers: {
             Accept: "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+            "x-mavuri-resolver-secret": resolverSecret
           }
         })
         fallbackPayload = await fallbackResponse.json().catch(() => null)
@@ -333,7 +335,7 @@ Deno.serve(async (req) => {
         const fallbackResponse = await fetch(fallbackUrl.toString(), {
           headers: {
             Accept: "application/json",
-            ...(authorization ? { Authorization: authorization } : {}),
+            "x-mavuri-resolver-secret": resolverSecret,
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"
           }
         })
