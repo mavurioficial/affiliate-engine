@@ -340,31 +340,6 @@ function navigation() {
 
         </div>
 
-        <div class="nav-group">
-
-          <p>
-            CATÁLOGOS
-          </p>
-
-          ${catalogItems.map((item) => `
-            <button
-              class="nav-item ${
-                page === item.id
-                  ? 'active'
-                  : ''
-              }"
-              data-page="${item.id}"
-            >
-              <span>
-                ${item.icon}
-              </span>
-
-              ${item.label}
-            </button>
-          `).join('')}
-
-        </div>
-
       </nav>
 
       <div class="sidebar-footer">
