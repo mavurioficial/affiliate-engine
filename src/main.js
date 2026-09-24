@@ -1,4 +1,5 @@
 import { getSession, onAuthChange, signIn, signOut, supabase } from './auth.js'
+import { sections } from '../domain/catalog.js'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
