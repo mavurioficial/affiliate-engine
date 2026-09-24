@@ -614,64 +614,6 @@ function bindEvents() {
     )
   }
 
-  document
-    .querySelectorAll(
-      '[data-add]'
-    )
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          'click',
-          async () => {
-            const section =
-              sections.find(
-                (item) =>
-                  item.id ===
-                  button.dataset.add
-              )
-
-            if (!section) {
-              return
-            }
-
-            root.innerHTML = `
-              <main class="app-shell">
-
-                ${navigation()}
-
-                <section class="content">
-
-                  <div class="topbar">
-
-                    <div>
-
-                      <span class="topbar-label">
-                        Mavuri Affiliate Engine
-                      </span>
-
-                    </div>
-
-                  </div>
-
-                  <div class="page-content">
-
-                    ${formPage(
-                      section
-                    )}
-
-                  </div>
-
-                </section>
-
-              </main>
-            `
-
-            bindEvents()
-          }
-        )
-      }
-    )
-
   const flowCaptureForm =
     document.querySelector(
       '[data-flow-capture]'
