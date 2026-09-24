@@ -602,17 +602,6 @@ function flowPage() {
 }
 
 function dashboard() {
-  const totals =
-    sections.map(
-      (section) => ({
-        label: section.label,
-        value:
-          getEntries(
-            section
-          ).length
-      })
-    )
-
   return `
     <header class="page-heading">
 
@@ -625,39 +614,19 @@ function dashboard() {
       </h1>
 
       <p>
-        Acompanhe os cadastros, encontre ofertas e prepare divulgações.
+        Gerencie o fluxo de captura, avaliação e distribuição das suas ofertas.
       </p>
 
     </header>
 
-    <section class="dashboard-grid">
-
-      ${totals.map((item) => `
-        <article class="metric-card">
-
-          <span>
-            ${escapeHtml(
-              item.label
-            )}
-          </span>
-
-          <strong>
-            ${item.value}
-          </strong>
-
-        </article>
-      `).join('')}
-
-    </section>
-
     <section class="next-steps">
 
       <h2>
-        Próximos passos
+        Mavuri Flow
       </h2>
 
       <p>
-        Comece pelo Mavuri Flow para capturar e distribuir uma oferta, ou organize os cadastros do catálogo.
+        Capture links de afiliado do Mercado Livre, aplique suas regras e publique as ofertas nos canais configurados.
       </p>
 
       <div class="form-actions">
@@ -669,18 +638,11 @@ function dashboard() {
           Abrir Mavuri Flow
         </button>
 
-        <button
-          data-page="produtos"
-        >
-          Gerenciar produtos
-        </button>
-
       </div>
 
     </section>
   `
 }
-
 function buscarOfertasPage() {
   const state =
     ofertasBuscaState.status
