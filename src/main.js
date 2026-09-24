@@ -290,15 +290,6 @@ function navigation() {
     }
   ]
 
-  const catalogItems =
-    sections.map(
-      (section) => ({
-        id: section.id,
-        label: section.label,
-        icon: '○'
-      })
-    )
-
   return `
     <aside class="sidebar">
 
