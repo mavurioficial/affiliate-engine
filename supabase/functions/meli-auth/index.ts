@@ -139,6 +139,9 @@ Deno.serve(async (req) => {
       const user = await getAuthenticatedUser(authorization)
       if (!user) return new Response(JSON.stringify({ error: "Invalid session" }), { status: 401, headers })
 
+      const marketplaceId = await getMarketplaceId()
+      if (!marketplaceId) return new Response(JSON.stringify({ error: "Marketplace Mercado Livre não configurado no Flow." }), { status: 500, headers })
+
       if (requestedAccountId) {
         const { data: account, error: accountError } = await admin
           .from("flow_affiliate_accounts")
