@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
 
   const activeChannelIds = new Set(
     channels
-      .filter((channel) => channel.status === "active" && channel.type === "telegram" && channel.external_ref)
+      .filter((channel) => ["active", "connected"].includes(channel.status) && channel.type === "telegram" && channel.external_ref)
       .map((channel) => channel.id)
   )
 
@@ -364,7 +364,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (!matchedChannels.size || !offerId || dryRun) {
+      const effectiveAffiliateUrl = affiliateUrl || existing?.affiliate_url || null\n      if (!matchedChannels.size || !offerId || dryRun || !effectiveAffiliateUrl) {
         result.skipped += matchedChannels.size ? 0 : 1
         continue
       }
