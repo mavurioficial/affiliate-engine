@@ -14,6 +14,8 @@ A função **não** recebe cookies, CSRF, sessão do Mercado Livre ou tokens OAu
 - A função identifica o usuário pelo `Authorization: Bearer <JWT>`.
 - Depois da autenticação, usa uma chave secreta somente no backend para gravar os dados.
 - O worker local nunca precisa conhecer uma service key do Supabase.
+
+A arquitetura separa **usuário do Mavuri** de **conta afiliada do marketplace**. Isso permite manter hoje a conta pessoal `lucasbrasildf` como uma conta conectada e, futuramente, adicionar uma conta dedicada ao Mavuri ou múltiplas contas por usuário.
 - A configuração padrão do Supabase mantém `verify_jwt` habilitado para funções autenticadas. Isso segue o padrão recomendado para chamadas feitas por usuários autenticados. 
 
 ## Payload
@@ -45,9 +47,11 @@ A função **não** recebe cookies, CSRF, sessão do Mercado Livre ou tokens OAu
 
 Máximo por chamada: 100 ofertas.
 
+Opcionalmente, o payload pode informar `affiliate_account_id`. Quando informado, a função valida que a conta pertence ao usuário e ao Mercado Livre. Sem esse campo, usa a primeira conta ativa do Mercado Livre disponível para compatibilidade.
+
 ## Idempotência
 
-A identidade operacional da oferta é o `source_ref` do produto Mercado Livre, dentro do usuário + marketplace.
+A identidade operacional da oferta é o `source_ref` do produto Mercado Livre, dentro do usuário + marketplace. A oferta também pode carregar `affiliate_account_id`, permitindo que o mesmo usuário tenha múltiplas contas do Mercado Livre sem misturar credenciais, links ou origem comercial.
 
 O `fingerprint` representa o estado comercial relevante da oferta. Se a mesma oferta voltar sem mudança, ela não gera novo job. Se preço, desconto, título ou outros dados relevantes mudarem, o fingerprint muda e uma nova entrega pode ser criada.
 
