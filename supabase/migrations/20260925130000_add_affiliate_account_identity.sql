@@ -72,8 +72,18 @@ drop index if exists public.flow_marketplace_tokens_user_id_marketplace_id_key;
 create unique index if not exists flow_marketplace_tokens_account_uidx
   on public.flow_marketplace_tokens(affiliate_account_id);
 
--- Default compatibility functions below keep existing callers working.
--- New account-aware functions are provided separately.
+-- Replace the old token functions explicitly. PostgreSQL treats a function
+-- with a new optional argument as a different signature; keeping the old
+-- upsert would still reference the removed (user_id, marketplace_id) key.
+drop function if exists mavuri_internal.get_flow_meli_token(uuid, uuid);
+drop function if exists mavuri_internal.get_flow_meli_token(uuid, uuid, uuid);
+drop function if exists mavuri_internal.upsert_flow_meli_token(uuid, uuid, text, text, text, integer, text[]);
+drop function if exists mavuri_internal.upsert_flow_meli_token(uuid, uuid, text, text, text, integer, text[], uuid);
+drop function if exists public.mavuri_get_meli_token(uuid, uuid);
+drop function if exists public.mavuri_get_meli_token(uuid, uuid, uuid);
+drop function if exists public.mavuri_store_meli_token(uuid, uuid, text, text, text, integer, text[]);
+drop function if exists public.mavuri_store_meli_token(uuid, uuid, text, text, text, integer, text[], uuid);
+
 
 create or replace function mavuri_internal.get_flow_meli_token(
   p_user_id uuid,
@@ -219,8 +229,8 @@ begin
 end;
 $function$;
 
--- Public wrappers retain the original signature and use the user's
--- active/default account when no explicit account is supplied.
+-- Public wrappers keep both legacy and account-aware call shapes. The legacy
+-- wrappers delegate to the explicit implementation with a null account id.
 create or replace function public.mavuri_get_meli_token(
   p_user_id uuid,
   p_marketplace_id uuid,
@@ -261,5 +271,46 @@ as $function$
     p_user_id, p_marketplace_id, p_external_account_id,
     p_access_token, p_refresh_token, p_expires_in, p_scopes,
     p_affiliate_account_id
+  );
+$function$;
+
+-- Legacy wrappers: preserve existing Edge Function callers using the old arity.
+create function public.mavuri_get_meli_token(
+  p_user_id uuid,
+  p_marketplace_id uuid
+)
+returns table(
+  access_token text,
+  refresh_token text,
+  external_account_id text,
+  expires_at timestamptz,
+  scopes text[]
+)
+language sql
+security definer
+set search_path = public
+as $function$
+  select * from mavuri_internal.get_flow_meli_token(
+    p_user_id, p_marketplace_id, null
+  );
+$function$;
+
+create function public.mavuri_store_meli_token(
+  p_user_id uuid,
+  p_marketplace_id uuid,
+  p_external_account_id text,
+  p_access_token text,
+  p_refresh_token text,
+  p_expires_in integer,
+  p_scopes text[]
+)
+returns void
+language sql
+security definer
+set search_path = public
+as $function$
+  select mavuri_internal.upsert_flow_meli_token(
+    p_user_id, p_marketplace_id, p_external_account_id,
+    p_access_token, p_refresh_token, p_expires_in, p_scopes, null
   );
 $function$;
