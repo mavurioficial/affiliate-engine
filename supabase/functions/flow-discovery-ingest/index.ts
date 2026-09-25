@@ -294,6 +294,7 @@ Deno.serve(async (req) => {
         .eq("user_id", userId)
         .eq("marketplace_id", marketplace.id)
         .eq("source_ref", sourceRef)
+        .eq("affiliate_account_id", affiliateAccount?.id || "")
         .maybeSingle()
 
       if (existingError) throw new Error(existingError.message)
