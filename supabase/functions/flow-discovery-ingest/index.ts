@@ -346,7 +346,8 @@ Deno.serve(async (req) => {
       }
 
       const affiliateUrlChanged = Boolean(affiliateUrl && affiliateUrl !== existing?.affiliate_url)
-      if (unchanged && !affiliateUrlChanged) continue
+      const hasEffectiveAffiliateUrl = Boolean(affiliateUrl || existing?.affiliate_url)
+      if (unchanged && !affiliateUrlChanged && !hasEffectiveAffiliateUrl) continue
 
       const effectiveOffer = {
         title,
