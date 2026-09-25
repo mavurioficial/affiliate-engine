@@ -989,7 +989,11 @@ async function handleDiscoveryBridgeMessage(event) {
       ? message.affiliate_account_id.trim()
       : null
     const { data, error } = await supabase.functions.invoke('flow-discovery-ingest', {
-      body: { offers, affiliate_account_id: affiliateAccountId }
+      body: {
+        offers,
+        affiliate_account_id: affiliateAccountId,
+        preselect: message.preselect === true
+      }
     })
     if (error) throw error
     window.postMessage({
