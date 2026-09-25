@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
       .select("id,name,external_account_id")
       .eq("user_id", userId)
       .eq("marketplace_id", marketplace.id)
-      .eq("status", "active")
+      .eq("status", "connected")
       .order("created_at", { ascending: true })
       .limit(1)
       .maybeSingle()
