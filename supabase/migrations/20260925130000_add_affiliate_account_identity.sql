@@ -27,6 +27,9 @@ create unique index if not exists flow_affiliate_accounts_user_marketplace_exter
 alter table public.flow_marketplace_tokens
   add column if not exists affiliate_account_id uuid references public.flow_affiliate_accounts(id);
 
+alter table public.flow_oauth_states
+  add column if not exists affiliate_account_id uuid references public.flow_affiliate_accounts(id);
+
 alter table public.flow_offers
   add column if not exists affiliate_account_id uuid references public.flow_affiliate_accounts(id);
 
