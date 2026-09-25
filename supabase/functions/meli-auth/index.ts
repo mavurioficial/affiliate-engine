@@ -211,7 +211,8 @@ Deno.serve(async (req) => {
       p_access_token: tokenPayload.access_token,
       p_refresh_token: tokenPayload.refresh_token || null,
       p_expires_in: Number(tokenPayload.expires_in || 0),
-      p_scopes: String(tokenPayload.scope || "").split(/\s+/).filter(Boolean)
+      p_scopes: String(tokenPayload.scope || "").split(/\s+/).filter(Boolean),
+      ...(stateRow.affiliate_account_id ? { p_affiliate_account_id: stateRow.affiliate_account_id } : {})
     })
     await admin.from("flow_oauth_states").delete().eq("state", state)
     if (storeError) return html("Autorização concluída, mas não foi possível salvar a conexão com segurança.", false)
