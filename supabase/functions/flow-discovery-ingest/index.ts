@@ -364,7 +364,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      const effectiveAffiliateUrl = affiliateUrl || existing?.affiliate_url || null\n      if (!matchedChannels.size || !offerId || dryRun || !effectiveAffiliateUrl) {
+      const effectiveAffiliateUrl = affiliateUrl || existing?.affiliate_url || null
+      if (!matchedChannels.size || !offerId || dryRun || !effectiveAffiliateUrl) {
         result.skipped += matchedChannels.size ? 0 : 1
         continue
       }
