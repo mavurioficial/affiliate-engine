@@ -27,6 +27,13 @@ create unique index if not exists flow_affiliate_accounts_user_marketplace_exter
 alter table public.flow_marketplace_tokens
   add column if not exists affiliate_account_id uuid references public.flow_affiliate_accounts(id);
 
+alter table public.flow_offers
+  add column if not exists affiliate_account_id uuid references public.flow_affiliate_accounts(id);
+
+create index if not exists flow_offers_affiliate_account_idx
+  on public.flow_offers(affiliate_account_id);
+
+
 -- Backfill the current connection into a named account so the existing
 -- lucasbrasildf connection has a stable identity.
 insert into public.flow_affiliate_accounts
