@@ -327,8 +327,8 @@ Deno.serve(async (req) => {
         if (existing) {
           const { error } = await admin.from("flow_offers").update(row).eq("id", existing.id)
           if (error) throw new Error(error.message)
-          result.updated += unchanged ? 0 : 1
-          result.unchanged += unchanged ? 1 : 0
+          result.updated += unchanged ? (affiliateUrlChanged ? 1 : 0) : 1
+          result.unchanged += unchanged && !affiliateUrlChanged ? 1 : 0
         } else {
           const { data: created, error } = await admin
             .from("flow_offers")
@@ -345,7 +345,8 @@ Deno.serve(async (req) => {
         if (existing) offerId = existing.id
       }
 
-      if (unchanged) continue
+      const affiliateUrlChanged = Boolean(affiliateUrl && affiliateUrl !== existing?.affiliate_url)
+      if (unchanged && !affiliateUrlChanged) continue
 
       const effectiveOffer = {
         title,
