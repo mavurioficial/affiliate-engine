@@ -36,8 +36,12 @@ async function getMarketplaceId() {
   return data?.id || null
 }
 
-async function getStoredConnection(userId: string, marketplaceId: string) {
-  const { data, error } = await admin.rpc("mavuri_get_meli_token", { p_user_id: userId, p_marketplace_id: marketplaceId })
+async function getStoredConnection(userId: string, marketplaceId: string, affiliateAccountId: string | null = null) {
+  const { data, error } = await admin.rpc("mavuri_get_meli_token", {
+    p_user_id: userId,
+    p_marketplace_id: marketplaceId,
+    ...(affiliateAccountId ? { p_affiliate_account_id: affiliateAccountId } : {})
+  })
   if (error) throw new Error("Falha ao verificar a conexão do Mercado Livre.")
 
   const row = Array.isArray(data) ? data[0] || null : data || null
@@ -77,7 +81,8 @@ async function getStoredConnection(userId: string, marketplaceId: string) {
     p_access_token: refreshed.access_token,
     p_refresh_token: refreshed.refresh_token || row.refresh_token,
     p_expires_in: Number(refreshed.expires_in || 0),
-    p_scopes: String(refreshed.scope || (row.scopes || []).join(" ")).split(/\s+/).filter(Boolean)
+    p_scopes: String(refreshed.scope || (row.scopes || []).join(" ")).split(/\s+/).filter(Boolean),
+    ...(affiliateAccountId ? { p_affiliate_account_id: affiliateAccountId } : {})
   })
 
   if (storeError) {
@@ -104,6 +109,7 @@ Deno.serve(async (req) => {
   const state = url.searchParams.get("state")
   const oauthError = url.searchParams.get("error")
   const action = (url.searchParams.get("action") || "").trim()
+  const requestedAccountId = (url.searchParams.get("account_id") || "").trim() || null
 
   try {
     const clientId = Deno.env.get("MELI_CLIENT_ID")
@@ -119,7 +125,7 @@ Deno.serve(async (req) => {
       const marketplaceId = await getMarketplaceId()
       if (!marketplaceId) return new Response(JSON.stringify({ error: "Marketplace Mercado Livre não configurado no Flow." }), { status: 500, headers })
 
-      const stored = await getStoredConnection(user.id, marketplaceId)
+      const stored = await getStoredConnection(user.id, marketplaceId, requestedAccountId)
       return new Response(JSON.stringify({
         connected: Boolean(stored?.access_token),
         external_account_id: stored?.external_account_id || null,
@@ -133,11 +139,25 @@ Deno.serve(async (req) => {
       const user = await getAuthenticatedUser(authorization)
       if (!user) return new Response(JSON.stringify({ error: "Invalid session" }), { status: 401, headers })
 
+      if (requestedAccountId) {
+        const { data: account, error: accountError } = await admin
+          .from("flow_affiliate_accounts")
+          .select("id")
+          .eq("id", requestedAccountId)
+          .eq("user_id", user.id)
+          .eq("marketplace_id", marketplaceId)
+          .maybeSingle()
+        if (accountError || !account) {
+          return new Response(JSON.stringify({ error: "Conta de afiliado inválida." }), { status: 400, headers })
+        }
+      }
+
       const stateValue = crypto.randomUUID()
       const { error: stateError } = await admin.from("flow_oauth_states").insert({
         state: stateValue,
         user_id: user.id,
         provider: "mercadolivre",
+        affiliate_account_id: requestedAccountId,
         expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
       })
       if (stateError) return new Response(JSON.stringify({ error: "Não foi possível iniciar a autorização.", details: stateError.message }), { status: 500, headers })
@@ -155,7 +175,7 @@ Deno.serve(async (req) => {
 
     const { data: stateRow, error: stateError } = await admin
       .from("flow_oauth_states")
-      .select("state,user_id,provider,expires_at")
+      .select("state,user_id,provider,affiliate_account_id,expires_at")
       .eq("state", state)
       .eq("provider", "mercadolivre")
       .gt("expires_at", new Date().toISOString())
