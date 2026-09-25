@@ -300,6 +300,8 @@ Deno.serve(async (req) => {
       if (existingError) throw new Error(existingError.message)
 
       const unchanged = existing?.fingerprint === fingerprint
+      const affiliateUrlChanged = Boolean(affiliateUrl && affiliateUrl !== existing?.affiliate_url)
+      const hasEffectiveAffiliateUrl = Boolean(affiliateUrl || existing?.affiliate_url)
       let offerId = existing?.id || null
 
       if (!dryRun) {
@@ -345,8 +347,6 @@ Deno.serve(async (req) => {
         if (existing) offerId = existing.id
       }
 
-      const affiliateUrlChanged = Boolean(affiliateUrl && affiliateUrl !== existing?.affiliate_url)
-      const hasEffectiveAffiliateUrl = Boolean(affiliateUrl || existing?.affiliate_url)
       if (unchanged && !affiliateUrlChanged && !hasEffectiveAffiliateUrl) continue
 
       const effectiveOffer = {
