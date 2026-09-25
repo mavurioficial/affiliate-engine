@@ -67,7 +67,7 @@ where t.affiliate_account_id is null
   and a.external_account_id is not distinct from t.external_account_id;
 
 -- One token set per explicit affiliate account.
-drop index if exists public.flow_marketplace_tokens_user_id_marketplace_id_key;
+alter table public.flow_marketplace_tokens drop constraint if exists flow_marketplace_tokens_user_id_marketplace_id_key;
 
 create unique index if not exists flow_marketplace_tokens_account_uidx
   on public.flow_marketplace_tokens(affiliate_account_id);
