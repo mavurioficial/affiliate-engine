@@ -965,4 +965,46 @@ async function bootstrap() {
   }
 }
 
+
+
+async function handleDiscoveryBridgeMessage(event) {
+  if (event.source !== window || event.origin !== window.location.origin) return
+  const message = event.data
+  if (!message || message.type !== 'mavuri.discovery.ingest') return
+
+  const requestId = String(message.requestId || '')
+  const offers = Array.isArray(message.offers) ? message.offers.slice(0, 100) : []
+  if (!requestId || !offers.length) {
+    window.postMessage({
+      type: 'mavuri.discovery.ingest.result',
+      requestId,
+      ok: false,
+      error: 'Payload de discovery vazio ou inválido.'
+    }, window.location.origin)
+    return
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('flow-discovery-ingest', {
+      body: { offers }
+    })
+    if (error) throw error
+    window.postMessage({
+      type: 'mavuri.discovery.ingest.result',
+      requestId,
+      ok: true,
+      data
+    }, window.location.origin)
+  } catch (error) {
+    window.postMessage({
+      type: 'mavuri.discovery.ingest.result',
+      requestId,
+      ok: false,
+      error: error?.message || 'Falha ao enviar discovery para o Flow.'
+    }, window.location.origin)
+  }
+}
+
+window.addEventListener('message', handleDiscoveryBridgeMessage)
+
 bootstrap()
