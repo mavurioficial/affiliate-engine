@@ -7,7 +7,7 @@ create table if not exists public.flow_affiliate_accounts (
   user_id uuid not null,
   marketplace_id uuid not null references public.flow_marketplaces(id),
   name text not null,
-  status text not null default 'active',
+  status text not null default 'connected',
   external_account_id text,
   settings jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
@@ -45,7 +45,7 @@ select
   t.user_id,
   t.marketplace_id,
   'Mercado Livre — Conta atual',
-  'active',
+  'connected',
   t.external_account_id,
   jsonb_build_object('role', 'default')
 from public.flow_marketplace_tokens t
@@ -131,7 +131,7 @@ begin
           from public.flow_affiliate_accounts a
           where a.user_id = p_user_id
             and a.marketplace_id = p_marketplace_id
-            and a.status = 'active'
+            and a.status = 'connected'
           order by (a.settings->>'role' = 'default') desc, a.created_at asc
           limit 1
         )
@@ -175,7 +175,7 @@ begin
     from public.flow_affiliate_accounts a
     where a.user_id = p_user_id
       and a.marketplace_id = p_marketplace_id
-      and a.status = 'active'
+      and a.status = 'connected'
       and (
         a.external_account_id is not distinct from p_external_account_id
         or a.settings->>'role' = 'default'
@@ -190,7 +190,7 @@ begin
     insert into public.flow_affiliate_accounts
       (user_id, marketplace_id, name, status, external_account_id, settings)
     values
-      (p_user_id, p_marketplace_id, 'Mercado Livre — Conta', 'active', p_external_account_id, '{}'::jsonb)
+      (p_user_id, p_marketplace_id, 'Mercado Livre — Conta', 'connected', p_external_account_id, '{}'::jsonb)
     returning id into account_id;
   else
     update public.flow_affiliate_accounts
