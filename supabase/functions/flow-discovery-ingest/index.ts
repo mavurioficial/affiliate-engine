@@ -158,6 +158,7 @@ Deno.serve(async (req) => {
   }
 
   const offers = Array.isArray(payload.offers) ? payload.offers.slice(0, 100) : []
+  const affiliateAccountId = textOrNull((payload as { affiliate_account_id?: string }).affiliate_account_id)
   if (!offers.length) return json({ error: "offers deve conter pelo menos uma oferta." }, 400)
 
   const dryRun = payload.dry_run === true
@@ -170,6 +171,31 @@ Deno.serve(async (req) => {
 
   if (marketplaceError) return json({ error: marketplaceError.message }, 500)
   if (!marketplace) return json({ error: "Marketplace mercadolivre não configurado." }, 500)
+
+  let affiliateAccount: { id: string; name: string; external_account_id: string | null } | null = null
+  if (affiliateAccountId) {
+    const { data, error } = await admin
+      .from("flow_affiliate_accounts")
+      .select("id,name,external_account_id")
+      .eq("id", affiliateAccountId)
+      .eq("user_id", userId)
+      .eq("marketplace_id", marketplace.id)
+      .maybeSingle()
+    if (error) return json({ error: error.message }, 500)
+    if (!data) return json({ error: "Conta de afiliado não encontrada para este usuário/marketplace." }, 404)
+    affiliateAccount = data
+  } else {
+    const { data } = await admin
+      .from("flow_affiliate_accounts")
+      .select("id,name,external_account_id")
+      .eq("user_id", userId)
+      .eq("marketplace_id", marketplace.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    affiliateAccount = data || null
+  }
 
   const { data: rules, error: rulesError } = await admin
     .from("flow_rules")
@@ -252,6 +278,8 @@ Deno.serve(async (req) => {
         discovery: {
           provider: "mercadolivre",
           method: "affiliate_hub_browser",
+          affiliate_account_id: affiliateAccount?.id || null,
+          affiliate_account_name: affiliateAccount?.name || null,
           source_ref: sourceRef,
           list_url: input.list_url || null,
           extra_commission: input.extra_commission === true,
@@ -277,6 +305,7 @@ Deno.serve(async (req) => {
         const row = {
           user_id: userId,
           marketplace_id: marketplace.id,
+          affiliate_account_id: affiliateAccount?.id || null,
           source_type: "api",
           source_ref: sourceRef,
           title,
