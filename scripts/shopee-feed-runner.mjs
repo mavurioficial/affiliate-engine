@@ -246,6 +246,61 @@ async function* parseCsv(filePath) {
   }
 }
 
+async function publishToMavuri(offers) {
+  const enabled = String(process.env.SHOPEE_ENABLE_PUBLISH || '').toLowerCase() === 'true'
+  if (!enabled) {
+    throw new Error('Publicação bloqueada: defina SHOPEE_ENABLE_PUBLISH=true para liberar.')
+  }
+
+  const accessToken = String(process.env.MAVURI_SUPABASE_ACCESS_TOKEN || '').trim()
+  if (!accessToken) {
+    throw new Error('MAVURI_SUPABASE_ACCESS_TOKEN não configurado.')
+  }
+
+  const supabaseUrl = String(process.env.MAVURI_SUPABASE_URL || 'https://otikoxnfotyjgphrdudn.supabase.co').replace(/\/$/, '')
+  const publishableKey = String(
+    process.env.MAVURI_SUPABASE_PUBLISHABLE_KEY ||
+    'sb_publishable_DSklSKpNz_Jlwi2Wx089TA_5JR8pBSt'
+  ).trim()
+
+  const endpoint = `${supabaseUrl}/functions/v1/flow-shopee-ingest`
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+      apikey: publishableKey,
+    },
+    body: JSON.stringify({
+      offers: offers.map((item) => ({
+        itemid: item.itemid,
+        title: item.title,
+        price: item.price,
+        sale_price: item.sale_price,
+        discount_percentage: item.discount_percentage,
+        shop_rating: item.shop_rating,
+        item_rating: item.item_rating,
+        like: item.like,
+        global_category1: item.global_category1,
+        global_category2: item.global_category2,
+        global_category3: item.global_category3,
+        shop_name: item.shop_name,
+        image_link: item.image_link,
+        product_link: item.product_link,
+        product_short_link: item.product_short_link,
+        affiliate_url: item.affiliate_url,
+      })),
+    }),
+  })
+
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(`flow-shopee-ingest HTTP ${response.status}: ${payload?.error || JSON.stringify(payload)}`)
+  }
+
+  return payload
+}
+
 async function resolveFeedFile(url, cacheHours) {
   const cacheDir = resolve(process.env.SHOPEE_CACHE_DIR || '.mavuri-cache')
   const filePath = join(cacheDir, 'shopee-feed.csv')
@@ -453,7 +508,16 @@ async function main() {
     console.log(`\n${JSON.stringify({ config: cfg, selected, publishPool }, null, 2)}`)
   }
 
-  console.log('\nPublicação automática permanece DESATIVADA até validar o rastreamento do link no painel da Shopee.')
+  if (process.argv.includes('--publish')) {
+    console.log('\nModo --publish solicitado.')
+    const result = await publishToMavuri(publishPool)
+    console.log('Resultado da ingestão Shopee:')
+    console.log(JSON.stringify(result, null, 2))
+  } else {
+    console.log('\nPublicação automática permanece DESATIVADA até validar o rastreamento do link no painel da Shopee.')
+    console.log('Quando validarmos, use --publish + SHOPEE_ENABLE_PUBLISH=true para liberar explicitamente.')
+  }
+
   console.log('O runner já está pronto para reutilizar o mesmo feed por algumas horas sem baixar ~190 MB a cada ciclo.')
 }
 
