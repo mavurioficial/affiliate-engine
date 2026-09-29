@@ -1,0 +1,326 @@
+import { createReadStream, createWriteStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { pipeline } from 'node:stream/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+
+const DEFAULTS = {
+  minDiscount: 10,
+  maxDiscount: 85,
+  minItemRating: 4.6,
+  minShopRating: 4.6,
+  minPrice: 8,
+  maxPrice: 5000,
+  maxSelected: 5,
+  maxPerShop: 1,
+}
+
+function numberOrNull(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const n = Number(raw.replace(',', '.'))
+  return Number.isFinite(n) ? n : null
+}
+
+function normalizeText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+}
+
+function hasAny(text, words) {
+  return words.some((word) => text.includes(normalizeText(word)))
+}
+
+function classify(row) {
+  const title = String(row.title || '')
+  const c1 = String(row.global_category1 || '')
+  const c2 = String(row.global_category2 || '')
+  const c3 = String(row.global_category3 || '')
+  const text = normalizeText([title, c1, c2, c3].join(' '))
+  const c1n = normalizeText(c1)
+  const tags = new Set()
+  let category = 'outros'
+
+  if (['women clothes', 'women shoes', 'women bags'].includes(c1n)) {
+    category = 'moda'
+    tags.add('feminino')
+    tags.add('moda')
+    if (c1n.includes('shoes')) tags.add('calcados')
+    if (c1n.includes('bags')) tags.add('bolsas')
+    if (c1n.includes('clothes')) tags.add('roupa')
+  } else if (c1n === 'beauty') {
+    category = 'beleza'
+  } else if (c1n === 'home & living' || c1n === 'home appliances') {
+    category = 'casa'
+    tags.add('casa')
+  } else if (c1n === 'computers & accessories') {
+    category = 'informatica'
+    tags.add('informatica')
+  } else if (['mobile & gadgets', 'audio'].includes(c1n)) {
+    category = 'eletronicos'
+    tags.add('eletronicos')
+  } else if (c1n === 'pets') {
+    category = 'pet'
+    tags.add('pet')
+  } else if (c1n === 'spare parts and accessories for vehicles') {
+    category = 'automotivo'
+  } else if (c1n.includes('sports') || c1n.includes('outdoor')) {
+    category = 'esporte'
+    tags.add('esporte')
+  } else if (c1n.includes('baby') || c1n.includes('kids') || c1n.includes('toys')) {
+    category = 'infantil'
+    tags.add('infantil')
+  }
+
+  const tagRules = [
+    ['feminino', ['feminina', 'para mulher', 'para mulheres', 'sutia', 'sutiã', 'calcinha', 'lingerie', 'vestido feminino', 'saia feminina', 'legging feminina', 'bolsa feminina', 'tenis feminino', 'tênis feminino', 'blusa feminina', 'camiseta feminina']],
+    ['masculino', ['masculino', 'para homem', 'para homens', 'cueca', 'barba', 'pos barba', 'pós barba', 'after shave']],
+    ['maquiagem', ['maquiagem', 'batom', 'rimel', 'rímel', 'delineador', 'blush', 'gloss', 'paleta de sombra', 'corretivo facial']],
+    ['skincare', ['skincare', 'serum facial', 'sérum facial', 'retinol', 'niacinamida', 'acido hialuronico', 'ácido hialurônico', 'hidratante facial', 'agua micelar', 'água micelar', 'protetor solar facial']],
+    ['cabelo', ['shampoo', 'condicionador', 'leave-in', 'mascara capilar', 'máscara capilar', 'escova alisadora', 'escova secadora', 'chapinha', 'modelador de cachos', 'babyliss']],
+    ['unhas', ['esmalte', 'gel para unha', 'alongamento de unha', 'base para unha']],
+    ['acessorios-femininos', ['brinco feminino', 'colar feminino', 'pulseira feminina', 'anel feminino', 'tiara feminina', 'presilha feminina']],
+    ['cozinha', ['panela', 'frigideira', 'air fryer', 'fritadeira', 'liquidificador', 'sanduicheira', 'cafeteira', 'pipoqueira', 'pote', 'copos', 'copo', 'talher', 'garrafa termica', 'garrafa térmica']],
+    ['limpeza', ['limpeza', 'detergente', 'lavanderia', 'vassoura', 'rodo', 'esfregao', 'esfregão', 'aspirador']],
+    ['decoracao', ['decoracao', 'decoração', 'vaso para plantas', 'quadro decorativo', 'tapete', 'cortina', 'luminaria', 'luminária']],
+    ['celular', ['celular', 'smartphone', 'iphone', 'galaxy']],
+    ['eletronicos', ['smart tv', 'televisao', 'televisão', 'fone', 'headset', 'smartwatch', 'caixa de som', 'projetor', 'tablet', 'carregador']],
+    ['informatica', ['notebook', 'computador', 'monitor', 'mouse', 'teclado', 'ssd', 'hd externo', 'roteador', 'cabo ethernet', 'gabinete']],
+    ['moto', [' moto ', 'motocicleta', 'motocross', 'enduro', 'bros ', 'titan ', 'biz ', 'cg ']],
+    ['trilha', ['trilha', 'motocross', 'enduro', 'off-road', 'off road']],
+    ['ferramenta', ['ferramenta', 'soquete', 'catraca', 'furadeira', 'parafusadeira', 'alicate', 'chave combinada']],
+    ['pet', ['racao', 'ração', ' gato ', 'gatos', 'cachorro', 'pet food', 'cat food', 'dog food']],
+  ]
+
+  for (const [tag, words] of tagRules) if (hasAny(text, words)) tags.add(tag)
+
+  if (category === 'casa' && tags.has('cozinha')) category = 'cozinha'
+  if (category === 'outros' && tags.has('informatica')) category = 'informatica'
+  if (category === 'outros' && (tags.has('eletronicos') || tags.has('celular'))) category = 'eletronicos'
+  if (category === 'outros' && (tags.has('maquiagem') || tags.has('skincare') || tags.has('cabelo') || tags.has('unhas'))) category = 'beleza'
+  if (category === 'outros' && tags.has('ferramenta')) category = 'ferramentas'
+  if (category === 'outros' && tags.has('pet')) category = 'pet'
+
+  return { category, tags: [...tags] }
+}
+
+function channelsFor(classification) {
+  const tags = new Set(classification.tags)
+  const channels = ['Mavuri Ofertas']
+  if ([...tags].some((tag) => ['feminino', 'maquiagem', 'skincare', 'cabelo', 'unhas', 'acessorios-femininos'].includes(tag)) && !tags.has('masculino') && !tags.has('infantil')) channels.push('Mavuri Mulher')
+  if ([...tags].some((tag) => ['casa', 'cozinha', 'limpeza', 'decoracao'].includes(tag))) channels.push('Mavuri Casa & Cozinha')
+  if ([...tags].some((tag) => ['eletronicos', 'informatica', 'celular'].includes(tag))) channels.push('Mavuri Tecnologia')
+  return channels
+}
+
+function score(row, channels) {
+  const discount = numberOrNull(row.discount_percentage) || 0
+  const itemRating = numberOrNull(row.item_rating) || 0
+  const shopRating = numberOrNull(row.shop_rating) || 0
+  const likes = Math.max(0, numberOrNull(row.like) || 0)
+  const nicheBonus = Math.max(0, channels.length - 1) * 4
+  return discount * 1.1
+    + Math.max(0, itemRating - 4.5) * 20
+    + Math.max(0, shopRating - 4.5) * 10
+    + Math.log10(likes + 1) * 4
+    + nicheBonus
+}
+
+async function* parseCsv(filePath) {
+  const stream = createReadStream(filePath, { encoding: 'utf8' })
+  let field = ''
+  let row = []
+  let quoted = false
+  let pendingQuote = false
+  let firstChunk = true
+
+  for await (let chunk of stream) {
+    if (firstChunk) {
+      chunk = chunk.replace(/^\uFEFF/, '')
+      firstChunk = false
+    }
+
+    for (let i = 0; i < chunk.length; i++) {
+      const ch = chunk[i]
+
+      if (pendingQuote) {
+        pendingQuote = false
+        if (ch === '"') {
+          field += '"'
+          continue
+        }
+        quoted = false
+      }
+
+      if (ch === '"') {
+        if (quoted) {
+          if (i + 1 < chunk.length) {
+            if (chunk[i + 1] === '"') {
+              field += '"'
+              i += 1
+            } else {
+              quoted = false
+            }
+          } else {
+            pendingQuote = true
+          }
+        } else {
+          quoted = true
+        }
+      } else if (ch === ',' && !quoted) {
+        row.push(field)
+        field = ''
+      } else if ((ch === '\n' || ch === '\r') && !quoted) {
+        if (ch === '\r' && chunk[i + 1] === '\n') i += 1
+        row.push(field)
+        field = ''
+        if (row.some((value) => value !== '')) yield row
+        row = []
+      } else {
+        field += ch
+      }
+    }
+  }
+
+  if (pendingQuote) quoted = false
+  if (field || row.length) {
+    row.push(field)
+    yield row
+  }
+}
+
+async function downloadFeed(url) {
+  const response = await fetch(url, { redirect: 'follow' })
+  if (!response.ok || !response.body) {
+    throw new Error(`Falha ao baixar feed: HTTP ${response.status}`)
+  }
+
+  const filePath = join(tmpdir(), `mavuri-shopee-feed-${Date.now()}.csv`)
+  await pipeline(response.body, createWriteStream(filePath))
+  return filePath
+}
+
+async function main() {
+  const fileArg = process.argv.find((arg) => arg.toLowerCase().endsWith('.csv')) || process.env.SHOPEE_FEED_FILE
+  const feedUrl = process.env.SHOPEE_FEED_URL
+
+  let filePath
+  if (fileArg) {
+    filePath = resolve(fileArg)
+    await stat(filePath)
+  } else if (feedUrl) {
+    console.log('Baixando feed da Shopee...')
+    filePath = await downloadFeed(feedUrl)
+  } else {
+    throw new Error('Informe SHOPEE_FEED_FILE, SHOPEE_FEED_URL ou passe o caminho do CSV na linha de comando.')
+  }
+
+  const iterator = parseCsv(filePath)[Symbol.asyncIterator]()
+  const first = await iterator.next()
+  const header = first.value
+  if (!header) throw new Error('CSV vazio.')
+
+  const columns = header.map((name) => name.trim())
+  const required = ['itemid', 'title', 'sale_price', 'price', 'discount_percentage', 'shop_rating', 'item_rating', 'like', 'global_category1', 'global_category2', 'global_category3', 'shop_name', 'image_link', 'product_link', 'product_short link']
+  const missing = required.filter((name) => !columns.includes(name))
+  if (missing.length) throw new Error(`Colunas ausentes: ${missing.join(', ')}`)
+
+  const cfg = {
+    minDiscount: numberOrNull(process.env.SHOPEE_MIN_DISCOUNT) ?? DEFAULTS.minDiscount,
+    maxDiscount: numberOrNull(process.env.SHOPEE_MAX_DISCOUNT) ?? DEFAULTS.maxDiscount,
+    minItemRating: numberOrNull(process.env.SHOPEE_MIN_ITEM_RATING) ?? DEFAULTS.minItemRating,
+    minShopRating: numberOrNull(process.env.SHOPEE_MIN_SHOP_RATING) ?? DEFAULTS.minShopRating,
+    minPrice: numberOrNull(process.env.SHOPEE_MIN_PRICE) ?? DEFAULTS.minPrice,
+    maxPrice: numberOrNull(process.env.SHOPEE_MAX_PRICE) ?? DEFAULTS.maxPrice,
+    maxSelected: numberOrNull(process.env.SHOPEE_MAX_SELECTED) ?? DEFAULTS.maxSelected,
+    maxPerShop: numberOrNull(process.env.SHOPEE_MAX_PER_SHOP) ?? DEFAULTS.maxPerShop,
+  }
+
+  const candidates = []
+  let totalRows = 0
+
+  for (;;) {
+    const next = await iterator.next()
+    if (next.done) break
+    const values = next.value
+    totalRows += 1
+
+    const row = Object.fromEntries(columns.map((name, i) => [name, values[i] ?? '']))
+    const salePrice = numberOrNull(row.sale_price)
+    const regularPrice = numberOrNull(row.price)
+    const discount = numberOrNull(row.discount_percentage)
+    const itemRating = numberOrNull(row.item_rating)
+    const shopRating = numberOrNull(row.shop_rating)
+
+    if (!row.itemid || !row.title || !row.image_link || !row.product_link || !row['product_short link']) continue
+    if (salePrice == null || salePrice < cfg.minPrice || salePrice > cfg.maxPrice) continue
+    if (regularPrice == null || regularPrice <= 0) continue
+    if (discount == null || discount < cfg.minDiscount || discount > cfg.maxDiscount) continue
+    if (itemRating == null || itemRating < cfg.minItemRating) continue
+    if (shopRating == null || shopRating < cfg.minShopRating) continue
+
+    const classification = classify(row)
+    const channels = channelsFor(classification)
+
+    candidates.push({
+      itemid: row.itemid,
+      title: row.title,
+      price: regularPrice,
+      sale_price: salePrice,
+      discount_percentage: discount,
+      shop_rating: shopRating,
+      item_rating: itemRating,
+      like: numberOrNull(row.like) || 0,
+      global_category1: row.global_category1,
+      global_category2: row.global_category2,
+      global_category3: row.global_category3,
+      shop_name: row.shop_name,
+      image_link: row.image_link,
+      product_link: row.product_link,
+      product_short_link: row['product_short link'],
+      affiliate_url: row['product_short link'],
+      mavuri_category: classification.category,
+      mavuri_tags: classification.tags,
+      channels,
+      score: score(row, channels),
+    })
+  }
+
+  candidates.sort((a, b) => b.score - a.score)
+
+  const selected = []
+  const byShop = new Map()
+  for (const candidate of candidates) {
+    const shopKey = normalizeText(candidate.shop_name || 'sem-loja')
+    const used = byShop.get(shopKey) || 0
+    if (used >= cfg.maxPerShop) continue
+
+    selected.push(candidate)
+    byShop.set(shopKey, used + 1)
+    if (selected.length >= cfg.maxSelected) break
+  }
+
+  console.log(`Shopee feed: ${totalRows.toLocaleString('pt-BR')} produtos`)
+  console.log(`Elegíveis após filtros: ${candidates.length.toLocaleString('pt-BR')}`)
+  console.log(`Selecionados (DRY-RUN): ${selected.length}`)
+
+  selected.forEach((item, index) => {
+    console.log(`\n${index + 1}. ${item.title}`)
+    console.log(`   R$ ${item.sale_price.toFixed(2)} | ${item.discount_percentage}% OFF | item ${item.item_rating.toFixed(2)} | loja ${item.shop_rating.toFixed(2)}`)
+    console.log(`   ${item.mavuri_category} | tags: ${item.mavuri_tags.join(', ') || '-'} | canais: ${item.channels.join(' + ')}`)
+    console.log(`   score=${item.score.toFixed(2)} | ${item.product_short_link}`)
+  })
+
+  if (process.argv.includes('--json')) {
+    console.log(`\n${JSON.stringify({ config: cfg, selected }, null, 2)}`)
+  }
+
+  console.log('\nPublicação automática permanece DESATIVADA até validar o rastreamento do link no painel da Shopee.')
+}
+
+main().catch((error) => {
+  console.error('Shopee runner falhou:', error.message || error)
+  process.exitCode = 1
+})
