@@ -8,7 +8,8 @@
     "build": "node scripts/build.mjs",
     "preview": "node scripts/server.mjs dist",
     "check": "node scripts/check.mjs",
-    "test": "node scripts/test-flow.mjs"
+    "test": "node scripts/test-flow.mjs",
+    "shopee:feed": "node scripts/shopee-feed-runner.mjs"
   },
   "dependencies": {}
 }
