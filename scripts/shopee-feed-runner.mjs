@@ -147,13 +147,28 @@ function score(row, channels) {
   const discount = numberOrNull(row.discount_percentage) || 0
   const itemRating = numberOrNull(row.item_rating) || 0
   const shopRating = numberOrNull(row.shop_rating) || 0
+  const salePrice = numberOrNull(row.sale_price) || 0
   const likes = Math.max(0, numberOrNull(row.like) || 0)
   const nicheBonus = Math.max(0, channels.length - 1) * 4
-  return discount * 1.1
+
+  // Desconto continua importante, mas a contribuição é limitada para não
+  // transformar descontos extremos/suspeitos no único critério do ranking.
+  const discountScore = Math.min(discount, 55) * 1.1
+
+  // Pequeno bônus de "compra por impulso" para tickets acessíveis, sem
+  // impedir que eletrônicos de maior valor apareçam quando a oferta for boa.
+  const priceBonus =
+    salePrice <= 80 ? 8 :
+    salePrice <= 200 ? 6 :
+    salePrice <= 500 ? 3 :
+    salePrice <= 1500 ? 1 : 0
+
+  return discountScore
     + Math.max(0, itemRating - 4.5) * 20
     + Math.max(0, shopRating - 4.5) * 10
     + Math.log10(likes + 1) * 4
     + nicheBonus
+    + priceBonus
 }
 
 async function* parseCsv(filePath) {
