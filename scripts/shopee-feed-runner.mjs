@@ -54,7 +54,8 @@ function classify(row) {
   } else if (c1n === 'beauty') {
     category = 'beleza'
     if (c2n === "men's care") tags.add('masculino')
-    else if (c2n === 'makeup') tags.add('maquiagem')
+    else tags.add('feminino')
+    if (c2n === 'makeup') tags.add('maquiagem')
     else if (c2n === 'skincare') tags.add('skincare')
     else if (['hair care', 'beauty tools'].includes(c2n)) tags.add('cabelo')
     else if (c2n === 'hand, foot & nail care') tags.add('unhas')
@@ -86,6 +87,16 @@ function classify(row) {
     category = 'eletronicos'
     tags.add('eletronicos')
     if (c1n === 'mobile & gadgets' && c2n === 'mobile phones') tags.add('celular')
+  } else if (c1n === 'fashion accessories') {
+    category = 'moda'
+    if (['earrings', 'necklaces', 'rings', 'bracelets & bangles', 'hair accessories', 'anklets', 'scarves & shawls'].includes(c2n)) {
+      tags.add('feminino')
+      tags.add('acessorios-femininos')
+    }
+  } else if (c1n === 'watches') {
+    category = 'moda'
+    if (c2n === 'women watches') tags.add('feminino')
+    if (c2n === 'men watches') tags.add('masculino')
   } else if (c1n === 'pets') {
     category = 'pet'
     tags.add('pet')
