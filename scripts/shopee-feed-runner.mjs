@@ -1,7 +1,6 @@
-import { createReadStream, createWriteStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { createReadStream, createWriteStream, existsSync } from 'node:fs'
+import { mkdir, stat } from 'node:fs/promises'
 import { pipeline } from 'node:stream/promises'
-import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const DEFAULTS = {
@@ -13,6 +12,8 @@ const DEFAULTS = {
   maxPrice: 5000,
   maxSelected: 5,
   maxPerShop: 1,
+  candidatePool: 100,
+  cacheHours: 6,
 }
 
 function numberOrNull(value) {
@@ -245,14 +246,36 @@ async function* parseCsv(filePath) {
   }
 }
 
-async function downloadFeed(url) {
+async function resolveFeedFile(url, cacheHours) {
+  const cacheDir = resolve(process.env.SHOPEE_CACHE_DIR || '.mavuri-cache')
+  const filePath = join(cacheDir, 'shopee-feed.csv')
+  await mkdir(cacheDir, { recursive: true })
+
+  if (existsSync(filePath)) {
+    const info = await stat(filePath)
+    const ageHours = (Date.now() - info.mtimeMs) / 3_600_000
+    if (info.size > 1024 && ageHours < cacheHours) {
+      console.log(`Usando feed Shopee em cache (${ageHours.toFixed(1)}h de idade).`)
+      return filePath
+    }
+  }
+
+  console.log('Baixando feed atualizado da Shopee...')
   const response = await fetch(url, { redirect: 'follow' })
   if (!response.ok || !response.body) {
     throw new Error(`Falha ao baixar feed: HTTP ${response.status}`)
   }
 
-  const filePath = join(tmpdir(), `mavuri-shopee-feed-${Date.now()}.csv`)
-  await pipeline(response.body, createWriteStream(filePath))
+  const tempPath = `${filePath}.part`
+  await pipeline(response.body, createWriteStream(tempPath))
+  const info = await stat(tempPath)
+  if (info.size < 1024) throw new Error('Feed baixado parece inválido ou vazio.')
+
+  // Node 20+: rename via dynamic import keeps Windows replacement predictable.
+  const { rename, rm } = await import('node:fs/promises')
+  if (existsSync(filePath)) await rm(filePath, { force: true })
+  await rename(tempPath, filePath)
+  console.log(`Feed atualizado: ${(info.size / 1024 / 1024).toFixed(1)} MB.`)
   return filePath
 }
 
@@ -265,8 +288,7 @@ async function main() {
     filePath = resolve(fileArg)
     await stat(filePath)
   } else if (feedUrl) {
-    console.log('Baixando feed da Shopee...')
-    filePath = await downloadFeed(feedUrl)
+    filePath = await resolveFeedFile(feedUrl, numberOrNull(process.env.SHOPEE_CACHE_HOURS) ?? DEFAULTS.cacheHours)
   } else {
     throw new Error('Informe SHOPEE_FEED_FILE, SHOPEE_FEED_URL ou passe o caminho do CSV na linha de comando.')
   }
@@ -290,6 +312,8 @@ async function main() {
     maxPrice: numberOrNull(process.env.SHOPEE_MAX_PRICE) ?? DEFAULTS.maxPrice,
     maxSelected: numberOrNull(process.env.SHOPEE_MAX_SELECTED) ?? DEFAULTS.maxSelected,
     maxPerShop: numberOrNull(process.env.SHOPEE_MAX_PER_SHOP) ?? DEFAULTS.maxPerShop,
+    candidatePool: numberOrNull(process.env.SHOPEE_CANDIDATE_POOL) ?? DEFAULTS.candidatePool,
+    cacheHours: numberOrNull(process.env.SHOPEE_CACHE_HOURS) ?? DEFAULTS.cacheHours,
   }
 
   const candidates = []
@@ -387,9 +411,36 @@ async function main() {
     add(candidate)
   }
 
+  // Pool maior para a futura ingestão automática: o backend faz a
+  // deduplicação/cooldown e escolhe até 5 ofertas realmente publicáveis.
+  const publishPool = []
+  const publishIds = new Set()
+  const publishByShop = new Map()
+
+  for (const candidate of selected) {
+    publishPool.push(candidate)
+    publishIds.add(candidate.itemid)
+    const shopKey = normalizeText(candidate.shop_name || 'sem-loja')
+    publishByShop.set(shopKey, (publishByShop.get(shopKey) || 0) + 1)
+  }
+
+  for (const candidate of candidates) {
+    if (publishPool.length >= cfg.candidatePool) break
+    if (publishIds.has(candidate.itemid)) continue
+
+    // No pool ampliado permitimos até 3 por loja; o top 5 continua limitado a 1.
+    const shopKey = normalizeText(candidate.shop_name || 'sem-loja')
+    if ((publishByShop.get(shopKey) || 0) >= 3) continue
+
+    publishPool.push(candidate)
+    publishIds.add(candidate.itemid)
+    publishByShop.set(shopKey, (publishByShop.get(shopKey) || 0) + 1)
+  }
+
   console.log(`Shopee feed: ${totalRows.toLocaleString('pt-BR')} produtos`)
   console.log(`Elegíveis após filtros: ${candidates.length.toLocaleString('pt-BR')}`)
-  console.log(`Selecionados (DRY-RUN): ${selected.length}`)
+  console.log(`Selecionados para visualização (DRY-RUN): ${selected.length}`)
+  console.log(`Pool preparado para ingestão futura: ${publishPool.length}`)
 
   selected.forEach((item, index) => {
     console.log(`\n${index + 1}. ${item.title}`)
@@ -399,10 +450,11 @@ async function main() {
   })
 
   if (process.argv.includes('--json')) {
-    console.log(`\n${JSON.stringify({ config: cfg, selected }, null, 2)}`)
+    console.log(`\n${JSON.stringify({ config: cfg, selected, publishPool }, null, 2)}`)
   }
 
   console.log('\nPublicação automática permanece DESATIVADA até validar o rastreamento do link no painel da Shopee.')
+  console.log('O runner já está pronto para reutilizar o mesmo feed por algumas horas sem baixar ~190 MB a cada ciclo.')
 }
 
 main().catch((error) => {
