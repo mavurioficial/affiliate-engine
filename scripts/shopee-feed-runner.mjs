@@ -40,6 +40,7 @@ function classify(row) {
   const c3 = String(row.global_category3 || '')
   const text = normalizeText([title, c1, c2, c3].join(' '))
   const c1n = normalizeText(c1)
+  const c2n = normalizeText(c2)
   const tags = new Set()
   let category = 'outros'
 
@@ -52,24 +53,51 @@ function classify(row) {
     if (c1n.includes('clothes')) tags.add('roupa')
   } else if (c1n === 'beauty') {
     category = 'beleza'
-  } else if (c1n === 'home & living' || c1n === 'home appliances') {
-    category = 'casa'
-    tags.add('casa')
+    if (c2n === "men's care") tags.add('masculino')
+    else if (c2n === 'makeup') tags.add('maquiagem')
+    else if (c2n === 'skincare') tags.add('skincare')
+    else if (['hair care', 'beauty tools'].includes(c2n)) tags.add('cabelo')
+    else if (c2n === 'hand, foot & nail care') tags.add('unhas')
+    else if (c2n === 'perfumes & fragrances') tags.add('perfume')
+  } else if (c1n === 'home & living') {
+    if (c2n === 'tools & home improvement') {
+      category = 'ferramentas'
+      tags.add('ferramenta')
+    } else {
+      category = ['kitchenware', 'dinnerware'].includes(c2n) ? 'cozinha' : 'casa'
+      tags.add('casa')
+      if (['kitchenware', 'dinnerware'].includes(c2n)) tags.add('cozinha')
+      if (c2n === 'home care supplies') tags.add('limpeza')
+      if (['decoration', 'lighting', 'home fragrance & aromatherapy'].includes(c2n)) tags.add('decoracao')
+    }
+  } else if (c1n === 'home appliances') {
+    if (['tvs & accessories', 'projectors & accessories'].includes(c2n)) {
+      category = 'eletronicos'
+      tags.add('eletronicos')
+    } else {
+      category = c2n === 'kitchen appliances' ? 'cozinha' : 'casa'
+      tags.add('casa')
+      if (c2n === 'kitchen appliances') tags.add('cozinha')
+    }
   } else if (c1n === 'computers & accessories') {
     category = 'informatica'
     tags.add('informatica')
-  } else if (['mobile & gadgets', 'audio'].includes(c1n)) {
+  } else if (['mobile & gadgets', 'audio', 'gaming & consoles', 'cameras & drones'].includes(c1n)) {
     category = 'eletronicos'
     tags.add('eletronicos')
+    if (c1n === 'mobile & gadgets' && c2n === 'mobile phones') tags.add('celular')
   } else if (c1n === 'pets') {
     category = 'pet'
     tags.add('pet')
-  } else if (c1n === 'spare parts and accessories for vehicles') {
+  } else if (['spare parts and accessories for vehicles', 'automobiles'].includes(c1n)) {
     category = 'automotivo'
+  } else if (c1n === 'motorcycles') {
+    category = 'moto'
+    tags.add('moto')
   } else if (c1n.includes('sports') || c1n.includes('outdoor')) {
     category = 'esporte'
     tags.add('esporte')
-  } else if (c1n.includes('baby') || c1n.includes('kids') || c1n.includes('toys')) {
+  } else if (c1n.includes('baby') || c1n.includes('kids') || c1n.includes('toys') || c1n === 'mom & baby') {
     category = 'infantil'
     tags.add('infantil')
   }
@@ -291,15 +319,46 @@ async function main() {
   candidates.sort((a, b) => b.score - a.score)
 
   const selected = []
+  const selectedIds = new Set()
   const byShop = new Map()
-  for (const candidate of candidates) {
-    const shopKey = normalizeText(candidate.shop_name || 'sem-loja')
-    const used = byShop.get(shopKey) || 0
-    if (used >= cfg.maxPerShop) continue
 
+  const canAdd = (candidate) => {
+    if (selectedIds.has(candidate.itemid)) return false
+    const shopKey = normalizeText(candidate.shop_name || 'sem-loja')
+    return (byShop.get(shopKey) || 0) < cfg.maxPerShop
+  }
+
+  const add = (candidate) => {
+    const shopKey = normalizeText(candidate.shop_name || 'sem-loja')
     selected.push(candidate)
-    byShop.set(shopKey, used + 1)
+    selectedIds.add(candidate.itemid)
+    byShop.set(shopKey, (byShop.get(shopKey) || 0) + 1)
+  }
+
+  // Reserva espaço para os três canais de nicho atuais quando houver
+  // ofertas qualificadas. O restante é preenchido pelo ranking geral.
+  const nicheOrder = ['Mavuri Mulher', 'Mavuri Casa & Cozinha', 'Mavuri Tecnologia']
+  for (const channelName of nicheOrder) {
     if (selected.length >= cfg.maxSelected) break
+    const candidate = candidates.find((item) => item.channels.includes(channelName) && canAdd(item))
+    if (candidate) add(candidate)
+  }
+
+  // Preenche o restante priorizando score e diversidade de categoria.
+  const usedCategories = new Set(selected.map((item) => item.mavuri_category))
+  for (const candidate of candidates) {
+    if (selected.length >= cfg.maxSelected) break
+    if (!canAdd(candidate)) continue
+    if (usedCategories.has(candidate.mavuri_category)) continue
+    add(candidate)
+    usedCategories.add(candidate.mavuri_category)
+  }
+
+  // Se ainda faltarem posições, completa apenas pelo score.
+  for (const candidate of candidates) {
+    if (selected.length >= cfg.maxSelected) break
+    if (!canAdd(candidate)) continue
+    add(candidate)
   }
 
   console.log(`Shopee feed: ${totalRows.toLocaleString('pt-BR')} produtos`)
