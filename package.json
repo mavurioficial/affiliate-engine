@@ -9,7 +9,8 @@
     "preview": "node scripts/server.mjs dist",
     "check": "node scripts/check.mjs",
     "test": "node scripts/test-flow.mjs",
-    "shopee:feed": "node scripts/shopee-feed-runner.mjs"
+    "shopee:feed": "node scripts/shopee-feed-runner.mjs",
+    "shopee:feed:publish": "node scripts/shopee-feed-runner.mjs --publish"
   },
   "dependencies": {}
 }
