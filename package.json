@@ -10,7 +10,10 @@
     "check": "node scripts/check.mjs",
     "test": "node scripts/test-flow.mjs",
     "shopee:feed": "node scripts/shopee-feed-runner.mjs",
-    "shopee:feed:publish": "node scripts/shopee-feed-runner.mjs --publish"
+    "shopee:feed:publish": "node scripts/shopee-feed-runner.mjs --publish",
+    "affiliate:queue": "node scripts/affiliate-link-queue-runner.mjs claim",
+    "affiliate:queue:complete": "node scripts/affiliate-link-queue-runner.mjs complete",
+    "affiliate:queue:fail": "node scripts/affiliate-link-queue-runner.mjs fail"
   },
   "dependencies": {}
 }
