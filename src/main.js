@@ -13,6 +13,19 @@ const root =
 let session = null
 let page = 'dashboard'
 let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
+let dashboardState = {
+  loading: false,
+  loaded: false,
+  offerJobs: [],
+  couponJobs: [],
+  offers: [],
+  coupons: [],
+  channels: [],
+  marketplaces: [],
+  clicks: [],
+  error: '',
+  updatedAt: null
+}
 
 function getFlowCaptureDraftStorage() {
   const userId = session?.user?.id
@@ -45,6 +58,50 @@ function formatMoney(value) {
       currency: 'BRL'
     }
   ).format(amount)
+}
+
+function formatDateTimeBR(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date)
+}
+
+function formatDateBR(value) {
+  if (!value) return 'Sem prazo'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Sem prazo'
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit'
+  }).format(date)
+}
+
+function marketplaceLabel(slug) {
+  const labels = {
+    mercadolivre: 'Mercado Livre',
+    shopee: 'Shopee',
+    magalu: 'Magalu',
+    amazon: 'Amazon'
+  }
+  return labels[String(slug || '').toLowerCase()] || String(slug || 'Marketplace')
+}
+
+function marketplaceIcon(slug) {
+  const icons = {
+    mercadolivre: '🟡',
+    shopee: '🟠',
+    magalu: '💙',
+    amazon: '📦'
+  }
+  return icons[String(slug || '').toLowerCase()] || '🛍️'
 }
 
 function calculateDiscount(
@@ -398,45 +455,345 @@ function flowPage() {
   `
 }
 
+async function loadDashboardState() {
+  dashboardState = { ...dashboardState, loading: true, error: '' }
+
+  try {
+    const user = (await supabase.auth.getUser()).data.user
+    if (!user) throw new Error('Usuário não autenticado.')
+
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+    const startIso = startOfToday.toISOString()
+
+    const [
+      marketplacesResult,
+      channelsResult,
+      offerJobsResult,
+      couponJobsResult,
+      couponsResult,
+      clicksResult
+    ] = await Promise.all([
+      supabase
+        .from('flow_marketplaces')
+        .select('id,slug,name,active')
+        .eq('active', true),
+      supabase
+        .from('flow_channels')
+        .select('id,name,status,type')
+        .eq('user_id', user.id)
+        .order('name', { ascending: true }),
+      supabase
+        .from('flow_delivery_jobs')
+        .select('id,offer_id,channel_id,status,created_at,sent_at,error_message')
+        .eq('user_id', user.id)
+        .gte('created_at', startIso)
+        .order('created_at', { ascending: false })
+        .limit(2000),
+      supabase
+        .from('flow_coupon_delivery_jobs')
+        .select('id,coupon_id,channel_id,status,created_at,sent_at,error_message')
+        .eq('user_id', user.id)
+        .gte('created_at', startIso)
+        .order('created_at', { ascending: false })
+        .limit(2000),
+      supabase
+        .from('flow_coupons')
+        .select('id,marketplace_id,code,coupon_type,title,discount_type,discount_value,min_purchase,max_discount,valid_until,status,publication_ready,last_seen_at')
+        .eq('user_id', user.id)
+        .order('last_seen_at', { ascending: false })
+        .limit(300),
+      supabase
+        .from('flow_clicks')
+        .select('id,offer_id,channel_id,click_count,last_clicked_at')
+        .eq('user_id', user.id)
+        .order('last_clicked_at', { ascending: false })
+        .limit(1000)
+    ])
+
+    const baseResults = [
+      marketplacesResult,
+      channelsResult,
+      offerJobsResult,
+      couponJobsResult,
+      couponsResult,
+      clicksResult
+    ]
+    const baseError = baseResults.find((result) => result.error)?.error
+    if (baseError) throw baseError
+
+    const offerIds = [...new Set((offerJobsResult.data || []).map((job) => job.offer_id).filter(Boolean))]
+    let offers = []
+
+    if (offerIds.length) {
+      const { data, error } = await supabase
+        .from('flow_offers')
+        .select('id,marketplace_id,title,price,previous_price,discount_percent,coupon,image_url,affiliate_url,metadata,captured_at')
+        .eq('user_id', user.id)
+        .in('id', offerIds)
+
+      if (error) throw error
+      offers = data || []
+    }
+
+    dashboardState = {
+      loading: false,
+      loaded: true,
+      offerJobs: offerJobsResult.data || [],
+      couponJobs: couponJobsResult.data || [],
+      offers,
+      coupons: couponsResult.data || [],
+      channels: channelsResult.data || [],
+      marketplaces: marketplacesResult.data || [],
+      clicks: clicksResult.data || [],
+      error: '',
+      updatedAt: new Date().toISOString()
+    }
+  } catch (error) {
+    dashboardState = {
+      ...dashboardState,
+      loading: false,
+      loaded: true,
+      error: error?.message || 'Não foi possível carregar o painel.',
+      updatedAt: new Date().toISOString()
+    }
+  }
+}
+
 function dashboard() {
+  if (dashboardState.loading && !dashboardState.loaded) {
+    return `
+      <header class="page-heading">
+        <p class="eyebrow">VISÃO GERAL</p>
+        <h1>Painel Mavuri</h1>
+        <p>Carregando indicadores operacionais...</p>
+      </header>
+      <section class="dashboard-loading">Atualizando o painel...</section>
+    `
+  }
+
+  const now = Date.now()
+  const marketplaceById = new Map(dashboardState.marketplaces.map((item) => [item.id, item]))
+  const channelById = new Map(dashboardState.channels.map((item) => [item.id, item]))
+  const offerById = new Map(dashboardState.offers.map((item) => [item.id, item]))
+  const couponById = new Map(dashboardState.coupons.map((item) => [item.id, item]))
+
+  const sentOfferJobs = dashboardState.offerJobs.filter((job) => job.status === 'sent')
+  const sentCouponJobs = dashboardState.couponJobs.filter((job) => job.status === 'sent')
+  const uniqueOfferIds = [...new Set(sentOfferJobs.map((job) => job.offer_id).filter(Boolean))]
+  const uniqueCouponIds = [...new Set(sentCouponJobs.map((job) => job.coupon_id).filter(Boolean))]
+  const activeCoupons = dashboardState.coupons.filter((coupon) => {
+    if (coupon.status === 'disabled' || coupon.status === 'expired') return false
+    if (coupon.publication_ready === false) return false
+    if (coupon.valid_until && new Date(coupon.valid_until).getTime() < now) return false
+    return true
+  })
+
+  const totalClicks = dashboardState.clicks.reduce(
+    (total, click) => total + Number(click.click_count || 0),
+    0
+  )
+  const failedJobs =
+    dashboardState.offerJobs.filter((job) => job.status === 'failed').length +
+    dashboardState.couponJobs.filter((job) => job.status === 'failed').length
+  const queuedJobs =
+    dashboardState.offerJobs.filter((job) => ['queued', 'processing'].includes(job.status)).length +
+    dashboardState.couponJobs.filter((job) => ['queued', 'processing'].includes(job.status)).length
+  const activeChannels = dashboardState.channels.filter((channel) => channel.status !== 'disabled').length
+
+  const marketplaceCards = ['mercadolivre', 'shopee', 'magalu', 'amazon'].map((slug) => {
+    const marketplace = dashboardState.marketplaces.find((item) => item.slug === slug)
+    const offerIds = new Set(
+      sentOfferJobs
+        .map((job) => offerById.get(job.offer_id))
+        .filter((offer) => offer && offer.marketplace_id === marketplace?.id)
+        .map((offer) => offer.id)
+    )
+    const couponIds = new Set(
+      sentCouponJobs
+        .map((job) => couponById.get(job.coupon_id))
+        .filter((coupon) => coupon && coupon.marketplace_id === marketplace?.id)
+        .map((coupon) => coupon.id)
+    )
+
+    return {
+      slug,
+      label: marketplaceLabel(slug),
+      offers: offerIds.size,
+      coupons: couponIds.size
+    }
+  })
+
+  const channelStats = dashboardState.channels.map((channel) => {
+    const offers = sentOfferJobs.filter((job) => job.channel_id === channel.id).length
+    const coupons = sentCouponJobs.filter((job) => job.channel_id === channel.id).length
+    return { ...channel, offers, coupons, total: offers + coupons }
+  }).filter((item) => item.total > 0).sort((a, b) => b.total - a.total)
+
+  const recentOfferRows = uniqueOfferIds
+    .map((offerId) => {
+      const offer = offerById.get(offerId)
+      if (!offer) return null
+      const jobs = sentOfferJobs.filter((job) => job.offer_id === offerId)
+      const latestSent = jobs
+        .map((job) => job.sent_at || job.created_at)
+        .filter(Boolean)
+        .sort()
+        .at(-1)
+      const marketplace = marketplaceById.get(offer.marketplace_id)
+      const channelNames = [...new Set(
+        jobs.map((job) => channelById.get(job.channel_id)?.name).filter(Boolean)
+      )]
+      return { offer, marketplace, latestSent, channelNames }
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.latestSent || 0) - new Date(a.latestSent || 0))
+    .slice(0, 8)
+
+  const benefitText = (coupon) => {
+    const value = Number(coupon.discount_value || 0)
+    if (coupon.discount_type === 'percent') return `${value}% OFF`
+    if (coupon.discount_type === 'fixed') return `${formatMoney(value)} OFF`
+    return 'Benefício'
+  }
+
   return `
-    <header class="page-heading">
-
-      <p class="eyebrow">
-        VISÃO GERAL
-      </p>
-
-      <h1>
-        Painel Mavuri
-      </h1>
-
-      <p>
-        Gerencie o fluxo de captura, avaliação e distribuição das suas ofertas.
-      </p>
-
+    <header class="page-heading dashboard-heading">
+      <div>
+        <p class="eyebrow">VISÃO GERAL</p>
+        <h1>Painel Mavuri</h1>
+        <p>Publicações, cupons, canais e saúde do motor em uma visão simples do dia.</p>
+      </div>
+      <div class="dashboard-heading-actions">
+        <span>Atualizado ${dashboardState.updatedAt ? formatDateTimeBR(dashboardState.updatedAt) : '—'}</span>
+        <button class="primary" data-dashboard-refresh>↻ Atualizar</button>
+      </div>
     </header>
 
-    <section class="next-steps">
+    ${dashboardState.error ? `<section class="notice">${escapeHtml(dashboardState.error)}</section>` : ''}
 
-      <h2>
-        Mavuri Flow
-      </h2>
+    <section class="dashboard-grid dashboard-kpis">
+      <article class="metric-card">
+        <span>Ofertas publicadas hoje</span>
+        <strong>${uniqueOfferIds.length}</strong>
+        <small>${sentOfferJobs.length} envio(s) aos canais</small>
+      </article>
+      <article class="metric-card">
+        <span>Cupons publicados hoje</span>
+        <strong>${uniqueCouponIds.length}</strong>
+        <small>${activeCoupons.length} cupom(ns) ativo(s)</small>
+      </article>
+      <article class="metric-card">
+        <span>Cliques registrados</span>
+        <strong>${totalClicks}</strong>
+        <small>Acumulado no rastreamento</small>
+      </article>
+      <article class="metric-card">
+        <span>Canais ativos</span>
+        <strong>${activeChannels}</strong>
+        <small>${queuedJobs} pendente(s) · ${failedJobs} falha(s)</small>
+      </article>
+    </section>
 
-      <p>
-        Capture links de afiliado do Mercado Livre, aplique suas regras e publique as ofertas nos canais configurados.
-      </p>
-
-      <div class="form-actions">
-
-        <button
-          class="primary"
-          data-page="flow"
-        >
-          Abrir Mavuri Flow
-        </button>
-
+    <section class="dashboard-panel">
+      <div class="section-title dashboard-section-title">
+        <div>
+          <h2>Hoje por marketplace</h2>
+          <p>Ofertas únicas e cupons enviados, sem misturar cupom na meta de ofertas.</p>
+        </div>
       </div>
+      <div class="dashboard-marketplaces">
+        ${marketplaceCards.map((item) => `
+          <article class="marketplace-card marketplace-${escapeHtml(item.slug)}">
+            <div class="marketplace-title">
+              <span class="marketplace-icon">${marketplaceIcon(item.slug)}</span>
+              <strong>${escapeHtml(item.label)}</strong>
+            </div>
+            <div class="marketplace-numbers">
+              <div><strong>${item.offers}</strong><span>ofertas</span></div>
+              <div><strong>${item.coupons}</strong><span>cupons</span></div>
+            </div>
+          </article>
+        `).join('')}
+      </div>
+    </section>
 
+    <section class="dashboard-two-columns">
+      <article class="dashboard-panel">
+        <div class="section-title dashboard-section-title">
+          <div>
+            <h2>Publicações por canal</h2>
+            <p>Quantidade de mensagens enviadas hoje.</p>
+          </div>
+        </div>
+        <div class="dashboard-list">
+          ${channelStats.map((item) => `
+            <div class="dashboard-list-row compact">
+              <div class="dashboard-row-main">
+                <strong>${escapeHtml(item.name)}</strong>
+                <small>${item.offers} oferta(s) · ${item.coupons} cupom(ns)</small>
+              </div>
+              <span class="dashboard-count">${item.total}</span>
+            </div>
+          `).join('') || '<div class="empty">Nenhuma publicação enviada hoje.</div>'}
+        </div>
+      </article>
+
+      <article class="dashboard-panel">
+        <div class="section-title dashboard-section-title">
+          <div>
+            <h2>Cupons ativos</h2>
+            <p>Últimos cupons válidos encontrados pelo motor.</p>
+          </div>
+        </div>
+        <div class="dashboard-list">
+          ${activeCoupons.slice(0, 8).map((coupon) => {
+            const marketplace = marketplaceById.get(coupon.marketplace_id)
+            return `
+              <div class="dashboard-list-row compact">
+                <div class="dashboard-row-main">
+                  <strong>${marketplaceIcon(marketplace?.slug)} ${escapeHtml(coupon.code || coupon.title || 'Cupom')}</strong>
+                  <small>${escapeHtml(benefitText(coupon))}${coupon.min_purchase ? ` · mín. ${formatMoney(coupon.min_purchase)}` : ''} · até ${formatDateBR(coupon.valid_until)}</small>
+                </div>
+                <span class="dashboard-badge">${escapeHtml(marketplaceLabel(marketplace?.slug))}</span>
+              </div>
+            `
+          }).join('') || '<div class="empty">Nenhum cupom ativo identificado.</div>'}
+        </div>
+      </article>
+    </section>
+
+    <section class="dashboard-panel">
+      <div class="section-title dashboard-section-title">
+        <div>
+          <h2>Últimas ofertas publicadas</h2>
+          <p>Ofertas únicas enviadas hoje e os canais que receberam cada uma.</p>
+        </div>
+      </div>
+      <div class="dashboard-list dashboard-offer-list">
+        ${recentOfferRows.map(({ offer, marketplace, latestSent, channelNames }) => {
+          const pricing = offer?.metadata?.pricing || {}
+          const finalPrice = Number(pricing.final_price || offer.price || 0)
+          const basePrice = Number(pricing.base_price || 0)
+          const priceLine = basePrice > finalPrice
+            ? `${formatMoney(basePrice)} → ${formatMoney(finalPrice)}`
+            : formatMoney(finalPrice)
+          const image = String(offer.image_url || '').trim()
+          return `
+            <div class="dashboard-list-row offer-row">
+              <div class="dashboard-offer-thumb">
+                ${image ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" />` : '<span>🛍️</span>'}
+              </div>
+              <div class="dashboard-row-main">
+                <strong>${escapeHtml(offer.title)}</strong>
+                <small>${marketplaceIcon(marketplace?.slug)} ${escapeHtml(marketplaceLabel(marketplace?.slug))} · ${priceLine}</small>
+                <small>${escapeHtml(channelNames.join(' · ') || 'Canal')} · ${formatDateTimeBR(latestSent)}</small>
+              </div>
+              <span class="dashboard-badge">${Number(offer.discount_percent || 0) > 0 ? `${Number(offer.discount_percent)}% OFF` : 'publicada'}</span>
+            </div>
+          `
+        }).join('') || '<div class="empty">Nenhuma oferta publicada hoje.</div>'}
+      </div>
     </section>
   `
 }
@@ -459,6 +816,10 @@ async function render() {
     bindEvents()
 
     return
+  }
+
+  if (page === 'dashboard' && !dashboardState.loaded && !dashboardState.loading) {
+    await loadDashboardState()
   }
 
   if (page === 'flow' && !flowState.loaded && !flowState.loading) {
@@ -525,6 +886,16 @@ function bindEvents() {
         )
       }
     )
+
+  const dashboardRefreshButton = document.querySelector('[data-dashboard-refresh]')
+
+  if (dashboardRefreshButton) {
+    dashboardRefreshButton.addEventListener('click', async () => {
+      dashboardRefreshButton.disabled = true
+      dashboardState = { ...dashboardState, loaded: false, error: '' }
+      await render()
+    })
+  }
 
   const logoutButton =
     document.querySelector(
@@ -929,6 +1300,19 @@ async function bootstrap() {
           getFlowCaptureDraftStorage()?.clear()
 
           flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
+          dashboardState = {
+            loading: false,
+            loaded: false,
+            offerJobs: [],
+            couponJobs: [],
+            offers: [],
+            coupons: [],
+            channels: [],
+            marketplaces: [],
+            clicks: [],
+            error: '',
+            updatedAt: null
+          }
         }
 
         await render()
