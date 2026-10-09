@@ -66,3 +66,54 @@ input:focus, select:focus, textarea:focus { outline: 3px solid #c8ed7570; border
 
 @media (max-width: 900px) { .app-shell { grid-template-columns: 1fr; } .sidebar { min-height: auto; } .sidebar nav { grid-template-columns: 1fr 1fr; gap: 8px; } .sidebar-footer { margin-top: 20px; } }
 @media (max-width: 640px) { .topbar { padding: 14px 18px; align-items: flex-start; flex-direction: column; } .page-content { padding: 34px 18px; } .form-grid, .entry dl { grid-template-columns: 1fr; } .sidebar nav { grid-template-columns: 1fr; } .dashboard-grid { grid-template-columns: 1fr 1fr; } }
+
+
+/* Dashboard operacional */
+.dashboard-heading { max-width: none; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.dashboard-heading > div:first-child { max-width: 760px; }
+.dashboard-heading-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dashboard-heading-actions > span { color: #718077; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.dashboard-loading { border: 1px solid #dae2d8; background: #fff; border-radius: 14px; padding: 28px; color: #56655c; }
+.dashboard-kpis { margin-bottom: 22px; }
+.metric-card small { color: #7a877f; font-size: 12px; line-height: 1.45; }
+.dashboard-panel { background: #fff; border: 1px solid #dae2d8; border-radius: 14px; padding: 22px; margin-top: 18px; }
+.dashboard-section-title { margin-bottom: 18px; }
+.dashboard-section-title h2 { margin: 0 0 4px; font-size: 20px; }
+.dashboard-section-title p { margin: 0; font-size: 13px; }
+.dashboard-marketplaces { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.marketplace-card { border: 1px solid #e2e8e0; border-radius: 12px; padding: 16px; background: #fbfcfb; display: grid; gap: 16px; }
+.marketplace-title { display: flex; align-items: center; gap: 9px; color: #26372c; }
+.marketplace-icon { font-size: 20px; }
+.marketplace-numbers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.marketplace-numbers > div { display: grid; gap: 2px; }
+.marketplace-numbers strong { font-size: 26px; color: #26372c; }
+.marketplace-numbers span { color: #718077; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.marketplace-mercadolivre { border-top: 3px solid #e3c23a; }
+.marketplace-shopee { border-top: 3px solid #e87735; }
+.marketplace-magalu { border-top: 3px solid #4e8cc9; }
+.marketplace-amazon { border-top: 3px solid #d69b37; }
+.dashboard-two-columns { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 18px; }
+.dashboard-list { display: grid; }
+.dashboard-list-row { display: flex; align-items: center; gap: 13px; padding: 13px 0; border-top: 1px solid #edf1ec; }
+.dashboard-list-row:first-child { border-top: 0; padding-top: 0; }
+.dashboard-list-row:last-child { padding-bottom: 0; }
+.dashboard-list-row.compact { justify-content: space-between; }
+.dashboard-row-main { min-width: 0; flex: 1; display: grid; gap: 3px; }
+.dashboard-row-main strong { color: #26372c; font-size: 13px; line-height: 1.35; }
+.dashboard-row-main small { color: #718077; font-size: 11px; line-height: 1.4; }
+.dashboard-count { min-width: 34px; height: 30px; padding: 0 8px; border-radius: 8px; background: #eef4e6; color: #365d2e; display: grid; place-items: center; font-weight: 800; }
+.dashboard-badge { display: inline-flex; align-items: center; justify-content: center; min-height: 25px; padding: 4px 8px; border-radius: 999px; background: #f1f4f0; color: #617068; font-size: 10px; font-weight: 750; white-space: nowrap; }
+.dashboard-offer-thumb { width: 54px; height: 54px; border: 1px solid #e2e8e0; border-radius: 10px; overflow: hidden; background: #f7f9f7; flex: 0 0 auto; display: grid; place-items: center; }
+.dashboard-offer-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.dashboard-offer-thumb span { font-size: 23px; }
+
+@media (max-width: 980px) {
+  .dashboard-heading { align-items: flex-start; flex-direction: column; }
+  .dashboard-marketplaces { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .dashboard-two-columns { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .dashboard-marketplaces { grid-template-columns: 1fr; }
+  .dashboard-list-row.offer-row { align-items: flex-start; }
+  .dashboard-list-row.offer-row .dashboard-badge { display: none; }
+}
