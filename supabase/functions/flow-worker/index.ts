@@ -47,6 +47,67 @@ async function whapiPost(route: "text" | "image", payload: Record<string, unknow
   }
 }
 
+
+async function processWhapiCouponJobs(db: any, token: string) {
+  const counters={sent:0,failed:0,retried:0,skipped:0}
+  if(!token)return counters
+  const now=new Date().toISOString()
+  const q=await db.from("flow_whapi_coupon_jobs")
+    .select("*, channel:flow_channels(id,type,status,external_ref)")
+    .eq("status","queued").lte("scheduled_for",now)
+    .order("created_at",{ascending:true}).order("part_index",{ascending:true})
+    .limit(6)
+  if(q.error){console.error("Whapi coupon queue select:",q.error.message);return counters}
+  for(const job of q.data||[]){
+    try{
+      const prior=await db.from("flow_whapi_coupon_jobs").select("id")
+        .eq("bundle_key",job.bundle_key).eq("channel_id",job.channel_id)
+        .lt("part_index",job.part_index).neq("status","sent").limit(1)
+      if(prior.error)throw new Error(prior.error.message)
+      // Always deliver earlier parts before a continuation.
+      if(prior.data?.length){counters.skipped++;continue}
+      const claimed=await db.from("flow_whapi_coupon_jobs")
+        .update({status:"processing",attempts:Number(job.attempts||0)+1,error_message:null})
+        .eq("id",job.id).eq("status","queued").select("id").maybeSingle()
+      if(claimed.error)throw new Error(claimed.error.message)
+      if(!claimed.data)continue
+      const channel=Array.isArray(job.channel)?job.channel[0]:job.channel
+      if(channel?.type!=="whatsapp"||channel.status!=="connected"||!/^[0-9]+@g\.us$/.test(String(channel.external_ref||"")))
+        throw new Error("Grupo WhatsApp não está conectado ou é inválido.")
+      const text=whatsappFromTelegramHtml(job.body)
+      const kind=job.kind==="image"&&job.media?"image":"text"
+      const payload=kind==="image"
+        ? {to:channel.external_ref,media:job.media,caption:text}
+        : {to:channel.external_ref,body:text}
+      const response=await whapiPost(kind,payload,token)
+      if(!response.success){
+        const retryable=response.status===429 && Number(job.attempts||0)<3
+        const retryAt=new Date(Date.now()+60*60*1000).toISOString()
+        await db.from("flow_whapi_coupon_jobs").update({
+          status:retryable?"queued":"failed",scheduled_for:retryable?retryAt:now,
+          error_message:"Whapi HTTP "+response.status+": "+response.error
+        }).eq("id",job.id).eq("status","processing")
+        if(retryable)counters.retried++;else counters.failed++
+        continue
+      }
+      const messageId=String(response.data?.message?.id||response.data?.sent_message?.id||response.data?.id||"")
+      const updated=await db.from("flow_whapi_coupon_jobs").update({
+        status:"sent",external_message_id:messageId,sent_at:new Date().toISOString(),error_message:null
+      }).eq("id",job.id).eq("status","processing")
+      if(updated.error)console.error("Whapi coupon receipt:",updated.error.message)
+      counters.sent++
+    }catch(cause){
+      const reason=cause instanceof Error?cause.message:String(cause)
+      console.error("Whapi coupon delivery:",reason)
+      // Ambiguous network failures must NOT retry automatically: the message may have arrived.
+      await db.from("flow_whapi_coupon_jobs")
+        .update({status:"failed",error_message:reason}).eq("id",job.id).eq("status","processing")
+      counters.failed++
+    }
+  }
+  return counters
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -587,5 +648,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  return json({ ok: true, mode: serviceToService ? "scheduled" : "user", processed, sent, retried, failed, results })
+  // Coupon mirrors are independent of the Telegram offer worker and run only on the authorized scheduler.
+  const coupon_mirror = serviceToService ? await processWhapiCouponJobs(supabase,whapiToken) : null
+  return json({ ok: true, mode: serviceToService ? "scheduled" : "user", processed, sent, retried, failed, coupon_mirror, results })
 })
