@@ -448,7 +448,10 @@ Deno.serve(async (req) => {
         externalMessageId = String(telegram.result?.message_id || "")
         sendMode = imageUrl ? "photo" : "text"
       } else {
-        const whatsappText = whatsappFromTelegramHtml(text)
+        const isManualTest = String(job.delivery_key || "").startsWith("whapi-manual-test:")
+        const whatsappText = (isManualTest
+          ? "🧪 *TESTE DE PUBLICAÇÃO MAVURI*\nPreço registrado anteriormente; confirme os valores no site.\n\n"
+          : "") + whatsappFromTelegramHtml(text)
         // Preserve the complete affiliate link: long captions must use text-only mode.
         let route: "image" | "text" = imageUrl && whatsappText.length <= 1000 ? "image" : "text"
         let result = await whapiPost(
