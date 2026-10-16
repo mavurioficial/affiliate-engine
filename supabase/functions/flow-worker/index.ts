@@ -9,6 +9,44 @@ const SCHEDULER_SECRET_SHA256 = "3efb0f37ba962d865839b2beeffd672787e652b4059e4de
 const MAX_ATTEMPTS = 5
 const BACKOFF_MINUTES = [1, 2, 5, 10, 20]
 
+function whatsappFromTelegramHtml(html: string) {
+  const tick = String.fromCharCode(96)
+  return String(html || "")
+    .replace(/<a\b[^>]*>/gi, "")
+    .replace(/<\/a>/gi, "")
+    .replace(/<b>/gi, "*").replace(/<\/b>/gi, "*")
+    .replace(/<s>/gi, "~").replace(/<\/s>/gi, "~")
+    .replace(/<code>/gi, tick).replace(/<\/code>/gi, tick)
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+}
+
+async function whapiPost(route: "text" | "image", payload: Record<string, unknown>, token: string) {
+  let response: Response
+  try {
+    response = await fetch("https://gate.whapi.cloud/messages/" + route, {
+      method: "POST",
+      headers: { "authorization": "Bearer " + token, "accept": "application/json", "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30000)
+    })
+  } catch (cause) {
+    // A timeout may have happened after WhatsApp accepted the message.
+    // Avoid automatic retries that could duplicate posts.
+    const error = new Error("Whapi sem confirmação de envio: " + (cause instanceof Error ? cause.message : String(cause)))
+    ;(error as Error & { retryable?: boolean }).retryable = false
+    throw error
+  }
+  const data = await response.json().catch(() => ({})) as Record<string, any>
+  const success = response.ok && data.sent === true
+  return {
+    success, status: response.status, data,
+    error: String(data?.error?.message || data?.message || data?.error || "Envio não confirmado pela Whapi").slice(0, 200)
+  }
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -92,6 +130,8 @@ function retryableError(message: string) {
     "O canal não possui Chat ID.",
     "Segredo TELEGRAM_BOT_TOKEN não configurado no Edge Function.",
     "A oferta não possui um link de destino válido.",
+    "Segredo WHAPI_TOKEN não configurado no Edge Function.",
+    "Identificador do grupo WhatsApp inválido.",
   ].includes(message)
 }
 
@@ -132,6 +172,60 @@ Deno.serve(async (req) => {
 
   const limit = Math.min(Math.max(Number(body.limit || 10), 1), 25)
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN") || ""
+  const whapiToken = Deno.env.get("WHAPI_TOKEN") || ""
+
+  if (botToken) {
+    try {
+      const webhookResponse = await fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`)
+      const webhookPayload = await webhookResponse.json()
+      console.log("Mavuri Telegram webhook:", JSON.stringify(webhookPayload?.result || {}))
+    } catch (error) {
+      console.error("Mavuri Telegram getWebhookInfo falhou:", error instanceof Error ? error.message : String(error))
+    }
+
+    try {
+      const updatesResponse = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?limit=20&timeout=0`)
+      const updatesPayload = await updatesResponse.json()
+      const channelCandidates = Array.isArray(updatesPayload?.result)
+        ? updatesPayload.result.map((u: any) => {
+            const forwardChat = u?.message?.forward_origin?.chat ?? u?.message?.forward_from_chat ?? null
+            const chat = u?.channel_post?.chat ?? forwardChat ?? u?.message?.chat ?? null
+            return {
+              update_id: u?.update_id || null,
+              chat_id: chat?.id ?? null,
+              chat_title: chat?.title ?? null,
+              chat_type: chat?.type ?? null
+            }
+          }).filter((x: any) => x.chat_id)
+        : []
+
+      const feminineChannel = [...channelCandidates].reverse().find((x: any) =>
+        x.chat_type === "channel" &&
+        String(x.chat_title || "").trim().toLocaleLowerCase("pt-BR") === "mavuri feminino"
+      )
+
+      if (feminineChannel) {
+        const secretKey = Object.values(secretKeys).find((key) => key)
+        if (secretKey) {
+          const adminClient = createClient(supabaseUrl, secretKey)
+          const { error: linkError } = await adminClient
+            .from("flow_channels")
+            .update({
+              external_ref: String(feminineChannel.chat_id),
+              status: "connected",
+              settings: { purpose: "niche_validation", taxonomy: "feminino", linked_via: "telegram_forward" }
+            })
+            .eq("name", "Mavuri Feminino")
+            .eq("status", "pending")
+          if (linkError) console.error("Mavuri Telegram: falha ao vincular canal feminino:", linkError.message)
+          else console.log("Mavuri Telegram: canal feminino vinculado.")
+        }
+      }
+    } catch (error) {
+      console.error("Mavuri Telegram getUpdates falhou:", error instanceof Error ? error.message : String(error))
+    }
+  }
+
   const now = new Date()
   const staleBefore = new Date(now.getTime() - 15 * 60 * 1000).toISOString()
 
@@ -175,6 +269,7 @@ Deno.serve(async (req) => {
     processed += 1
 
     let trackingId: string | null = null
+    const providerName = job.channel?.type === "whatsapp" ? "whapi" : "telegram"
 
     try {
       const { data: priorSuccess, error: priorSuccessError } = await supabase
@@ -198,13 +293,29 @@ Deno.serve(async (req) => {
 
       const channel = job.channel
       const offer = job.offer
-      if (!channel || channel.type !== "telegram") throw new Error("Canal Telegram inválido ou não encontrado.")
-      if (!channel.external_ref) throw new Error("O canal não possui Chat ID.")
-      if (!botToken) throw new Error("Segredo TELEGRAM_BOT_TOKEN não configurado no Edge Function.")
+      if (!channel || !["telegram", "whatsapp"].includes(channel.type)) throw new Error("Canal de distribuição inválido ou não encontrado.")
+      if (!channel.external_ref) throw new Error("Canal sem identificador de destino.")
+      if (channel.type === "telegram" && !botToken) throw new Error("Segredo TELEGRAM_BOT_TOKEN não configurado no Edge Function.")
+      if (channel.type === "whatsapp" && !whapiToken) throw new Error("Segredo WHAPI_TOKEN não configurado no Edge Function.")
+      if (channel.type === "whatsapp" && !/^[0-9]+@g\.us$/.test(String(channel.external_ref))) throw new Error("Identificador do grupo WhatsApp inválido.")
 
       const price = Number(offer?.price || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
       const old = Number(offer?.previous_price || 0)
       const discount = Number(offer?.discount_percent || 0)
+      const pricing = (offer?.metadata?.pricing || {}) as Record<string, unknown>
+      const matchedCouponCode = String(pricing.coupon_code || "").trim()
+      const matchedBasePrice = Number(pricing.base_price || 0)
+      const matchedFinalPrice = Number(pricing.final_price || 0)
+      const matchedCouponSavings = Number(pricing.coupon_savings || 0)
+      const hasMatchedCoupon =
+        Boolean(matchedCouponCode) &&
+        matchedBasePrice > 0 &&
+        matchedFinalPrice > 0 &&
+        matchedFinalPrice <= matchedBasePrice
+      const matchedBasePriceText = matchedBasePrice.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+      const matchedSavingsText = matchedCouponSavings > 0
+        ? matchedCouponSavings.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+        : ""
       const escapeHtml = (value: unknown) => String(value || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")
       const destination = String(offer?.affiliate_url || offer?.product_url || "")
       let destinationUrl: URL
@@ -215,58 +326,152 @@ Deno.serve(async (req) => {
       }
       if (!["http:", "https:"].includes(destinationUrl.protocol)) throw new Error("A oferta não possui um link de destino válido.")
 
-      trackingId = crypto.randomUUID()
-      const { error: clickError } = await supabase.from("flow_clicks").insert({
-        user_id: job.user_id,
-        offer_id: job.offer_id,
-        channel_id: job.channel_id,
-        tracking_id: trackingId
-      })
-      if (clickError) throw new Error(`Falha ao criar tracking: ${clickError.message}`)
-
-      const trackedUrl = `${supabaseUrl}/functions/v1/track-click?t=${encodeURIComponent(trackingId)}`
+      // Telegram usa diretamente o link de afiliado.
+      // Métricas de clique/conversão poderão ser obtidas pelo Mercado Livre.
       const shipping = offer?.metadata?.shipping
       const freeShipping = shipping?.free_shipping === true || shipping?.freeShipping === true
       const displayTitle = normalizeTitle(offer?.title)
       const category = classifyProduct(displayTitle)
-      const messageLines = [
-        `${category.emoji} <b>${escapeHtml(displayTitle)}</b>`,
-        discount > 0 ? `🔥 <b>${discount.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% OFF</b>` : "",
-        old > Number(offer?.price || 0) ? `De: <s>${old.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</s>` : "",
-        `💰 <b>${price}</b>`,
-        offer?.coupon ? `🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : "",
-        freeShipping ? "🚚 <b>Frete grátis</b>" : "",
-        "",
-        `👉 <a href="${trackedUrl}"><b>COMPRAR AGORA</b></a>`
-      ].filter(Boolean)
+
+      // Marketing de republicação por queda real de preço:
+      // compara com o último preço efetivamente enviado deste produto neste canal.
+      let priceDropCallout = ""
+      let priceDropDetail = ""
+      let priceDropMeta: Record<string, unknown> | null = null
+      try {
+        const { data: lastSent } = await supabase
+          .from("flow_delivery_logs")
+          .select("metadata,created_at")
+          .eq("offer_id", job.offer_id)
+          .eq("channel_id", job.channel_id)
+          .eq("status", "sent")
+          .neq("delivery_job_id", job.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        const previousPublishedPrice = Number(lastSent?.metadata?.offer_snapshot?.price || 0)
+        const currentPublishedPrice = Number(offer?.price || 0)
+        const priceDropPct =
+          previousPublishedPrice > 0 && currentPublishedPrice > 0 && currentPublishedPrice < previousPublishedPrice
+            ? ((previousPublishedPrice - currentPublishedPrice) / previousPublishedPrice) * 100
+            : 0
+
+        if (priceDropPct >= 5) {
+          if (priceDropPct >= 20) priceDropCallout = "🤯 <b>DESPENCOU! OLHA ESSE PREÇO AGORA</b>"
+          else if (priceDropPct >= 10) priceDropCallout = "🚨 <b>CAIU MAIS AINDA!</b>"
+          else priceDropCallout = "🔥 <b>O PREÇO CAIU DE NOVO!</b>"
+
+          priceDropDetail =
+            `Antes: <s>${previousPublishedPrice.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</s> → Agora: <b>${currentPublishedPrice.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b>`
+
+          priceDropMeta = {
+            previous_published_price: previousPublishedPrice,
+            current_price: currentPublishedPrice,
+            drop_pct: Number(priceDropPct.toFixed(2)),
+            tier: priceDropPct >= 20 ? "despencou" : priceDropPct >= 10 ? "caiu_mais" : "caiu_de_novo"
+          }
+        }
+      } catch (priceDropError) {
+        console.warn("Mavuri: falha não crítica ao calcular destaque de queda de preço:", priceDropError instanceof Error ? priceDropError.message : String(priceDropError))
+      }
+
+      const isMagalu = Boolean(offer?.metadata?.magalu)
+      const installments = String(offer?.metadata?.magalu?.installments || "").trim()
+
+      const messageLines = isMagalu
+        ? [
+            priceDropCallout,
+            priceDropDetail,
+            "💙 <b>OFERTA MAGALU</b>",
+            "",
+            `📦 <b>${escapeHtml(displayTitle)}</b>`,
+            discount > 0 ? `🔥 <b>${discount.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% OFF</b>` : "",
+            old > Number(offer?.price || 0) ? `De: <s>${old.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</s>` : "",
+            `💰 <b>${price}</b>`,
+            installments ? `💳 ${escapeHtml(installments)}` : "",
+            offer?.coupon ? `🎟️ Cupom: <code>${escapeHtml(offer.coupon)}</code>` : "",
+            freeShipping ? "🚚 <b>Frete grátis</b>" : "",
+            "",
+            `👉 <a href="${escapeHtml(destinationUrl.toString())}"><b>VER NO MAGALU</b></a>`,
+            `🔗 ${escapeHtml(destinationUrl.toString())}`,
+            "",
+            "⚠️ Preço e disponibilidade podem mudar a qualquer momento."
+          ].filter(Boolean)
+        : [
+            priceDropCallout,
+            priceDropDetail,
+            priceDropCallout ? "" : "",
+            `${category.emoji} <b>${escapeHtml(displayTitle)}</b>`,
+            discount > 0 ? `🔥 <b>${discount.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% OFF</b>` : "",
+            old > Number(offer?.price || 0) ? `De: <s>${old.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</s>` : "",
+            hasMatchedCoupon ? `💵 Preço da oferta: <b>${matchedBasePriceText}</b>` : `💰 <b>${price}</b>`,
+            hasMatchedCoupon
+              ? `🎟️ Cupom: <code>${escapeHtml(matchedCouponCode)}</code>${matchedSavingsText ? ` (economiza ${matchedSavingsText})` : ""}`
+              : (offer?.coupon ? `🎟️ Cupom: <b>${escapeHtml(offer.coupon)}</b>` : ""),
+            hasMatchedCoupon ? `💰 <b>COM CUPOM: ${price}</b>` : "",
+            hasMatchedCoupon ? "ℹ️ Cupom sujeito à elegibilidade e disponibilidade no Mercado Livre." : "",
+            freeShipping ? "🚚 <b>Frete grátis</b>" : "",
+            "",
+            `👉 <a href="${escapeHtml(destinationUrl.toString())}"><b>COMPRAR AGORA</b></a>`,
+            `🔗 ${escapeHtml(destinationUrl.toString())}`
+          ].filter(Boolean)
       const text = messageLines.join("\n")
 
       const imageUrl = /^https?:\/\//i.test(String(offer?.image_url || "").trim())
         ? String(offer.image_url).trim()
         : ""
-      const telegramMethod = imageUrl ? "sendPhoto" : "sendMessage"
-      const telegramCaption = text.length > 1024 ? `${text.slice(0, 1000)}…` : text
-      const telegramBody = imageUrl
-        ? { chat_id: channel.external_ref, photo: imageUrl, caption: telegramCaption, parse_mode: "HTML" }
-        : { chat_id: channel.external_ref, text, parse_mode: "HTML", disable_web_page_preview: true }
-
-      let response: Response
-      try {
-        response = await fetch(`https://api.telegram.org/bot${botToken}/${telegramMethod}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(telegramBody)
-        })
-      } catch (error) {
-        throw new Error(`Falha de rede ao chamar Telegram: ${error instanceof Error ? error.message : String(error)}`)
-      }
-
-      const telegram = await response.json()
-      if (!response.ok || !telegram.ok) {
-        const description = telegram?.description || `Telegram HTTP ${response.status}`
-        const error = new Error(description)
-        ;(error as Error & { retryable?: boolean }).retryable = response.status === 429 || response.status >= 500
-        throw error
+      let externalMessageId = ""
+      let sendMode = "text"
+      if (channel.type === "telegram") {
+        const telegramMethod = imageUrl ? "sendPhoto" : "sendMessage"
+        const telegramCaption = text.length > 1024 ? text.slice(0, 1000) + "…" : text
+        const telegramBody = imageUrl
+          ? { chat_id: channel.external_ref, photo: imageUrl, caption: telegramCaption, parse_mode: "HTML" }
+          : { chat_id: channel.external_ref, text, parse_mode: "HTML", disable_web_page_preview: true }
+        let response: Response
+        try {
+          response = await fetch("https://api.telegram.org/bot" + botToken + "/" + telegramMethod, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(telegramBody)
+          })
+        } catch (cause) {
+          throw new Error("Falha de rede ao chamar Telegram: " + (cause instanceof Error ? cause.message : String(cause)))
+        }
+        const telegram = await response.json()
+        if (!response.ok || !telegram.ok) {
+          const error = new Error(telegram?.description || "Telegram HTTP " + response.status)
+          ;(error as Error & { retryable?: boolean }).retryable = response.status === 429 || response.status >= 500
+          throw error
+        }
+        externalMessageId = String(telegram.result?.message_id || "")
+        sendMode = imageUrl ? "photo" : "text"
+      } else {
+        const whatsappText = whatsappFromTelegramHtml(text)
+        // Preserve the complete affiliate link: long captions must use text-only mode.
+        let route: "image" | "text" = imageUrl && whatsappText.length <= 1000 ? "image" : "text"
+        let result = await whapiPost(
+          route,
+          route === "image"
+            ? { to: channel.external_ref, media: imageUrl, caption: whatsappText }
+            : { to: channel.external_ref, body: whatsappText },
+          whapiToken
+        )
+        // A bad remote image URL should not prevent sending the offer text.
+        if (!result.success && route === "image" && [400, 415, 422].includes(result.status)) {
+          console.warn("Mavuri Whapi: imagem recusada, tentando texto (HTTP " + result.status + ")")
+          route = "text"
+          result = await whapiPost("text", { to: channel.external_ref, body: whatsappText }, whapiToken)
+        }
+        if (!result.success) {
+          const error = new Error("Whapi HTTP " + result.status + ": " + result.error)
+          // Only a definite rate-limit response is safe to retry automatically.
+          ;(error as Error & { retryable?: boolean }).retryable = result.status === 429
+          throw error
+        }
+        externalMessageId = String(result.data?.message?.id || result.data?.sent_message?.id || result.data?.id || "")
+        sendMode = route
       }
 
       const { error: deliveryLogError } = await supabase.from("flow_delivery_logs").insert({
@@ -275,8 +480,8 @@ Deno.serve(async (req) => {
         offer_id: job.offer_id,
         channel_id: job.channel_id,
         status: "sent",
-        external_message_id: String(telegram.result?.message_id || ""),
-        metadata: { provider: "telegram", attempt: nextAttempt }
+        external_message_id: externalMessageId,
+        metadata: { provider: providerName, attempt: nextAttempt, send_mode: sendMode, price_drop_callout: priceDropMeta }
       })
       if (deliveryLogError) throw new Error("Falha ao registrar entrega confirmada: " + deliveryLogError.message)
 
@@ -285,6 +490,35 @@ Deno.serve(async (req) => {
         .eq("id", job.id)
         .eq("status", "processing")
       if (sentUpdateError) throw new Error("Falha ao finalizar job entregue: " + sentUpdateError.message)
+
+
+      // Fan-out: the WhatsApp group receives its own independent delivery job.
+      // This is idempotent and cannot change the status of a successful Telegram post.
+      if (channel.type === "telegram" && whapiToken) {
+        const { data: mirrors, error: lookupError } = await supabase
+          .from("flow_channels")
+          .select("id")
+          .eq("user_id", job.user_id)
+          .eq("type", "whatsapp")
+          .eq("status", "connected")
+          .contains("settings", { mirror_telegram_channel_id: channel.id })
+        if (lookupError) {
+          console.error("Mavuri WhatsApp: falha ao localizar espelhos:", lookupError.message)
+        } else {
+          for (const mirror of mirrors || []) {
+            const { error: enqueueError } = await supabase.from("flow_delivery_jobs").upsert({
+              user_id: job.user_id,
+              offer_id: job.offer_id,
+              channel_id: mirror.id,
+              status: "queued",
+              attempts: 0,
+              scheduled_for: new Date().toISOString(),
+              delivery_key: "whapi-mirror:" + job.id + ":" + mirror.id
+            }, { onConflict: "user_id,delivery_key", ignoreDuplicates: true })
+            if (enqueueError) console.error("Mavuri WhatsApp: falha ao enfileirar oferta:", enqueueError.message)
+          }
+        }
+      }
 
       sent += 1
       results.push({ id: job.id, status: "sent", attempts: nextAttempt })
@@ -316,7 +550,7 @@ Deno.serve(async (req) => {
           offer_id: job.offer_id,
           channel_id: job.channel_id,
           status: "retry",
-          metadata: { provider: "telegram", attempt: nextAttempt, next_attempt_at: scheduledFor, error: message }
+          metadata: { provider: providerName, attempt: nextAttempt, next_attempt_at: scheduledFor, error: message }
         })
         if (retryLogError) console.error("Falha ao registrar tentativa de retry:", retryLogError.message)
 
@@ -340,7 +574,7 @@ Deno.serve(async (req) => {
           offer_id: job.offer_id,
           channel_id: job.channel_id,
           status: "failed",
-          metadata: { provider: "telegram", attempt: nextAttempt, error: message }
+          metadata: { provider: providerName, attempt: nextAttempt, error: message }
         })
         if (failedLogError) console.error("Falha ao registrar falha de entrega:", failedLogError.message)
 
