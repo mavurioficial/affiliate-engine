@@ -90,3 +90,5 @@
 }
 
 .cat-result-notice { margin: 13px 0; border: 1px solid #b8d4ed; background: #eef6fd; color: #24527a; font-size: 12px; font-weight: 750; border-radius: 9px; padding: 12px; }
+
+.cat-dialog-note[hidden] { display: none; }
