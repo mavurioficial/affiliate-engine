@@ -111,6 +111,7 @@ export function renderDashboardOperations(state, escapeHtml, formatDateTime) {
     quantity(categories.other) + '</b><small>Em Outros</small></div><div><b>' +
     quantity(categories.fallback) + '</b><small>Por fallback</small></div></div>' +
     '<div class="ops-bar ops-quality-bar"><i style="width:' + auditPct + '%"></i></div>' +
+    '<a href="#mavuri-category-reviews" class="ops-review-link">🔎 Abrir ' + quantity(categories.needs_review) + ' ofertas em revisão ↓</a>' +
     '<h3 class="ops-small-title">Ofertas únicas por marketplace</h3>' +
     '<div class="ops-market-grid">' + marketHtml + '</div></section></div>' +
     (paused ? '<p class="ops-alert">WhatsApp pausado por limite do provedor. O Telegram continua independente.' +
