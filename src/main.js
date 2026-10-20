@@ -1,6 +1,7 @@
 import { getSession, onAuthChange, signIn, signOut, supabase } from './auth.js'
 import { loadDashboardOperations, renderDashboardOperations, normalizeDashboardPeriod } from './application/dashboard-operations.js'
 import { loadCategoryReviews, renderCategoryReviews, normalizeCategoryReviewView, normalizeCategoryReviewMarketplace } from './application/category-review.js'
+import { applyCategoryDecision, undoCategoryDecision, loadCategoryDecisionHistory, renderCategoryHistoryList } from './application/category-decisions.js'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
@@ -16,7 +17,7 @@ let session = null
 let page = 'operations'
 let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
-let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '' }
+let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
 
 let dashboardState = {
   loading: false,
@@ -923,6 +924,135 @@ async function render() {
   bindEvents()
 }
 
+
+function bindCategoryDecisionEvents() {
+  const confirmDialog = document.getElementById('cat-decision-confirm')
+  const historyDialog = document.getElementById('cat-decision-history')
+  if (!confirmDialog || !historyDialog) return
+
+  let pending = null
+  const submit = confirmDialog.querySelector('[data-cat-confirm-submit]')
+  const cancel = confirmDialog.querySelector('[data-cat-confirm-cancel]')
+  const errorField = confirmDialog.querySelector('#cat-confirm-error')
+  const noteField = confirmDialog.querySelector('#cat-confirm-note')
+
+  function showDecision({ item, action, targetSlug = null, actionId = null }) {
+    pending = { offerId: item.offer_id, title: item.title, action, targetSlug, actionId,
+      updatedAt: item.audit_updated_at }
+    confirmDialog.querySelector('#cat-confirm-product').textContent = item.title || 'Produto'
+    confirmDialog.querySelector('#cat-confirm-title').textContent =
+      action === 'approve' ? 'Aprovar classificação' : action === 'correct'
+        ? 'Confirmar correção da categoria' : 'Desfazer última decisão'
+    const categoryNames = categoryReviewState.data?.categories || []
+    const label = (slug) => categoryNames.find((cat) => cat.slug === slug)?.name || slug || 'Sem categoria'
+    confirmDialog.querySelector('#cat-confirm-description').textContent =
+      action === 'approve'
+        ? 'Confirmar que a categoria "' + label(item.category_slug) + '" está correta para esta oferta?'
+        : action === 'correct'
+          ? 'Alterar somente esta oferta de "' + label(item.category_slug) +
+            '" para "' + label(targetSlug) + '"?'
+          : 'Restaurar a classificação anterior ou automática deste produto?'
+    noteField.value = ''
+    noteField.closest('label').hidden = action === 'undo'
+    errorField.hidden = true
+    errorField.textContent = ''
+    submit.disabled = false
+    submit.textContent = action === 'undo' ? 'Confirmar reversão' : 'Confirmar decisão'
+    confirmDialog.showModal()
+  }
+
+  const findItem = (id) =>
+    (categoryReviewState.data?.items || []).find((item) => item.offer_id === id)
+
+  document.querySelectorAll('[data-cat-approve]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const item = findItem(button.dataset.catApprove)
+      if (item?.needs_review && item?.category_slug !== 'outros' && item.audit_updated_at) {
+        showDecision({ item, action: 'approve' })
+      }
+    })
+  })
+
+  document.querySelectorAll('[data-cat-correct]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const item = findItem(button.dataset.catCorrect)
+      const targetSlug = button.closest('.cat-review-card')?.querySelector('[data-cat-target]')?.value
+      const validCategories = categoryReviewState.data?.categories || []
+      if (!item || !item.needs_review || !item.audit_updated_at) return
+      if (!targetSlug || targetSlug === item.category_slug ||
+          !validCategories.some((cat) => cat.slug === targetSlug)) {
+        window.alert('Selecione uma categoria diferente da atual.')
+        return
+      }
+      showDecision({ item, action: 'correct', targetSlug })
+    })
+  })
+
+  document.querySelectorAll('[data-cat-undo]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const item = findItem(button.dataset.catOffer)
+      const actionId = Number(button.dataset.catUndo)
+      if (!item || !item.manual_decision || !Number.isSafeInteger(actionId)) return
+      showDecision({ item, action: 'undo', actionId })
+    })
+  })
+
+  document.querySelectorAll('[data-cat-history]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const item = findItem(button.dataset.catHistory)
+      if (!item) return
+      historyDialog.querySelector('#cat-history-product').textContent = item.title || ''
+      const entries = historyDialog.querySelector('#cat-history-entries')
+      entries.textContent = 'Carregando histórico…'
+      historyDialog.showModal()
+      try {
+        const history = await loadCategoryDecisionHistory(supabase, item.offer_id)
+        if (historyDialog.open) entries.innerHTML = renderCategoryHistoryList(history, escapeHtml, formatDateTimeBR)
+      } catch (error) {
+        if (historyDialog.open) entries.textContent = error?.message || 'Não foi possível carregar o histórico.'
+      }
+    })
+  })
+
+  cancel.addEventListener('click', () => { pending = null; confirmDialog.close() })
+  historyDialog.querySelector('[data-cat-history-close]').addEventListener('click', () => historyDialog.close())
+  confirmDialog.addEventListener('close', () => { pending = null })
+
+  submit.addEventListener('click', async () => {
+    if (!pending || submit.disabled) return
+    submit.disabled = true
+    errorField.textContent = ''
+    errorField.hidden = true
+    try {
+      const completedAction = pending.action
+      if (pending.action === 'undo') {
+        await undoCategoryDecision(supabase, pending.actionId)
+      } else {
+        await applyCategoryDecision(supabase, {
+          offerId: pending.offerId, action: pending.action,
+          targetSlug: pending.targetSlug, updatedAt: pending.updatedAt,
+          note: noteField.value
+        })
+      }
+      pending = null
+      confirmDialog.close()
+      dashboardOperationsState = { ...dashboardOperationsState, loaded: false, error: '' }
+      categoryReviewState = {
+        ...categoryReviewState, loaded: false, data: null, error: '',
+        notice: completedAction === 'approve' ? 'Categoria aprovada e decisão registrada.' :
+          completedAction === 'correct' ? 'Categoria corrigida e decisão registrada.' :
+          'Última decisão desfeita. Classificação recalculada.'
+      }
+      await render()
+      document.getElementById('mavuri-category-reviews')?.scrollIntoView({ block: 'start' })
+    } catch (error) {
+      errorField.textContent = error?.message || 'Não foi possível confirmar a decisão.'
+      errorField.hidden = false
+      submit.disabled = false
+    }
+  })
+}
+
 function bindEvents() {
   document
     .querySelectorAll(
@@ -1005,6 +1135,8 @@ function bindEvents() {
       document.getElementById('mavuri-category-reviews')?.scrollIntoView({ block: 'start' })
     })
   })
+
+  bindCategoryDecisionEvents()
 
   const dashboardRefreshButton = document.querySelector('[data-dashboard-refresh]')
 
@@ -1420,7 +1552,7 @@ async function bootstrap() {
 
           flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
           dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
-          categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '' }
+          categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
           dashboardState = {
             loading: false,
             loaded: false,

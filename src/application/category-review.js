@@ -1,6 +1,7 @@
-// Mavuri v0.1.45 — auditoria individual de categorias.
-// Leitura autenticada e filtrada pelo proprietário. Esta tela NÃO altera mapeamentos.
-export const CATEGORY_REVIEW_VIEWS = ['review', 'other', 'all']
+// Mavuri v0.1.46 — auditoria com confirmação e histórico de ações individuais.
+// Nunca cria mapeamentos automáticos de categoria oficial.
+import { renderCategoryDecisionControls, renderCategoryDecisionDialogs } from './category-decisions.js'
+export const CATEGORY_REVIEW_VIEWS = ['review', 'other', 'reviewed', 'all']
 export const CATEGORY_REVIEW_MARKETS = ['', 'mercadolivre', 'shopee', 'magalu', 'amazon']
 const CATEGORY_REVIEW_LIMIT = 50
 
@@ -72,6 +73,7 @@ function safeHttpUrl(value) {
   }
 }
 function reviewBadge(item) {
+  if (item.manual_decision) return [item.manual_decision === 'correct' ? 'Corrigida' : 'Aprovada', 'classified']
   const reason = String(item.review_reason || '')
   if (reason.startsWith('category_title_conflict:')) return ['Conflito', 'conflict']
   if (item.category_slug === 'outros') return ['Sem classificação útil', 'unclassified']
@@ -93,9 +95,10 @@ export function renderCategoryReviews(state, escapeHtml, formatDateTimeBR) {
   const reviewCount = data?.review_total ?? 0
   const otherCount = data?.other_total ?? 0
   const error = state.error ? '<p class="cat-error" role="alert">' + safe(state.error) + '</p>' : ''
+  const notice = state.notice ? '<p class="cat-result-notice" role="status">' + safe(state.notice) + '</p>' : ''
 
   const selectView = CATEGORY_REVIEW_VIEWS.map((id) => {
-    const label = id === 'review' ? 'Em revisão' : id === 'other' ? 'Classificadas em Outros' : 'Todas auditadas'
+    const label = id === 'review' ? 'Em revisão' : id === 'other' ? 'Classificadas em Outros' : id === 'reviewed' ? 'Revisadas manualmente' : 'Todas auditadas'
     return '<option value="' + id + '"' + (id === view ? ' selected' : '') + '>' + label + '</option>'
   }).join('')
   const selectMarkets = CATEGORY_REVIEW_MARKETS.map((id) => {
@@ -139,8 +142,10 @@ export function renderCategoryReviews(state, escapeHtml, formatDateTimeBR) {
         '<span class="cat-expand" aria-hidden="true">⌄</span>' +
       '</summary>' +
       '<div class="cat-details">' +
-        '<div class="cat-reason"><strong>Por que revisar?</strong><span>' +
-          safe(displayReason(item.review_reason, hasOfficial)) + '</span></div>' +
+        (item.manual_decision
+          ? '<div class="cat-reason cat-reason-approved"><strong>Revisão manual concluída</strong><span>Decisão registrada com histórico e reversão da última ação.</span></div>'
+          : '<div class="cat-reason"><strong>Por que revisar?</strong><span>' +
+              safe(displayReason(item.review_reason, hasOfficial)) + '</span></div>') +
         '<div class="cat-comparison">' +
           '<div><small>Categoria oficial do marketplace</small><strong>' +
             safe(originalName || (officialId ? 'Nome não informado' : 'Não informada')) + '</strong>' +
@@ -157,7 +162,8 @@ export function renderCategoryReviews(state, escapeHtml, formatDateTimeBR) {
           '<span><b>Etiquetas:</b> ' + safe(tags.length ? tags.join(', ') : 'Nenhuma') + '</span></div>' +
         suggestion +
         '<div class="cat-actions">' + action +
-          '<span>Somente leitura · nenhuma correção aplicada</span></div>' +
+          '<span>Somente leitura até você confirmar uma decisão</span></div>' +
+        renderCategoryDecisionControls(item, data?.categories, escapeHtml) +
       '</div>' +
     '</details>'
   }).join('')
@@ -171,13 +177,13 @@ export function renderCategoryReviews(state, escapeHtml, formatDateTimeBR) {
       '<h2>Auditoria de categorias</h2>' +
       '<p>Abra cada produto e confira a categoria oficial, a classificação atual e o motivo do alerta.</p></div>' +
       '<span class="cat-count">' + (data ? Number(reviewCount).toLocaleString('pt-BR') : '—') +
-        ' em revisão</span></div>' +
+        ' em revisão · ' + (data ? Number(data.reviewed_total || 0).toLocaleString('pt-BR') : '—') + ' revisadas</span></div>' +
     '<div class="cat-review-filters">' +
       '<label><span>Situação</span><select data-cat-view>' + selectView + '</select></label>' +
       '<label><span>Marketplace</span><select data-cat-marketplace>' + selectMarkets + '</select></label>' +
       '<span class="cat-filter-note">' + Number(otherCount).toLocaleString('pt-BR') +
         ' em Outros no período e marketplace selecionados</span>' +
-    '</div>' + error +
+    '</div>' + error + notice +
     (state.loading && !data ? '<p class="cat-empty">Carregando ofertas auditadas…</p>'
       : data
         ? '<div class="cat-results"><span>' + firstNumber + '–' + lastNumber + ' de ' +
@@ -191,7 +197,7 @@ export function renderCategoryReviews(state, escapeHtml, formatDateTimeBR) {
             '<button type="button" data-cat-page="next"' +
               (hasNext ? '' : ' disabled') + '>Próxima →</button></div></div>'
         : '<p class="cat-empty">Não foi possível carregar a auditoria.</p>') +
-    '<p class="cat-footnote">A confiança registrada é do classificador e não prova que a categoria está correta. ' +
-      'Indícios estatísticos não representam mapeamentos aprovados.</p>' +
-  '</section>'
+    '<p class="cat-footnote">A confiança registrada pelo classificador não prova que uma categoria esteja correta. ' +
+      'Decisões manuais são individuais, registradas em histórico e não aprovam mapeamentos oficiais em lote.</p>' +
+  '</section>' + renderCategoryDecisionDialogs()
 }
