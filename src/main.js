@@ -17,7 +17,7 @@ let session = null
 let page = 'operations'
 let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
-let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '' }
+let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
 
 let dashboardState = {
   loading: false,
@@ -1024,6 +1024,7 @@ function bindCategoryDecisionEvents() {
     errorField.textContent = ''
     errorField.hidden = true
     try {
+      const completedAction = pending.action
       if (pending.action === 'undo') {
         await undoCategoryDecision(supabase, pending.actionId)
       } else {
@@ -1036,7 +1037,12 @@ function bindCategoryDecisionEvents() {
       pending = null
       confirmDialog.close()
       dashboardOperationsState = { ...dashboardOperationsState, loaded: false, error: '' }
-      categoryReviewState = { ...categoryReviewState, loaded: false, data: null, error: '' }
+      categoryReviewState = {
+        ...categoryReviewState, loaded: false, data: null, error: '',
+        notice: completedAction === 'approve' ? 'Categoria aprovada e decisão registrada.' :
+          completedAction === 'correct' ? 'Categoria corrigida e decisão registrada.' :
+          'Última decisão desfeita. Classificação recalculada.'
+      }
       await render()
       document.getElementById('mavuri-category-reviews')?.scrollIntoView({ block: 'start' })
     } catch (error) {
@@ -1546,7 +1552,7 @@ async function bootstrap() {
 
           flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
           dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
-          categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '' }
+          categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
           dashboardState = {
             loading: false,
             loaded: false,
