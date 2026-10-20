@@ -95,6 +95,7 @@ export function renderCategoryReviews(state, escapeHtml, formatDateTimeBR) {
   const reviewCount = data?.review_total ?? 0
   const otherCount = data?.other_total ?? 0
   const error = state.error ? '<p class="cat-error" role="alert">' + safe(state.error) + '</p>' : ''
+  const notice = state.notice ? '<p class="cat-result-notice" role="status">' + safe(state.notice) + '</p>' : ''
 
   const selectView = CATEGORY_REVIEW_VIEWS.map((id) => {
     const label = id === 'review' ? 'Em revisão' : id === 'other' ? 'Classificadas em Outros' : id === 'reviewed' ? 'Revisadas manualmente' : 'Todas auditadas'
@@ -182,7 +183,7 @@ export function renderCategoryReviews(state, escapeHtml, formatDateTimeBR) {
       '<label><span>Marketplace</span><select data-cat-marketplace>' + selectMarkets + '</select></label>' +
       '<span class="cat-filter-note">' + Number(otherCount).toLocaleString('pt-BR') +
         ' em Outros no período e marketplace selecionados</span>' +
-    '</div>' + error +
+    '</div>' + error + notice +
     (state.loading && !data ? '<p class="cat-empty">Carregando ofertas auditadas…</p>'
       : data
         ? '<div class="cat-results"><span>' + firstNumber + '–' + lastNumber + ' de ' +
