@@ -1,4 +1,5 @@
 import { getSession, onAuthChange, signIn, signOut, supabase } from './auth.js'
+import { loadDashboardOperations, renderDashboardOperations, normalizeDashboardPeriod } from './application/dashboard-operations.js'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
@@ -11,8 +12,10 @@ const root =
   document.querySelector('#app')
 
 let session = null
-let page = 'dashboard'
+let page = 'operations'
 let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
+let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
+
 let dashboardState = {
   loading: false,
   loaded: false,
@@ -133,8 +136,13 @@ function calculateDiscount(
 function navigation() {
   const navItems = [
     {
+      id: 'operations',
+      label: 'Painel Mavuri',
+      icon: '📊'
+    },
+    {
       id: 'dashboard',
-      label: 'Dashboard',
+      label: 'Detalhamento',
       icon: '⌂'
     },
     {
@@ -453,6 +461,19 @@ function flowPage() {
       </div>
     </section>
   `
+}
+
+async function loadDashboardOperationsState() {
+  dashboardOperationsState = { ...dashboardOperationsState, loading: true, error: '' }
+  try {
+    const data = await loadDashboardOperations(supabase, dashboardOperationsState.days)
+    dashboardOperationsState = { ...dashboardOperationsState, loading: false, loaded: true, data, error: '' }
+  } catch (error) {
+    dashboardOperationsState = {
+      ...dashboardOperationsState, loading: false, loaded: true,
+      error: error?.message || 'Não foi possível consultar a operação.'
+    }
+  }
 }
 
 async function loadDashboardState() {
@@ -797,7 +818,24 @@ function dashboard() {
     </section>
   `
 }
+function operationalPage() {
+  return `
+    <header class="page-heading dashboard-heading">
+      <div>
+        <p class="eyebrow">CONTROLE DA OPERAÇÃO</p>
+        <h1>Painel Mavuri</h1>
+        <p>Acompanhe o Discovery, a qualidade das ofertas e as publicações em todos os canais.</p>
+      </div>
+      <div class="dashboard-heading-actions">
+        <button class="primary" type="button" data-ops-refresh>↻ Atualizar dados</button>
+      </div>
+    </header>
+    ${renderDashboardOperations(dashboardOperationsState, escapeHtml, formatDateTimeBR)}
+  `
+}
+
 function currentPage() {
+  if (page === 'operations') return operationalPage()
   if (page === 'flow') {
     return flowPage()
   }
@@ -816,6 +854,10 @@ async function render() {
     bindEvents()
 
     return
+  }
+
+  if (page === 'operations' && !dashboardOperationsState.loaded && !dashboardOperationsState.loading) {
+    await loadDashboardOperationsState()
   }
 
   if (page === 'dashboard' && !dashboardState.loaded && !dashboardState.loading) {
@@ -886,6 +928,24 @@ function bindEvents() {
         )
       }
     )
+
+  const operationsRefreshButton = document.querySelector('[data-ops-refresh]')
+  if (operationsRefreshButton) {
+    operationsRefreshButton.addEventListener('click', async () => {
+      operationsRefreshButton.disabled = true
+      dashboardOperationsState = { ...dashboardOperationsState, loaded: false, error: '' }
+      await render()
+    })
+  }
+
+  document.querySelectorAll('[data-dashboard-period]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const period = normalizeDashboardPeriod(button.dataset.dashboardPeriod)
+      if (period === dashboardOperationsState.days) return
+      dashboardOperationsState = { ...dashboardOperationsState, days: period, loaded: false, error: '' }
+      await render()
+    })
+  })
 
   const dashboardRefreshButton = document.querySelector('[data-dashboard-refresh]')
 
@@ -1295,11 +1355,12 @@ async function bootstrap() {
 
         if (!session) {
           page =
-            'dashboard'
+            'operations'
 
           getFlowCaptureDraftStorage()?.clear()
 
           flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
+          dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
           dashboardState = {
             loading: false,
             loaded: false,
