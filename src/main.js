@@ -1113,6 +1113,23 @@ function bindCategoryDecisionEvents() {
       submit.disabled = false
     }
   })
+
+  // Reopen a pending confirmation after a browser reload or an intentional
+  // rerender, but ONLY when the audit snapshot still matches the database.
+  const savedPending = categoryUiDraft.pending
+  const savedItem = savedPending && findItem(savedPending.offerId)
+  if (savedItem && canRestorePendingCategoryDecision(
+    savedPending, savedItem, categoryReviewState.data?.categories
+  )) {
+    showDecision({
+      item: savedItem, action: savedPending.action,
+      targetSlug: savedPending.targetSlug, actionId: savedPending.actionId,
+      restoreNote: savedPending.note
+    })
+  } else if (savedItem && savedPending) {
+    categoryUiDraft.pending = null
+    persistCategoryUiDraft()
+  }
 }
 
 function bindEvents() {
@@ -1196,6 +1213,14 @@ function bindEvents() {
       await render()
       document.getElementById('mavuri-category-reviews')?.scrollIntoView({ block: 'start' })
     })
+  })
+
+
+  document.querySelectorAll('.cat-review-card[data-offer-id]').forEach((card) => {
+    card.addEventListener('toggle', () => captureVisibleCategoryDraft())
+  })
+  document.querySelectorAll('.cat-review-card [data-cat-target]').forEach((selector) => {
+    selector.addEventListener('change', () => captureVisibleCategoryDraft())
   })
 
   bindCategoryDecisionEvents()
@@ -1597,42 +1622,42 @@ async function bootstrap() {
     session =
       await getSession()
 
+    if (session) restoreDraftForAuthenticatedUser()
     await render()
 
     onAuthChange(
       async (
         nextSession
       ) => {
-        session =
-          nextSession
+        const previousUserId = session?.user?.id || null
+        const nextUserId = nextSession?.user?.id || null
+        session = nextSession
+
+        // Supabase emits SIGNED_IN/TOKEN_REFRESHED when the browser tab regains
+        // focus. Rebuilding the whole DOM at that point discards open cards
+        // and native modal dialogs. No UI rerender is needed for the same user.
+        if (previousUserId === nextUserId) return
 
         if (!session) {
-          page =
-            'operations'
-
-          getFlowCaptureDraftStorage()?.clear()
+          clearCategoryReviewDraft(categoryDraftStorage(), previousUserId)
+          categoryUiDraft = emptyCategoryReviewDraft()
+          page = 'operations'
 
           flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
           dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
           categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
           dashboardState = {
-            loading: false,
-            loaded: false,
-            offerJobs: [],
-            couponJobs: [],
-            offers: [],
-            coupons: [],
-            channels: [],
-            marketplaces: [],
-            clicks: [],
-            error: '',
-            updatedAt: null
+            loading: false, loaded: false, offerJobs: [], couponJobs: [], offers: [],
+            coupons: [], channels: [], marketplaces: [], clicks: [], error: '', updatedAt: null
           }
+        } else {
+          restoreDraftForAuthenticatedUser()
         }
 
         await render()
       }
     )
+
 
   } catch (error) {
     console.error(error)
