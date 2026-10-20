@@ -1,6 +1,6 @@
 // Mavuri v0.1.46 — auditoria com confirmação e histórico de ações individuais.
 // Nunca cria mapeamentos automáticos de categoria oficial.
-import { renderCategoryDecisionControls, renderCategoryDecisionDialogs } from './category-decisions.js?v=0.1.46'
+import { renderCategoryDecisionControls, renderCategoryDecisionDialogs } from './category-decisions.js?v=0.1.46.1'
 export const CATEGORY_REVIEW_VIEWS = ['review', 'other', 'reviewed', 'all']
 export const CATEGORY_REVIEW_MARKETS = ['', 'mercadolivre', 'shopee', 'magalu', 'amazon']
 const CATEGORY_REVIEW_LIMIT = 50
