@@ -1,5 +1,6 @@
 import { getSession, onAuthChange, signIn, signOut, supabase } from './auth.js'
 import { loadDashboardOperations, renderDashboardOperations, normalizeDashboardPeriod } from './application/dashboard-operations.js'
+import { loadCategoryReviews, renderCategoryReviews, normalizeCategoryReviewView, normalizeCategoryReviewMarketplace } from './application/category-review.js'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
@@ -15,6 +16,7 @@ let session = null
 let page = 'operations'
 let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
+let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '' }
 
 let dashboardState = {
   loading: false,
@@ -476,6 +478,19 @@ async function loadDashboardOperationsState() {
   }
 }
 
+async function loadCategoryReviewState() {
+  categoryReviewState = { ...categoryReviewState, loading: true, error: '' }
+  try {
+    const data = await loadCategoryReviews(supabase, categoryReviewState)
+    categoryReviewState = { ...categoryReviewState, data, loaded: true, loading: false, error: '' }
+  } catch (error) {
+    categoryReviewState = {
+      ...categoryReviewState, loaded: true, loading: false,
+      error: error?.message || 'Não foi possível consultar as categorias.'
+    }
+  }
+}
+
 async function loadDashboardState() {
   dashboardState = { ...dashboardState, loading: true, error: '' }
 
@@ -831,6 +846,7 @@ function operationalPage() {
       </div>
     </header>
     ${renderDashboardOperations(dashboardOperationsState, escapeHtml, formatDateTimeBR)}
+    ${renderCategoryReviews(categoryReviewState, escapeHtml, formatDateTimeBR)}
   `
 }
 
@@ -858,6 +874,10 @@ async function render() {
 
   if (page === 'operations' && !dashboardOperationsState.loaded && !dashboardOperationsState.loading) {
     await loadDashboardOperationsState()
+  }
+
+  if (page === 'operations' && !categoryReviewState.loaded && !categoryReviewState.loading) {
+    await loadCategoryReviewState()
   }
 
   if (page === 'dashboard' && !dashboardState.loaded && !dashboardState.loading) {
@@ -934,6 +954,7 @@ function bindEvents() {
     operationsRefreshButton.addEventListener('click', async () => {
       operationsRefreshButton.disabled = true
       dashboardOperationsState = { ...dashboardOperationsState, loaded: false, error: '' }
+      categoryReviewState = { ...categoryReviewState, loaded: false, data: null, offset: 0, error: '' }
       await render()
     })
   }
@@ -943,7 +964,45 @@ function bindEvents() {
       const period = normalizeDashboardPeriod(button.dataset.dashboardPeriod)
       if (period === dashboardOperationsState.days) return
       dashboardOperationsState = { ...dashboardOperationsState, days: period, loaded: false, error: '' }
+      categoryReviewState = { ...categoryReviewState, days: period, offset: 0, data: null, loaded: false, error: '' }
       await render()
+    })
+  })
+
+  // Os filtros de categorias são apenas leitura; nenhuma seleção altera o banco.
+  const catViewSelector = document.querySelector('[data-cat-view]')
+  if (catViewSelector) {
+    catViewSelector.addEventListener('change', async () => {
+      categoryReviewState = {
+        ...categoryReviewState, view: normalizeCategoryReviewView(catViewSelector.value),
+        offset: 0, data: null, loaded: false, error: ''
+      }
+      await render()
+      document.getElementById('mavuri-category-reviews')?.scrollIntoView({ block: 'start' })
+    })
+  }
+  const catMarketSelector = document.querySelector('[data-cat-marketplace]')
+  if (catMarketSelector) {
+    catMarketSelector.addEventListener('change', async () => {
+      categoryReviewState = {
+        ...categoryReviewState, marketplace: normalizeCategoryReviewMarketplace(catMarketSelector.value),
+        offset: 0, data: null, loaded: false, error: ''
+      }
+      await render()
+      document.getElementById('mavuri-category-reviews')?.scrollIntoView({ block: 'start' })
+    })
+  }
+  document.querySelectorAll('[data-cat-page]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const direction = button.dataset.catPage
+      const total = Math.max(0, Number(categoryReviewState.data?.total || 0))
+      const current = Math.max(0, Number(categoryReviewState.offset || 0))
+      const nextOffset = direction === 'next'
+        ? Math.min(5000, current + 50) : Math.max(0, current - 50)
+      if (nextOffset === current || (direction === 'next' && nextOffset >= total)) return
+      categoryReviewState = { ...categoryReviewState, offset: nextOffset, data: null, loaded: false, error: '' }
+      await render()
+      document.getElementById('mavuri-category-reviews')?.scrollIntoView({ block: 'start' })
     })
   })
 
@@ -1361,6 +1420,7 @@ async function bootstrap() {
 
           flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
           dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
+          categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '' }
           dashboardState = {
             loading: false,
             loaded: false,
