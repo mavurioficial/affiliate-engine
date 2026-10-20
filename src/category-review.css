@@ -1,0 +1,83 @@
+/* Mavuri v0.1.45 — painel individual de auditoria. Somente leitura. */
+html { scroll-behavior: smooth; }
+.cat-review-panel {
+  margin-top: 22px;
+  padding: clamp(18px, 2.6vw, 30px);
+  border: 1px solid #d6e2f1;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 32px rgba(16,53,109,.045);
+  scroll-margin-top: 22px;
+}
+.cat-review-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.cat-review-header h2 { color: #173970; font-size: clamp(21px, 2.3vw, 27px); margin: 0 0 5px; }
+.cat-review-header p:not(.cat-eyebrow) { color: #64758d; font-size: 13px; margin: 0; line-height: 1.5; }
+.cat-eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .12em; color: #dd7920; margin: 0 0 8px; }
+.cat-count { background: #fff1df; color: #a45814; border: 1px solid #f5d5ae; padding: 9px 13px; border-radius: 999px; font-weight: 800; font-size: 12px; }
+.cat-review-filters { margin: 23px 0 16px; display: flex; align-items: flex-end; gap: 13px; flex-wrap: wrap; }
+.cat-review-filters label { display: grid; gap: 7px; min-width: min(230px, 100%); flex: 1 1 220px; }
+.cat-review-filters label span { color: #5d7190; font-size: 11px; font-weight: 750; }
+.cat-review-filters select { width: 100%; min-height: 40px; font-size: 13px; color: #203f72; background: #f9fbfe; border: 1px solid #d7e3f0; border-radius: 8px; padding: 9px 10px; }
+.cat-filter-note { flex: 1 1 190px; color: #7789a1; font-size: 11px; text-align: right; padding-bottom: 6px; }
+.cat-results { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin: 7px 0 12px; font-size: 11px; color: #71829b; font-weight: 650; }
+.cat-review-card { border: 1px solid #dfe7f3; border-radius: 12px; background: #fff; margin-bottom: 10px; overflow: hidden; }
+.cat-review-card[open] { border-color: #a9c4e5; background: #fbfdff; box-shadow: 0 5px 15px rgba(29,70,130,.05); }
+.cat-summary { display: flex; gap: 13px; align-items: center; list-style: none; cursor: pointer; padding: 11px 14px; }
+.cat-summary::-webkit-details-marker { display: none; }
+.cat-summary:hover { background: #f4f8fd; }
+.cat-summary:focus-visible { outline: 3px solid #71a5eb; outline-offset: -3px; }
+.cat-thumb { flex: 0 0 58px; width: 58px; height: 58px; border: 1px solid #e0e8f1; border-radius: 9px; overflow: hidden; display: grid; place-items: center; background: #f3f6fb; }
+.cat-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.cat-thumb span { font-size: 23px; }
+.cat-summary-main { min-width: 0; display: grid; flex: 1; gap: 6px; }
+.cat-summary-main strong { font-size: 13px; color: #233d65; line-height: 1.35; overflow-wrap: anywhere; }
+.cat-summary-meta { font-size: 11px; line-height: 1.35; color: #71829a; }
+.cat-review-badge { display: inline-flex; flex: 0 0 auto; align-items: center; padding: 6px 10px; font-size: 10px; font-weight: 800; border-radius: 999px; }
+.cat-review-badge.review { background: #fff2dc; color: #945e10; }
+.cat-review-badge.unclassified { background: #fce9e7; color: #9d3831; }
+.cat-review-badge.conflict { background: #f9e8ff; color: #76379b; }
+.cat-review-badge.classified { background: #e4f5ee; color: #187448; }
+.cat-expand { color: #7a93ae; font-size: 22px; line-height: 1; transition: transform .15s ease; }
+.cat-review-card[open] .cat-expand { transform: rotate(180deg); }
+.cat-details { padding: 16px 18px 19px; border-top: 1px solid #e0e8f1; }
+.cat-reason { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: #664818; padding: 11px 13px; border: 1px solid #f1dfc4; border-radius: 9px; background: #fffbf4; margin-bottom: 14px; }
+.cat-reason strong { color: #975d15; }
+.cat-comparison { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 13px; }
+.cat-comparison > div { display: grid; align-content: start; gap: 5px; padding: 12px; border-radius: 9px; background: #f1f5fb; border: 1px solid #e2eaf4; min-width: 0; }
+.cat-comparison small { font-size: 10px; font-weight: 700; color: #768ba8; line-height: 1.4; }
+.cat-comparison strong { font-size: 13px; color: #1c3b69; overflow-wrap: anywhere; }
+.cat-comparison span { font-size: 10px; color: #70829a; overflow-wrap: anywhere; }
+.cat-comparison .cat-warning { color: #b35222; font-weight: 750; }
+.cat-details-row { font-size: 11px; display: flex; flex-wrap: wrap; gap: 12px 22px; color: #657893; margin: 10px 0; overflow-wrap: anywhere; }
+.cat-details-row b { color: #3f5574; }
+.cat-statistical { background: #eef6ff; border-left: 3px solid #4a80be; padding: 10px; font-size: 11px; line-height: 1.6; color: #4a6384; border-radius: 3px 8px 8px 3px; margin-top: 10px; }
+.cat-statistical strong { color: #295c91; }
+.cat-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 13px; margin-top: 12px; border-top: 1px solid #e4ebf4; }
+.cat-action { display: inline-flex; text-decoration: none; font-weight: 750; color: white; background: #244b84; border-radius: 8px; padding: 9px 12px; font-size: 12px; }
+.cat-action:hover { color: white; background: #14396f; }
+.cat-action:focus-visible { outline: 3px solid #7ba6e9; }
+.cat-action-muted { font-size: 11px; color: #7c8997; }
+.cat-actions > span:last-child { font-size: 11px; color: #7d8ba0; }
+.cat-pagination { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; margin: 20px 0 10px; font-size: 12px; color: #637994; }
+.cat-pagination > div { display: flex; gap: 8px; }
+.cat-pagination button { border: 1px solid #bfcfe4; background: #fff; color: #23466e; border-radius: 7px; padding: 9px 13px; font-weight: 750; font-size: 12px; }
+.cat-pagination button:hover:not(:disabled) { background: #eff5fb; }
+.cat-pagination button:disabled { opacity: .4; cursor: default; }
+.cat-error { color: #9c3d34; background: #ffefed; border-radius: 8px; padding: 11px; font-size: 12px; }
+.cat-empty { color: #7c8ba0; text-align: center; padding: 28px 12px; font-size: 13px; }
+.cat-footnote { font-size: 11px; color: #8090a5; margin: 16px 0 0; line-height: 1.5; }
+.ops-review-link { display: inline-flex; width: fit-content; color: #225f9e; margin-top: 13px; margin-bottom: 3px; text-decoration: none; font-size: 12px; font-weight: 800; }
+.ops-review-link:hover { text-decoration: underline; color: #154270; }
+@media (max-width: 780px) {
+  .cat-comparison { grid-template-columns: 1fr; }
+  .cat-filter-note { text-align: left; }
+}
+@media (max-width: 540px) {
+  .cat-summary { gap: 9px; padding: 9px; flex-wrap: wrap; }
+  .cat-thumb { flex-basis: 47px; width: 47px; height: 47px; }
+  .cat-summary-main { flex-basis: calc(100% - 75px); }
+  .cat-review-badge { margin-left: 56px; }
+  .cat-review-header { align-items: start; }
+  .cat-details { padding: 12px; }
+  .cat-results > span:last-child { display: none; }
+}
