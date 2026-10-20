@@ -2,6 +2,11 @@ import { getSession, onAuthChange, signIn, signOut, supabase } from './auth.js'
 import { loadDashboardOperations, renderDashboardOperations, normalizeDashboardPeriod } from './application/dashboard-operations.js'
 import { loadCategoryReviews, renderCategoryReviews, normalizeCategoryReviewView, normalizeCategoryReviewMarketplace } from './application/category-review.js?v=0.1.46.1'
 import { applyCategoryDecision, undoCategoryDecision, loadCategoryDecisionHistory, renderCategoryHistoryList } from './application/category-decisions.js'
+import {
+  emptyCategoryReviewDraft, loadCategoryReviewDraft, saveCategoryReviewDraft,
+  clearCategoryReviewDraft, captureCategoryReviewCards, restoreCategoryReviewCards,
+  removeCategoryReviewOfferDraft, canRestorePendingCategoryDecision
+} from './application/category-review-draft.js?v=0.1.47'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
@@ -18,6 +23,46 @@ let page = 'operations'
 let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
 let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
+
+let categoryUiDraft = emptyCategoryReviewDraft()
+
+function categoryDraftStorage() {
+  try { return window.sessionStorage } catch { return null }
+}
+
+function persistCategoryUiDraft() {
+  const userId = session?.user?.id
+  if (!userId) return
+  categoryUiDraft = {
+    ...categoryUiDraft,
+    days: categoryReviewState.days,
+    view: categoryReviewState.view,
+    marketplace: categoryReviewState.marketplace,
+    offset: categoryReviewState.offset
+  }
+  saveCategoryReviewDraft(categoryDraftStorage(), userId, categoryUiDraft)
+}
+
+function captureVisibleCategoryDraft() {
+  if (!session) return
+  categoryUiDraft = captureCategoryReviewCards(root, categoryUiDraft)
+  persistCategoryUiDraft()
+}
+
+function restoreDraftForAuthenticatedUser() {
+  categoryUiDraft = loadCategoryReviewDraft(categoryDraftStorage(), session?.user?.id)
+  categoryReviewState = {
+    ...categoryReviewState,
+    days: categoryUiDraft.days,
+    view: categoryUiDraft.view,
+    marketplace: categoryUiDraft.marketplace,
+    offset: categoryUiDraft.offset,
+    data: null, loaded: false, error: '', notice: ''
+  }
+  dashboardOperationsState = { ...dashboardOperationsState,
+    days: categoryUiDraft.days, data: null, loaded: false, error: '' }
+}
+
 
 let dashboardState = {
   loading: false,
@@ -889,6 +934,8 @@ async function render() {
     await loadFlowState()
   }
 
+  // Save unsent category selections before any intentional full-page rerender.
+  captureVisibleCategoryDraft()
   root.innerHTML = `
     <main class="app-shell">
 
@@ -921,6 +968,7 @@ async function render() {
     </main>
   `
 
+  restoreCategoryReviewCards(root, categoryUiDraft)
   bindEvents()
 }
 
@@ -936,7 +984,7 @@ function bindCategoryDecisionEvents() {
   const errorField = confirmDialog.querySelector('#cat-confirm-error')
   const noteField = confirmDialog.querySelector('#cat-confirm-note')
 
-  function showDecision({ item, action, targetSlug = null, actionId = null }) {
+  function showDecision({ item, action, targetSlug = null, actionId = null, restoreNote = '' }) {
     pending = { offerId: item.offer_id, title: item.title, action, targetSlug, actionId,
       updatedAt: item.audit_updated_at }
     confirmDialog.querySelector('#cat-confirm-product').textContent = item.title || 'Produto'
@@ -952,12 +1000,14 @@ function bindCategoryDecisionEvents() {
           ? 'Alterar somente esta oferta de "' + label(item.category_slug) +
             '" para "' + label(targetSlug) + '"?'
           : 'Restaurar a classificação anterior ou automática deste produto?'
-    noteField.value = ''
+    noteField.value = restoreNote
     noteField.closest('label').hidden = action === 'undo'
     errorField.hidden = true
     errorField.textContent = ''
     submit.disabled = false
     submit.textContent = action === 'undo' ? 'Confirmar reversão' : 'Confirmar decisão'
+    categoryUiDraft.pending = { ...pending, note: noteField.value }
+    persistCategoryUiDraft()
     confirmDialog.showModal()
   }
 
@@ -1014,9 +1064,18 @@ function bindCategoryDecisionEvents() {
     })
   })
 
+  noteField.addEventListener('input', () => {
+    if (!pending) return
+    categoryUiDraft.pending = { ...pending, note: noteField.value }
+    persistCategoryUiDraft()
+  })
   cancel.addEventListener('click', () => { pending = null; confirmDialog.close() })
   historyDialog.querySelector('[data-cat-history-close]').addEventListener('click', () => historyDialog.close())
-  confirmDialog.addEventListener('close', () => { pending = null })
+  confirmDialog.addEventListener('close', () => {
+    pending = null
+    categoryUiDraft.pending = null
+    persistCategoryUiDraft()
+  })
 
   submit.addEventListener('click', async () => {
     if (!pending || submit.disabled) return
@@ -1025,6 +1084,7 @@ function bindCategoryDecisionEvents() {
     errorField.hidden = true
     try {
       const completedAction = pending.action
+      const completedOfferId = pending.offerId
       if (pending.action === 'undo') {
         await undoCategoryDecision(supabase, pending.actionId)
       } else {
@@ -1035,6 +1095,8 @@ function bindCategoryDecisionEvents() {
         })
       }
       pending = null
+      categoryUiDraft = removeCategoryReviewOfferDraft(categoryUiDraft, completedOfferId)
+      persistCategoryUiDraft()
       confirmDialog.close()
       dashboardOperationsState = { ...dashboardOperationsState, loaded: false, error: '' }
       categoryReviewState = {
