@@ -130,7 +130,7 @@ export function renderCategoryReviews(state, escapeHtml, formatDateTimeBR) {
     const action = link
       ? '<a class="cat-action" href="' + safe(link) + '" target="_blank" rel="noopener noreferrer sponsored">Abrir oferta afiliada ↗</a>'
       : '<span class="cat-action-muted">Sem link válido disponível</span>'
-    return '<details class="cat-review-card">' +
+    return '<details class="cat-review-card" data-offer-id="' + safe(item.offer_id) + '">' +
       '<summary class="cat-summary">' +
         '<span class="cat-thumb">' + media + '</span>' +
         '<span class="cat-summary-main"><strong>' + safe(item.title || 'Produto sem título') + '</strong>' +
