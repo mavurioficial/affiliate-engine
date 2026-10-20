@@ -1,0 +1,33 @@
+/* Mavuri v0.1.44: tela inteira, cores da marca e layout responsivo. */
+main.app-shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  grid-template-columns: 264px minmax(0, 1fr);
+}
+main.app-shell .sidebar { background: #10264b; color: #eff5ff; min-height: 100vh; }
+main.app-shell .brand-mark { color: #10264b; background: #f7a43b; }
+main.app-shell .sidebar .brand span, main.app-shell .sidebar-footer { color: #b2c3df; }
+main.app-shell .sidebar .nav-group p { color: #91aacd; }
+main.app-shell .sidebar .nav-item { color: #dce8fb; }
+main.app-shell .sidebar .nav-item:hover, main.app-shell .sidebar .nav-item.active { color: white; background: #244b82; }
+main.app-shell .sidebar-footer button { color: #eaf3ff; border-color: #5579ac; }
+main.app-shell .content { min-width: 0; width: 100%; }
+main.app-shell .page-content { width: 100%; max-width: 1500px; margin: 0 auto; padding: 38px clamp(24px, 3.4vw, 56px) 74px; }
+main.app-shell .topbar { min-height: 66px; padding-inline: clamp(24px, 3.4vw, 56px); }
+main.app-shell .dashboard-heading { max-width: none; gap: 20px; margin-bottom: 26px; }
+main.app-shell .dashboard-heading-actions .primary { background: #1c427d; color: #fff; white-space: nowrap; }
+main.app-shell .dashboard-heading-actions .primary:hover { background: #153466; }
+main.app-shell .ops-panel { max-width: none; width: 100%; }
+@media (max-width: 900px) {
+  main.app-shell { grid-template-columns: minmax(0, 1fr); }
+  main.app-shell .sidebar { min-height: auto; }
+  main.app-shell .page-content { padding: 28px 20px 54px; }
+  main.app-shell .topbar { padding-inline: 20px; }
+}
+@media (max-width: 560px) {
+  main.app-shell .page-content { padding: 24px 14px 48px; }
+  main.app-shell .topbar { padding-inline: 14px; }
+}
