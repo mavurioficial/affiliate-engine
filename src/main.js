@@ -1,12 +1,13 @@
 import { getSession, onAuthChange, signIn, signOut, supabase } from './auth.js'
 import { loadDashboardOperations, renderDashboardOperations, normalizeDashboardPeriod } from './application/dashboard-operations.js'
-import { loadCategoryReviews, renderCategoryReviews, normalizeCategoryReviewView, normalizeCategoryReviewMarketplace } from './application/category-review.js?v=0.1.47'
-import { applyCategoryDecision, undoCategoryDecision, loadCategoryDecisionHistory, renderCategoryHistoryList } from './application/category-decisions.js?v=0.1.46.1'
+import { loadCategoryReviews, renderCategoryReviews, normalizeCategoryReviewView, normalizeCategoryReviewMarketplace } from './application/category-review.js?v=0.1.48'
+import { applyCategoryDecision, reviseCategoryDecision, undoCategoryDecision, loadCategoryDecisionHistory, renderCategoryHistoryList } from './application/category-decisions.js?v=0.1.48'
+import { loadCategoryLearningCandidates, renderCategoryLearningCandidates } from './application/category-learning.js?v=0.1.48'
 import {
   emptyCategoryReviewDraft, loadCategoryReviewDraft, saveCategoryReviewDraft,
   clearCategoryReviewDraft, captureCategoryReviewCards, restoreCategoryReviewCards,
   removeCategoryReviewOfferDraft, canRestorePendingCategoryDecision
-} from './application/category-review-draft.js?v=0.1.47'
+} from './application/category-review-draft.js?v=0.1.48'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
@@ -23,6 +24,7 @@ let page = 'operations'
 let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
 let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
+let categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
 
 let categoryUiDraft = emptyCategoryReviewDraft()
 
@@ -537,6 +539,17 @@ async function loadCategoryReviewState() {
   }
 }
 
+async function loadCategoryLearningState() {
+  categoryLearningState = { ...categoryLearningState, loading: true, error: '' }
+  try {
+    const data = await loadCategoryLearningCandidates(supabase)
+    categoryLearningState = { data, loading: false, loaded: true, error: '' }
+  } catch (error) {
+    categoryLearningState = { ...categoryLearningState, loading: false, loaded: true,
+      error: error?.message || 'Não foi possível consultar os padrões.' }
+  }
+}
+
 async function loadDashboardState() {
   dashboardState = { ...dashboardState, loading: true, error: '' }
 
@@ -893,6 +906,7 @@ function operationalPage() {
     </header>
     ${renderDashboardOperations(dashboardOperationsState, escapeHtml, formatDateTimeBR)}
     ${renderCategoryReviews(categoryReviewState, escapeHtml, formatDateTimeBR)}
+    ${renderCategoryLearningCandidates(categoryLearningState, escapeHtml)}
   `
 }
 
@@ -924,6 +938,10 @@ async function render() {
 
   if (page === 'operations' && !categoryReviewState.loaded && !categoryReviewState.loading) {
     await loadCategoryReviewState()
+  }
+
+  if (page === 'operations' && !categoryLearningState.loaded && !categoryLearningState.loading) {
+    await loadCategoryLearningState()
   }
 
   if (page === 'dashboard' && !dashboardState.loaded && !dashboardState.loading) {
