@@ -1,0 +1,27 @@
+/* Mavuri V0.1.48 — human-reviewed learning signals (read-only). */
+.cat-learning-panel {
+  margin: 22px 0; padding: clamp(18px,2.6vw,30px);
+  border: 1px solid #d6e2f1; border-radius: 16px;
+  background: #fff; box-shadow: 0 10px 32px rgba(16,53,109,.045);
+}
+.cat-learning-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.cat-learning-heading h2 { margin: 5px 0 7px; color: #173970; font-size: clamp(19px,2.3vw,26px); }
+.cat-learning-heading p { margin: 0; font-size: 12px; color: #677c95; max-width: 680px; line-height: 1.6; }
+.cat-learning-heading > span { display: inline-flex; border-radius: 999px; background: #e9f2ff; color: #285e93; font-size: 11px; font-weight: 800; padding: 8px 13px; }
+.cat-learning-eyebrow { color: #a86719; font-size: 10px; letter-spacing: .12em; font-weight: 800; }
+.cat-learning-card { margin-top: 13px; padding: 14px 17px; border: 1px solid #dae5f1; border-radius: 12px; background: #f9fbfe; }
+.cat-learning-card-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; color: #1c416e; font-size: 13px; }
+.cat-learning-status, .cat-learning-conflict { font-size: 10px; border-radius: 999px; padding: 6px 9px; font-weight: 850; }
+.cat-learning-status { background: #e2f4eb; color: #226b44; }
+.cat-learning-conflict { background: #fff0df; color: #9b5f16; }
+.cat-learning-card-meta { font-size: 11px; color: #627d99; margin-top: 6px; line-height: 1.6; }
+.cat-learning-card code { font-size: 11px; }
+.cat-learning-card p { font-size: 12px; color: #48617d; line-height: 1.5; margin: 9px 0; }
+.cat-learning-examples { font-size: 12px; color: #315c8a; padding-top: 5px; }
+.cat-learning-examples > summary { cursor: pointer; font-weight: 750; }
+.cat-learning-examples ul { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 9px; }
+.cat-learning-examples li strong { display: block; font-size: 12px; line-height: 1.5; color: #314f76; }
+.cat-learning-examples li small { color: #617891; font-size: 11px; }
+.cat-learning-footnote { color: #7a8da5; font-size: 11px; line-height: 1.5; margin: 17px 0 0; }
+.cat-learning-empty { padding: 25px 8px; color: #7e91a8; font-size: 12px; text-align: center; }
+@media (max-width:600px) { .cat-learning-card { padding: 11px; } }
