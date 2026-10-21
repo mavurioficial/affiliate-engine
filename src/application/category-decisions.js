@@ -83,7 +83,7 @@ export function renderCategoryDecisionControls(item, categories, escapeHtml) {
       '">✓ Aprovar categoria atual</button>'
     : ''
   const correction = (eligible || reviewed) && options
-    ? '<label class="cat-target-wrapper"><span>Corrigir para:</span>' +
+    ? '<label class="cat-target-wrapper"><span>' + (reviewed ? 'Alterar para:' : 'Corrigir para:') + '</span>' +
         '<select data-cat-target><option value="">Selecionar categoria…</option>' + options + '</select>' +
       '</label>' +
       (reviewed
