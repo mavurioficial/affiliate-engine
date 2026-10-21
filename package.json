@@ -1,14 +1,14 @@
 {
   "name": "mavuri-affiliate-engine",
   "private": true,
-  "version": "0.1.47",
+  "version": "0.1.48",
   "type": "module",
   "scripts": {
     "dev": "node scripts/server.mjs",
     "build": "node scripts/build.mjs",
     "preview": "node scripts/server.mjs dist",
     "check": "node scripts/check.mjs",
-    "test": "node scripts/test-flow.mjs && node scripts/test-dashboard.mjs && node scripts/test-categories.mjs && node scripts/test-category-decisions.mjs && node scripts/test-category-review-draft.mjs",
+    "test": "node scripts/test-flow.mjs && node scripts/test-dashboard.mjs && node scripts/test-categories.mjs && node scripts/test-category-decisions.mjs && node scripts/test-category-review-draft.mjs && node scripts/test-category-learning.mjs",
     "shopee:feed": "node scripts/shopee-feed-runner.mjs",
     "shopee:feed:publish": "node scripts/shopee-feed-runner.mjs --publish",
     "affiliate:queue": "node scripts/affiliate-link-queue-runner.mjs claim",
