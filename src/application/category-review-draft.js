@@ -3,7 +3,7 @@
 import {
   normalizeCategoryReviewView, normalizeCategoryReviewMarketplace,
   normalizeCategoryReviewOffset
-} from './category-review.js?v=0.1.47'
+} from './category-review.js?v=0.1.48'
 
 const VERSION = 1
 const OFFER_LIMIT = 150
