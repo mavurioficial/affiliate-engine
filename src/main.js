@@ -9,6 +9,7 @@ import {
   removeCategoryReviewOfferDraft, canRestorePendingCategoryDecision
 } from './application/category-review-draft.js?v=0.1.48'
 import { listOffers } from './application/offer-service.js'
+import { loadOfferRequests, changeOfferRequestStatus, renderOfferRequests } from './application/offer-requests.js?v=0.1.49'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
 import { captureMercadoLivreOffer } from './application/mercadolivre-offer-service.js'
@@ -25,6 +26,7 @@ let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: []
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
 let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
 let categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
+let offerRequestsState = { data: null, loaded: false, loading: false, error: '', notice: '', filter: 'active' }
 
 let categoryUiDraft = emptyCategoryReviewDraft()
 
@@ -892,6 +894,16 @@ function dashboard() {
     </section>
   `
 }
+async function loadOfferRequestsState() {
+  offerRequestsState = { ...offerRequestsState, loading: true, error: '' }
+  try {
+    const data = await loadOfferRequests(supabase)
+    offerRequestsState = { ...offerRequestsState, data, loaded: true, loading: false, error: '' }
+  } catch (error) {
+    offerRequestsState = { ...offerRequestsState, loaded: true, loading: false, error: error?.message || 'Falha ao carregar pedidos.' }
+  }
+}
+
 function operationalPage() {
   return `
     <header class="page-heading dashboard-heading">
@@ -907,6 +919,7 @@ function operationalPage() {
     ${renderDashboardOperations(dashboardOperationsState, escapeHtml, formatDateTimeBR)}
     ${renderCategoryReviews(categoryReviewState, escapeHtml, formatDateTimeBR)}
     ${renderCategoryLearningCandidates(categoryLearningState, escapeHtml)}
+    ${renderOfferRequests(offerRequestsState, escapeHtml, formatMoney, formatDateTimeBR)}
   `
 }
 
@@ -942,6 +955,10 @@ async function render() {
 
   if (page === 'operations' && !categoryLearningState.loaded && !categoryLearningState.loading) {
     await loadCategoryLearningState()
+  }
+
+  if (page === 'operations' && !offerRequestsState.loaded && !offerRequestsState.loading) {
+    await loadOfferRequestsState()
   }
 
   if (page === 'dashboard' && !dashboardState.loaded && !dashboardState.loading) {
@@ -1201,6 +1218,36 @@ function bindEvents() {
       }
     )
 
+  document.querySelectorAll('[data-request-filter]').forEach(button => {
+    button.addEventListener('click', async () => {
+      offerRequestsState = { ...offerRequestsState, filter: button.dataset.requestFilter || 'active', notice: '' }
+      await render()
+      document.getElementById('mavuri-offer-requests')?.scrollIntoView({ block: 'start' })
+    })
+  })
+  document.querySelector('[data-request-refresh]')?.addEventListener('click', async () => {
+    offerRequestsState = { ...offerRequestsState, data: null, loaded: false, notice: '' }
+    await render()
+    document.getElementById('mavuri-offer-requests')?.scrollIntoView({ block: 'start' })
+  })
+  document.querySelectorAll('[data-request-status]').forEach(selector => {
+    selector.addEventListener('change', async () => {
+      const oldStatus = offerRequestsState.data?.items?.find(item => item.id === selector.dataset.requestStatus)?.status
+      selector.disabled = true
+      try {
+        await changeOfferRequestStatus(supabase, selector.dataset.requestStatus, selector.value)
+        offerRequestsState = { ...offerRequestsState, data: null, loaded: false, notice: 'Andamento do pedido atualizado.', error: '' }
+        await render()
+      } catch(error) {
+        selector.disabled = false
+        selector.value = oldStatus || 'new'
+        offerRequestsState = { ...offerRequestsState, error: error?.message || 'Não foi possível alterar o pedido.' }
+        const section = document.querySelector('#mavuri-offer-requests')
+        if(section){let notice = section.querySelector('[data-request-save-error]');if(!notice){notice=document.createElement('p');notice.dataset.requestSaveError='';notice.className='notice';section.prepend(notice)}notice.textContent=offerRequestsState.error}
+      }
+    })
+  })
+
   const operationsRefreshButton = document.querySelector('[data-ops-refresh]')
   if (operationsRefreshButton) {
     operationsRefreshButton.addEventListener('click', async () => {
@@ -1208,6 +1255,7 @@ function bindEvents() {
       dashboardOperationsState = { ...dashboardOperationsState, loaded: false, error: '' }
       categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
       categoryReviewState = { ...categoryReviewState, loaded: false, data: null, offset: 0, error: '' }
+      offerRequestsState = { ...offerRequestsState, data: null, loaded: false, notice: '' }
       await render()
     })
   }
