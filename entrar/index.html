@@ -106,6 +106,20 @@
     @media(max-width:850px){.hero-content{grid-template-columns:1fr;padding:40px 0 90px}.hero-art{min-height:230px}.offer-preview{max-width:340px;transform:rotate(1deg)}.request-wrap{grid-template-columns:1fr}.request-info{padding:30px}.request-form{padding:30px}}
     @media(max-width:600px){.shell{padding:0 17px}.hero{min-height:0}.topbar{padding:18px 0}.brand{font-size:17px}.top-pill{font-size:10px;padding:7px 10px}.hero-content{gap:30px;padding:30px 0 85px}h1{font-size:44px}.lead{font-size:16px}.hero-art{min-height:0}.offer-preview{padding:17px;max-width:290px}.preview-product{padding:12px;margin:12px 0}.preview-product span{font-size:55px}.preview-price strong{font-size:25px}.join-wrap{padding:22px 17px}.channels,.features,.two{grid-template-columns:1fr}.channel{padding:16px}.channel-copy strong{font-size:16px}.features{gap:12px}.explain{padding-top:56px}.request-info{padding:29px 24px}.request-info h2{font-size:30px}.request-form{padding:25px 20px}.requests{padding-bottom:54px}}
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+    /* Logos reais das plataformas com arquivos SVG locais. */
+    .cta-button .channel-symbol{display:grid;place-items:center}
+    .cta-button .channel-symbol img.social-logo{width:34px;height:34px;display:block;object-fit:contain;flex-shrink:0}
+    .marketplaces b.marketplace-pill{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:6px 11px;line-height:1.3;white-space:nowrap;font-size:12px}
+    .marketplaces .marketplace-pill img{display:block;object-fit:contain;flex:none}
+    .marketplaces .marketplace-amazon img{width:49px;height:18px}
+    .marketplaces .marketplace-magalu img{width:54px;height:19px}
+    @media(max-width:600px){
+      .cta-button .channel-symbol img.social-logo{width:29px;height:29px}
+      .marketplaces{gap:7px}
+      .marketplaces b.marketplace-pill{min-height:38px;padding:6px 10px;gap:6px;font-size:11px}
+      .marketplaces .marketplace-amazon img{width:43px;height:16px}
+      .marketplaces .marketplace-magalu img{width:45px;height:18px}
+    }
     /* Conversão: os botões principais devem se destacar mais que o cabeçalho. */
     .join-head h2{margin:10px 0 5px}
     .cta-button{border:2px solid transparent;border-radius:19px;padding:21px 20px;min-height:112px;color:#fff;box-shadow:0 13px 27px #06255032;transition:transform .15s,box-shadow .15s,filter .15s}
@@ -171,18 +185,24 @@
         <div class="join-head"><span class="tag">ENTRE GRÁTIS</span><h2 id="join-title">Entre agora no Mavuri Ofertas</h2><p class="sublead">Escolha WhatsApp ou Telegram e comece a receber promoções.</p></div>
         <div class="channels">
           <a class="channel whatsapp cta-button" href="https://chat.whatsapp.com/G2Q71W49Zrn10eLbXDB0UD" target="_blank" rel="noopener noreferrer" aria-label="Clique aqui para entrar no grupo Mavuri Ofertas do WhatsApp">
-            <span class="channel-symbol" aria-hidden="true">💬</span>
+            <span class="channel-symbol" aria-hidden="true"><img class="social-logo" src="./assets/whatsapp.svg" width="34" height="34" alt=""></span>
             <span class="channel-copy"><strong>Clique aqui para entrar no grupo</strong><small>WhatsApp · Mavuri Ofertas</small></span>
             <span class="arrow" aria-hidden="true">➜</span>
           </a>
           <a class="channel telegram cta-button" href="https://t.me/+U5TG_qViml4yNTVh" target="_blank" rel="noopener noreferrer" aria-label="Clique aqui para entrar no canal Mavuri Ofertas do Telegram">
-            <span class="channel-symbol" aria-hidden="true">✈️</span>
+            <span class="channel-symbol" aria-hidden="true"><img class="social-logo" src="./assets/telegram.svg" width="34" height="34" alt=""></span>
             <span class="channel-copy"><strong>Clique aqui para entrar no canal</strong><small>Telegram · Mavuri Ofertas</small></span>
             <span class="arrow" aria-hidden="true">➜</span>
           </a>
         </div>
         <div class="join-tools"><button class="share share-secondary" id="share" type="button">↗ Compartilhar Mavuri</button></div>
-        <div class="marketplaces"><span>Ofertas de</span><b>🟡 Mercado Livre</b><b>🟠 Shopee</b><b>📦 Amazon</b><b>🔵 Magalu</b></div>
+        <div class="marketplaces" aria-label="Lojas com ofertas divulgadas no Mavuri">
+          <span>Ofertas de</span>
+          <b class="marketplace-pill"><img src="./assets/mercado-livre.svg" width="28" height="28" alt="" loading="lazy">Mercado Livre</b>
+          <b class="marketplace-pill"><img src="./assets/shopee.svg" width="26" height="26" alt="" loading="lazy">Shopee</b>
+          <b class="marketplace-pill marketplace-amazon"><img src="./assets/amazon.svg" width="49" height="18" alt="" loading="lazy">Amazon</b>
+          <b class="marketplace-pill marketplace-magalu"><img src="./assets/magalu.svg" width="54" height="19" alt="" loading="lazy">Magalu</b>
+        </div>
       </div>
     </section>
     <section class="explain shell" aria-labelledby="why-title">
