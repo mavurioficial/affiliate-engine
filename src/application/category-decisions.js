@@ -20,6 +20,26 @@ export async function applyCategoryDecision(supabase, { offerId, action, targetS
   return data
 }
 
+export async function reviseCategoryDecision(supabase, { offerId, targetSlug, updatedAt, expectedActionId, note = '' }) {
+  const lastId = Number(expectedActionId)
+  if (!offerId || !targetSlug || targetSlug === 'outros' || !updatedAt ||
+    !Number.isSafeInteger(lastId) || lastId <= 0) {
+    throw new Error('Dados incompletos para alterar a categoria.')
+  }
+  const { data, error } = await supabase.rpc('mavuri_dashboard_category_revise_v1', {
+    p_offer_id: offerId,
+    p_category_slug: targetSlug,
+    p_expected_updated_at: updatedAt,
+    p_expected_action_id: lastId,
+    p_note: note?.trim() || null
+  })
+  if (error) throw error
+  if (!data?.ok || data.action !== 'revise' || !data.action_id) {
+    throw new Error('A nova categoria não foi confirmada pelo Supabase.')
+  }
+  return data
+}
+
 export async function undoCategoryDecision(supabase, actionId) {
   const id = Number(actionId)
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Identificador da decisão inválido.')
@@ -62,14 +82,15 @@ export function renderCategoryDecisionControls(item, categories, escapeHtml) {
     ? '<button type="button" class="cat-decision-approve" data-cat-approve="' + offerId +
       '">✓ Aprovar categoria atual</button>'
     : ''
-  const correction = eligible && options
-    ? '<label class="cat-target-wrapper"><span>Corrigir para:</span>' +
+  const correction = (eligible || reviewed) && options
+    ? '<label class="cat-target-wrapper"><span>' + (reviewed ? 'Alterar para:' : 'Corrigir para:') + '</span>' +
         '<select data-cat-target><option value="">Selecionar categoria…</option>' + options + '</select>' +
       '</label>' +
-      '<button type="button" class="cat-decision-correct" data-cat-correct="' + offerId +
-      '">Corrigir categoria</button>'
+      (reviewed
+        ? '<button type="button" class="cat-decision-correct" data-cat-revise="' + offerId + '">Alterar categoria</button>'
+        : '<button type="button" class="cat-decision-correct" data-cat-correct="' + offerId + '">Corrigir categoria</button>')
     : ''
-  const undo = reviewed && item.last_action_id && ['approve', 'correct'].includes(item.last_action_kind)
+  const undo = reviewed && item.last_action_id && ['approve', 'correct', 'revise'].includes(item.last_action_kind)
     ? '<button type="button" class="cat-decision-undo" data-cat-undo="' +
        safe(item.last_action_id) + '" data-cat-offer="' + offerId + '">↶ Desfazer última decisão</button>'
     : ''
@@ -112,6 +133,7 @@ export function renderCategoryHistoryList(history, escapeHtml, formatDateTimeBR)
   const names = {
     approve: 'Categoria aprovada',
     correct: 'Categoria corrigida',
+    revise: 'Categoria alterada novamente',
     undo: 'Decisão desfeita'
   }
   if (!history?.items?.length) {

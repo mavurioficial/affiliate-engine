@@ -1,12 +1,13 @@
 import { getSession, onAuthChange, signIn, signOut, supabase } from './auth.js'
 import { loadDashboardOperations, renderDashboardOperations, normalizeDashboardPeriod } from './application/dashboard-operations.js'
-import { loadCategoryReviews, renderCategoryReviews, normalizeCategoryReviewView, normalizeCategoryReviewMarketplace } from './application/category-review.js?v=0.1.47'
-import { applyCategoryDecision, undoCategoryDecision, loadCategoryDecisionHistory, renderCategoryHistoryList } from './application/category-decisions.js?v=0.1.46.1'
+import { loadCategoryReviews, renderCategoryReviews, normalizeCategoryReviewView, normalizeCategoryReviewMarketplace } from './application/category-review.js?v=0.1.48'
+import { applyCategoryDecision, reviseCategoryDecision, undoCategoryDecision, loadCategoryDecisionHistory, renderCategoryHistoryList } from './application/category-decisions.js?v=0.1.48'
+import { loadCategoryLearningCandidates, renderCategoryLearningCandidates } from './application/category-learning.js?v=0.1.48'
 import {
   emptyCategoryReviewDraft, loadCategoryReviewDraft, saveCategoryReviewDraft,
   clearCategoryReviewDraft, captureCategoryReviewCards, restoreCategoryReviewCards,
   removeCategoryReviewOfferDraft, canRestorePendingCategoryDecision
-} from './application/category-review-draft.js?v=0.1.47'
+} from './application/category-review-draft.js?v=0.1.48'
 import { listOffers } from './application/offer-service.js'
 import { listRules } from './application/rule-service.js'
 import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
@@ -23,6 +24,7 @@ let page = 'operations'
 let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
 let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
+let categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
 
 let categoryUiDraft = emptyCategoryReviewDraft()
 
@@ -537,6 +539,17 @@ async function loadCategoryReviewState() {
   }
 }
 
+async function loadCategoryLearningState() {
+  categoryLearningState = { ...categoryLearningState, loading: true, error: '' }
+  try {
+    const data = await loadCategoryLearningCandidates(supabase)
+    categoryLearningState = { data, loading: false, loaded: true, error: '' }
+  } catch (error) {
+    categoryLearningState = { ...categoryLearningState, loading: false, loaded: true,
+      error: error?.message || 'Não foi possível consultar os padrões.' }
+  }
+}
+
 async function loadDashboardState() {
   dashboardState = { ...dashboardState, loading: true, error: '' }
 
@@ -893,6 +906,7 @@ function operationalPage() {
     </header>
     ${renderDashboardOperations(dashboardOperationsState, escapeHtml, formatDateTimeBR)}
     ${renderCategoryReviews(categoryReviewState, escapeHtml, formatDateTimeBR)}
+    ${renderCategoryLearningCandidates(categoryLearningState, escapeHtml)}
   `
 }
 
@@ -924,6 +938,10 @@ async function render() {
 
   if (page === 'operations' && !categoryReviewState.loaded && !categoryReviewState.loading) {
     await loadCategoryReviewState()
+  }
+
+  if (page === 'operations' && !categoryLearningState.loaded && !categoryLearningState.loading) {
+    await loadCategoryLearningState()
   }
 
   if (page === 'dashboard' && !dashboardState.loaded && !dashboardState.loading) {
@@ -989,14 +1007,15 @@ function bindCategoryDecisionEvents() {
       updatedAt: item.audit_updated_at }
     confirmDialog.querySelector('#cat-confirm-product').textContent = item.title || 'Produto'
     confirmDialog.querySelector('#cat-confirm-title').textContent =
-      action === 'approve' ? 'Aprovar classificação' : action === 'correct'
-        ? 'Confirmar correção da categoria' : 'Desfazer última decisão'
+      action === 'approve' ? 'Aprovar classificação' :
+        action === 'revise' ? 'Alterar categoria já revisada' :
+          action === 'correct' ? 'Confirmar correção da categoria' : 'Desfazer última decisão'
     const categoryNames = categoryReviewState.data?.categories || []
     const label = (slug) => categoryNames.find((cat) => cat.slug === slug)?.name || slug || 'Sem categoria'
     confirmDialog.querySelector('#cat-confirm-description').textContent =
       action === 'approve'
         ? 'Confirmar que a categoria "' + label(item.category_slug) + '" está correta para esta oferta?'
-        : action === 'correct'
+        : action === 'correct' || action === 'revise'
           ? 'Alterar somente esta oferta de "' + label(item.category_slug) +
             '" para "' + label(targetSlug) + '"?'
           : 'Restaurar a classificação anterior ou automática deste produto?'
@@ -1035,6 +1054,22 @@ function bindCategoryDecisionEvents() {
         return
       }
       showDecision({ item, action: 'correct', targetSlug })
+    })
+  })
+
+  document.querySelectorAll('[data-cat-revise]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const item = findItem(button.dataset.catRevise)
+      const targetSlug = button.closest('.cat-review-card')?.querySelector('[data-cat-target]')?.value
+      const validCategories = categoryReviewState.data?.categories || []
+      if (!item?.manual_decision || item.needs_review || !item.audit_updated_at ||
+          !item.last_action_id || !['approve', 'correct', 'revise'].includes(item.last_action_kind)) return
+      if (!targetSlug || targetSlug === item.category_slug ||
+        !validCategories.some((c) => c.slug === targetSlug)) {
+        window.alert('Selecione uma categoria diferente da atual.')
+        return
+      }
+      showDecision({ item, action: 'revise', targetSlug, actionId: item.last_action_id })
     })
   })
 
@@ -1087,6 +1122,12 @@ function bindCategoryDecisionEvents() {
       const completedOfferId = pending.offerId
       if (pending.action === 'undo') {
         await undoCategoryDecision(supabase, pending.actionId)
+      } else if (pending.action === 'revise') {
+        await reviseCategoryDecision(supabase, {
+          offerId: pending.offerId, targetSlug: pending.targetSlug,
+          updatedAt: pending.updatedAt, expectedActionId: pending.actionId,
+          note: noteField.value
+        })
       } else {
         await applyCategoryDecision(supabase, {
           offerId: pending.offerId, action: pending.action,
@@ -1094,6 +1135,7 @@ function bindCategoryDecisionEvents() {
           note: noteField.value
         })
       }
+      categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
       pending = null
       categoryUiDraft = removeCategoryReviewOfferDraft(categoryUiDraft, completedOfferId)
       persistCategoryUiDraft()
@@ -1103,6 +1145,7 @@ function bindCategoryDecisionEvents() {
         ...categoryReviewState, loaded: false, data: null, error: '',
         notice: completedAction === 'approve' ? 'Categoria aprovada e decisão registrada.' :
           completedAction === 'correct' ? 'Categoria corrigida e decisão registrada.' :
+          completedAction === 'revise' ? 'Categoria alterada novamente. A escolha anterior permanece no histórico.' :
           'Última decisão desfeita. Classificação recalculada.'
       }
       await render()
@@ -1163,6 +1206,7 @@ function bindEvents() {
     operationsRefreshButton.addEventListener('click', async () => {
       operationsRefreshButton.disabled = true
       dashboardOperationsState = { ...dashboardOperationsState, loaded: false, error: '' }
+      categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
       categoryReviewState = { ...categoryReviewState, loaded: false, data: null, offset: 0, error: '' }
       await render()
     })
@@ -1645,6 +1689,7 @@ async function bootstrap() {
 
           flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
           dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
+          categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
           categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
           dashboardState = {
             loading: false, loaded: false, offerJobs: [], couponJobs: [], offers: [],

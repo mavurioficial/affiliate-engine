@@ -3,11 +3,11 @@
 import {
   normalizeCategoryReviewView, normalizeCategoryReviewMarketplace,
   normalizeCategoryReviewOffset
-} from './category-review.js?v=0.1.47'
+} from './category-review.js?v=0.1.48'
 
 const VERSION = 1
 const OFFER_LIMIT = 150
-const VALID_ACTIONS = new Set(['approve', 'correct', 'undo'])
+const VALID_ACTIONS = new Set(['approve', 'correct', 'revise', 'undo'])
 
 export function emptyCategoryReviewDraft() {
   return {
@@ -43,7 +43,7 @@ export function normalizeCategoryReviewDraft(value) {
   }
   const raw = value.pending
   const pending = raw && id(raw.offerId) && VALID_ACTIONS.has(raw.action) &&
-      (raw.action !== 'correct' || /^[a-z0-9-]{1,64}$/.test(String(raw.targetSlug || '')))
+      (!['correct','revise'].includes(raw.action) || /^[a-z0-9-]{1,64}$/.test(String(raw.targetSlug || '')))
     ? {
         offerId: raw.offerId, action: raw.action,
         targetSlug: typeof raw.targetSlug === 'string' ? raw.targetSlug : null,
@@ -150,7 +150,16 @@ export function canRestorePendingCategoryDecision(pending, item, validCategories
   if (pending.action === 'undo') {
     return Boolean(item.manual_decision) &&
       Number(item.last_action_id) === Number(pending.actionId) &&
-      ['approve', 'correct'].includes(item.last_action_kind)
+      ['approve', 'correct', 'revise'].includes(item.last_action_kind)
+  }
+  if (pending.action === 'revise') {
+    return Boolean(item.manual_decision) &&
+      item.audit_updated_at === pending.updatedAt &&
+      Number(item.last_action_id) === Number(pending.actionId) &&
+      ['approve', 'correct', 'revise'].includes(item.last_action_kind) &&
+      pending.targetSlug !== item.category_slug &&
+      Array.isArray(validCategories) &&
+      validCategories.some((c) => c.slug === pending.targetSlug)
   }
   if (!item.needs_review || item.manual_decision ||
       item.audit_updated_at !== pending.updatedAt) return false
