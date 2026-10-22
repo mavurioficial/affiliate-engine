@@ -4,7 +4,7 @@
 // an atomic recheck of sent/pending histories, channel status and current offer version.
 import {matchesRule,diversityFamily} from "./shopee-production-rules.mjs";
 import {validateShopeeRoutingRules} from "./shopee-routing-shadow.mjs";
-import {compareShopeeCandidates,shopeePriceDropPercent,SHOPEE_CLOUD_POLICY}
+import {compareShopeeCandidates,shopeeSignificantPriceDropStrict,SHOPEE_CLOUD_POLICY}
   from "./shopee-policy.mjs";
 
 const validId=x=>typeof x==="string"&&x.length>0;
@@ -96,9 +96,9 @@ export function planShopeeAfterPersistence({
         &&Number.isFinite(age(h.sent_at,now))&&age(h.sent_at,now)>=0&&age(h.sent_at,now)<48)
         .sort((a,b)=>Date.parse(b.sent_at)-Date.parse(a.sent_at));
       if(recent.length){
-        const drop=snapshot_price_verified?
-          shopeePriceDropPercent(recent[0].published_price,price):null;
-        if(drop===null||drop<10){counters.same_item_48h++;continue;}
+        const exceptionAllowed=snapshot_price_verified &&
+          shopeeSignificantPriceDropStrict(recent[0].published_price,price);
+        if(!exceptionAllowed){counters.same_item_48h++;continue;}
         counters.price_drop_override++;
       }
       // Cross-seller cooldown uses proven catalog identity only. Never treat a
