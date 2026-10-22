@@ -4,6 +4,7 @@ import {summarizeShopeeSentHistory} from "./shopee-history.mjs";
 import {simulateShopeeGeneralAudit,validateShopeeGeneralRule} from "./shopee-general-audit.mjs";
 import {compareShopeeRoutingShadow,validateShopeeRoutingRules} from "./shopee-routing-shadow.mjs";
 import {compareShopeeDbCategoryParity} from "./shopee-db-category-parity.mjs";
+import {compareShopeeGeneralEffectiveCategoryImpact} from "./shopee-category-impact.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -203,10 +204,14 @@ async function liveGeneralAudit(req: Request) {
   const routingShadow=compareShopeeRoutingShadow(cloudPool.internal_offers,rules,channels);
   const persistedRows=await readPersistedShopeeCategories(req,marketplaceId,cloudPool.internal_offers||[]);
   const dbParity=compareShopeeDbCategoryParity(cloudPool.internal_offers,persistedRows,rules,channels);
+  const categoryImpact=compareShopeeGeneralEffectiveCategoryImpact({
+    offers:cloudPool.internal_offers||[],dbRows:persistedRows,
+    rules,channels,sentRows,pendingRows,now_iso:moment.toISOString()
+  });
   return {ok:true,mode:"general_audit",dry_run:true,cloud_publishing:false,
     cloud_schedule:false,source_counts:cloudPool.selected_by_source,
     source_discount_at_least_10:cloudPool.summary.discount_at_least_10,
-    ...report,routing_shadow:routingShadow,db_category_parity:dbParity};
+    ...report,routing_shadow:routingShadow,db_category_parity:dbParity,db_category_impact:categoryImpact};
 }
 
 Deno.serve(async(req: Request)=>{
@@ -255,6 +260,16 @@ Deno.serve(async(req: Request)=>{
         " pending_matched="+report.history.pending_matched+
         " db_category_comparable="+report.db_category_parity.comparable_candidates+
         " db_category_differences="+report.db_category_parity.ingest_vs_database_category_mismatches);
+      console.log("[discovery-cloud-shopee] db_category_impact="+JSON.stringify({
+        known:report.db_category_impact.effective_categories_available,
+        unknown:report.db_category_impact.unknown_final_categories,
+        manual:report.db_category_impact.manual_reviews_preserved,
+        before:report.db_category_impact.initial_projected,
+        after:report.db_category_impact.effective_stored_projected,
+        change:report.db_category_impact.projected_difference,
+        category_blocks_before:report.db_category_impact.initial_category_blocks,
+        category_blocks_after:report.db_category_impact.effective_category_blocks
+      }));
       console.log("[discovery-cloud-shopee] db_category_parity="+JSON.stringify({
         total:report.db_category_parity.candidates_total,
         existing:report.db_category_parity.comparable_candidates,
