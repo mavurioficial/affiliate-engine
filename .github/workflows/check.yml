@@ -20,6 +20,7 @@ jobs:
       - run: node scripts/test-discovery-cloud-shopee-policy.mjs
       - run: node scripts/test-discovery-cloud-shopee-history.mjs
       - run: node scripts/test-discovery-cloud-shopee-general-audit.mjs
+      - run: node scripts/test-discovery-cloud-shopee-routing-shadow.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
