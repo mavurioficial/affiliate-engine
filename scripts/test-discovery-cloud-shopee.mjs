@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import {normalizeShopeeDiscount,inferShopeeCategoryHints,mapShopeeApiProduct,collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS} from "../supabase/functions/discovery-cloud-shopee/shopee-core.mjs";
+assert.equal(normalizeShopeeDiscount(0.2),20);
+assert.equal(normalizeShopeeDiscount(18.53),18.53);
+assert.equal(normalizeShopeeDiscount(null),null);
+assert.equal(inferShopeeCategoryHints("Shorts masculino com bolso para celular").global_category1,"Fashion Accessories");
+assert.equal(inferShopeeCategoryHints("Criado-mudo com carregador para celular").global_category1,"Home & Living");
+assert.equal(inferShopeeCategoryHints("Liquidificador Air Fryer").global_category1,"Home Appliances");
+assert.equal(inferShopeeCategoryHints("Vestido feminino").global_category1,"Women Clothes");
+const node=(itemId,discount=0.25)=>({itemId,productName:"Notebook SSD",priceMin:"199.90",priceDiscountRate:discount,
+  offerLink:"https://s.shopee.com.br/example"+itemId,imageUrl:"https://example.com/img.jpg",productLink:"https://shopee.com.br/example"});
+assert.equal(mapShopeeApiProduct({...node("42"),offerLink:""}),null);
+assert.equal(mapShopeeApiProduct({...node("42"),priceMin:0}),null);
+assert.equal(mapShopeeApiProduct(node("42")).global_category1,"Computers & Accessories");
+const offers=collectUniqueOffers([node("42"),node("42"),node("43",0.07),node("44",0.8)],80);
+assert.equal(offers.length,3);
+assert.equal(previewSummary(offers).discount_at_least_10,2);
+assert.equal(previewSummary(offers).affiliate_links_present,3);
+assert.equal(SHOPEE_V85_SPECS.length,3);
+assert.equal(collectUniqueOffers(Array.from({length:100},(_,i)=>node(String(i))),80).length,80);
+console.log("Shopee V85 cloud pure-function tests passed. No network or publications.");
