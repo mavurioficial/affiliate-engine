@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {normalizeShopeeDiscount,inferShopeeCategoryHints,mapShopeeApiProduct,collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOTAS,selectShopeeBalancedCandidates} from "../supabase/functions/discovery-cloud-shopee/shopee-core.mjs";
+import {normalizeShopeeDiscount,inferShopeeCategoryHints,mapShopeeApiProduct,collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOTAS,selectShopeeBalancedCandidates,diagnoseShopeeSources} from "../supabase/functions/discovery-cloud-shopee/shopee-core.mjs";
 assert.equal(normalizeShopeeDiscount(0.2),20);
 assert.equal(normalizeShopeeDiscount(18.53),18.53);
 assert.equal(normalizeShopeeDiscount(null),null);
@@ -56,5 +56,41 @@ const fallback=selectShopeeBalancedCandidates({
 });
 assert.equal(fallback.offers.length,80);
 assert.equal(fallback.backfill_added,50);
+
+// Diagnostics separate actual empty API lists, missing affiliate URLs and overlap.
+const emptyDiag=diagnoseShopeeSources({
+  "top-performance":list("top",40),
+  "maior-comissao":[],
+  "recomendados":list("rec",30)
+},selectShopeeBalancedCandidates({
+  "top-performance":list("top",40),
+  "maior-comissao":[],
+  "recomendados":list("rec",30)
+}));
+assert.equal(emptyDiag["maior-comissao"].reason_if_zero_selected,"api_returned_no_products");
+assert.equal(emptyDiag["top-performance"].received,40);
+assert.equal(emptyDiag["maior-comissao"].selected,0);
+const invalidDiag=diagnoseShopeeSources({
+  "top-performance":list("top",20),
+  "maior-comissao":[{...node("bad"),offerLink:""},{...node("bad2"),imageUrl:""}],
+  "recomendados":list("rec",30)
+},selectShopeeBalancedCandidates({
+  "top-performance":list("top",20),
+  "maior-comissao":[{...node("bad"),offerLink:""},{...node("bad2"),imageUrl:""}],
+  "recomendados":list("rec",30)
+}));
+assert.equal(invalidDiag["maior-comissao"].invalid,2);
+assert.equal(invalidDiag["maior-comissao"].reason_if_zero_selected,"no_valid_affiliate_offers");
+const overlapDiag=diagnoseShopeeSources({
+  "top-performance":list("top",30),
+  "maior-comissao":list("top",5),
+  "recomendados":list("rec",30)
+},selectShopeeBalancedCandidates({
+  "top-performance":list("top",30),
+  "maior-comissao":list("top",5),
+  "recomendados":list("rec",30)
+}));
+assert.equal(overlapDiag["maior-comissao"].duplicates_from_earlier_sources,5);
+assert.equal(overlapDiag["maior-comissao"].reason_if_zero_selected,"all_overlap_earlier_sources");
 
 console.log("Shopee V85 cloud pure-function tests passed. No network or publications.");
