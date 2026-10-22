@@ -87,8 +87,9 @@ function dateAgeHours(date,now) {
 /** @param {ShopeePolicyInput} param0 */
 export function simulateShopeeCloudSelection({
   candidates=[], sent_history=[], pending_history=[], connected_telegram_channel_ids=[],
-  now_iso="2026-10-22T18:00:00Z", target=SHOPEE_CLOUD_POLICY.target_unique_offers
+  now_iso=null, target=SHOPEE_CLOUD_POLICY.target_unique_offers
 }={}) {
+  if(!now_iso)throw Error("now_iso_required");
   const now=Date.parse(now_iso);
   if(!Number.isFinite(now))throw Error("invalid_now");
   const limit=Math.min(8,Math.max(0,Number(target)||0));
