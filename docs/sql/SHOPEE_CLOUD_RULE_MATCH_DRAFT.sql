@@ -46,8 +46,8 @@ matching_rules AS (
     AND r.actions->'channel_ids' @> jsonb_build_array(c.id::text)
     -- Never silently authorize rules with new, unsupported conditions.
     AND NOT EXISTS (
-      SELECT 1 FROM jsonb_object_keys(r.conditions) AS key
-      WHERE key NOT IN (
+      SELECT 1 FROM jsonb_object_keys(r.conditions) AS keys(condition_key)
+      WHERE condition_key NOT IN (
         'marketplace','minDiscount','maxDiscount','minPrice','maxPrice',
         'mavuriCategories','mavuriTagsAny','mavuriTagsAll',
         'deniedMavuriTags','deniedWords'
@@ -63,41 +63,41 @@ SELECT (
       o.discount_percent IS NOT NULL
       AND o.discount_percent >= 10
       AND o.discount_percent >= COALESCE((r.conditions->>'minDiscount')::numeric,10)
-      AND (NOT r.conditions ? 'maxDiscount'
+      AND (NOT (r.conditions ? 'maxDiscount')
            OR o.discount_percent <= (r.conditions->>'maxDiscount')::numeric)
-      AND (NOT r.conditions ? 'minPrice'
+      AND (NOT (r.conditions ? 'minPrice')
            OR o.price >= (r.conditions->>'minPrice')::numeric)
-      AND (NOT r.conditions ? 'maxPrice'
+      AND (NOT (r.conditions ? 'maxPrice')
            OR o.price <= (r.conditions->>'maxPrice')::numeric)
       AND (
-        NOT r.conditions ? 'mavuriCategories'
+        NOT (r.conditions ? 'mavuriCategories')
         OR o.category_slug IN (
           SELECT jsonb_array_elements_text(r.conditions->'mavuriCategories')
         )
       )
       AND (
-        NOT r.conditions ? 'mavuriTagsAny'
+        NOT (r.conditions ? 'mavuriTagsAny')
         OR EXISTS (
           SELECT 1 FROM jsonb_array_elements_text(r.conditions->'mavuriTagsAny') t
           WHERE t = ANY(o.tags)
         )
       )
       AND (
-        NOT r.conditions ? 'mavuriTagsAll'
+        NOT (r.conditions ? 'mavuriTagsAll')
         OR NOT EXISTS (
           SELECT 1 FROM jsonb_array_elements_text(r.conditions->'mavuriTagsAll') t
           WHERE NOT t = ANY(o.tags)
         )
       )
       AND (
-        NOT r.conditions ? 'deniedMavuriTags'
+        NOT (r.conditions ? 'deniedMavuriTags')
         OR NOT EXISTS (
           SELECT 1 FROM jsonb_array_elements_text(r.conditions->'deniedMavuriTags') t
           WHERE t = ANY(o.tags)
         )
       )
       AND (
-        NOT r.conditions ? 'deniedWords'
+        NOT (r.conditions ? 'deniedWords')
         OR NOT EXISTS (
           SELECT 1 FROM jsonb_array_elements_text(r.conditions->'deniedWords') t
           WHERE position(lower(t) IN lower(o.title))>0
