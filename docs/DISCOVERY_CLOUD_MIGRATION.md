@@ -125,6 +125,20 @@ Saída da simulação por canal geral, **não publica**:
 
 **Próxima pergunta técnica:** dos 19 descartados por diversidade, quantos eram do bucket genérico `outros`? Não mudar o teto de 2 por categoria até confirmar. Foi implantada função `discovery-cloud-shopee` **v13**, que acrescenta indicadores agregados `category_diagnostics` na resposta da próxima auditoria `general_audit`: distribuição dos selecionados, bloqueados por diversidade, bloqueados por publicação recente e elegíveis pós-cooldown, separados por categorias predefinidas. Nenhuma alteração ao algoritmo de seleção, ao runner, banco ou publicador. Testes de regressão e Deno check aprovados (GitHub Actions run 39843054941).
 
+### Shopee v14 — comparador paralelo de categorias e regras dos quatro canais
+
+**Motivação confirmada em produção:** 149 ofertas Shopee capturadas nos últimos 3 dias, das quais 41 possuem categoria efetiva `outros` no banco. A v12 identificou 19 candidatos bloqueados pelo limite de categoria na simulação somente do canal geral. É necessário discriminar casos legitimamente similares dos itens sem classificação precisa antes de afrouxar qualquer limite.
+
+**Implementado e implantado na Edge Function read-only `discovery-cloud-shopee` v14**:
+- `shopee-production-rules.mjs`: cópia das funções puras `classifyShopee`, `matchesRule`, `diversityFamily` e auxiliares extraídas do `flow-shopee-ingest` efetivamente implantado em 22/10/2026, sem código de rede/gravação/publicação;
+- `shopee-routing-shadow.mjs`: verifica a existência **exata** das 4 regras de Shopee, nomes, status ativo, `minDiscount=10`, campos de condições reconhecidos e um canal Telegram `connected` distinto para cada regra. Se algo mudou, aborta a auditoria sem autorizar publicação;
+- A execução já existente `mode=general_audit` passa a ler todas as regras habilitadas pertencentes ao usuário (via RLS), testa o mesmo conjunto de até 80 candidatos com a classificação provisória e a cópia do classificador da ingestão. Retorna `routing_shadow` com contadores agregados: classificação `outros` do backend versus provisória, quantidades por categoria, discrepâncias por transição e número de candidatos que corresponderiam às regras de Geral, Mulher, Casa & Cozinha e Tecnologia;
+- `category_diagnostics` da v13 continua presente para explicar o limite 2/categoria na simulação do canal geral; `general_audit` segue apresentando o mesmo resultado de política anterior;
+- Nenhum produto é escrito, aprovado, publicado, enfileirado ou reclassificado. Não há utilização de service_role nas consultas PostgREST e não são retornados títulos, IDs, preços, links ou chat IDs;
+- Suíte `test-discovery-cloud-shopee-routing-shadow.mjs` e `deno check` passaram no GitHub Actions run `39845235702`. **A nova resposta `routing_shadow` ainda precisa de um teste autenticado pelo usuário no browser**.
+
+**Limite essencial:** o classificador copiado representa a lógica `flow-shopee-ingest` de entrada, **não os gatilhos/overrides SQL posteriores no banco**. As contagens `routing_shadow` indicam correspondência aos filtros antes de cooldown, validações finais e possíveis correções de categoria; não são quantidades autorizadas para envio a canais de nicho. A versão de classificação de produção deve ser revalidada em cada etapa, pois pode evoluir independentemente desta branch.
+
 ### Primeira função cloud implantada (sem publicação)
 
 `discovery-cloud-shopee` V1 implantada no Supabase, com `verify_jwt=true`. Código: `supabase/functions/discovery-cloud-shopee/`.
