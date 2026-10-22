@@ -18,6 +18,7 @@ jobs:
       - run: npm test
       - run: node scripts/test-discovery-cloud-shopee.mjs
       - run: node scripts/test-discovery-cloud-shopee-policy.mjs
+      - run: node scripts/test-discovery-cloud-shopee-history.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
