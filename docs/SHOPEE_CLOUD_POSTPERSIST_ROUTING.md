@@ -53,3 +53,18 @@ Estratégia recomendada: **usar a classificação que já existe no Supabase com
 ## Estado
 
 Cloud Shopee v16 está **somente em diagnóstico**; `discovery_cloud_control.enabled=false`, `active_executor=local`, nenhum Cron de Discovery. O código de produção **não foi modificado nesta auditoria**. Evitar novos ciclos de shadow sem avanço no pipeline — a prioridade agora é construir/testar este pós-persistência antes do cutover.
+
+
+## Implementação isolada de planejamento pós-persistência (22/10/2026)
+
+**Adicionado na branch do PR, NÃO implantado no Supabase como publicador:**
+- `supabase/functions/discovery-cloud-shopee/shopee-postpersist-plan.mjs` — função pura `planShopeeAfterPersistence` exige `stored_offers` com escopo exato de usuário, marketplace e conta afiliada; falha de modo conservador quando não encontra a linha final, quando a categoria ou tags finais estão ausentes, ou se o preço/URL afiliado da linha diferem do candidato da API.
+- Aplica `matchesRule` das **quatro regras** aos dados efetivamente persistidos (categoria e tags finais), preservando revisões manuais e somente canais Telegram válidos. Permite decisões independentes por canal e limite de até 8 itens únicos, máximo de 2/categoria e 1/família ampla por ciclo.
+- Janela de 48h para o mesmo item e canal, com exceção de queda de preço >=10% **somente quando `snapshot_price_verified=true`**. Enquanto o preço exatamente renderizado não for validado, exceção desativada. Jobs `queued/processing` impedem duplicação por canal.
+- Janela de 24h entre vendedores apenas quando os dois registros trazem **identidade de família de catálogo comprovada** e `shop_id` distinto; títulos parecidos não são prova.
+- Relatório público `summarizePostPersistPlan` agrega contagens sem nomes, links afiliados, IDs de produtos e referências dos chats. A lista interna de decisões contém IDs para testes **mas nunca deve ser logada nem retornada ao navegador**.
+- Retorna `ready_to_publish=false` incondicionalmente. Ainda faltam lease compartilhado com o V85 e a rechecagem atômica de envio/fila no banco; esta etapa NÃO cria tarefas, executa queries, chama APIs ou publica nada.
+
+**Testes**: `scripts/test-discovery-cloud-shopee-postpersist-plan.mjs` cobre categorias pós-trigger, revisão manual, produto novo bloqueado, vínculo da conta afiliada, preço/URL divergente, pendentes, cooldown de 48h, exceção de preço condicionado a snapshot confiável, equivalência entre vendedores comprovada, decisões independentes por canal, limite de diversidade e 8 ofertas únicas e segurança dos agregados. GitHub Actions run `39852671008`: suite e Deno check **SUCESSO**.
+
+**Fase posterior antes de ativação**: integrar esse planejador a um executor transacional seguro, persistindo linhas e garantindo que as decisões usem as classificações após os gatilhos; bloquear qualquer caminho cloud de publicação até haver exclusão mútua entre Windows e nuvem, além de `shop_id` e histórico de preço renderizado confiáveis. O sistema V85 de produção não foi alterado.
