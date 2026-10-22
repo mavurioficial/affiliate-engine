@@ -417,6 +417,7 @@ function flowPage() {
     ${flowState.error ? `<section class="notice">${escapeHtml(flowState.error)}</section>` : ''}
     <section class="flow-capture-panel">
       <div class="section-title"><h2>Capturar oferta</h2><p>Cole somente o link de afiliado do Mercado Livre. O Flow identifica o produto automaticamente, consulta os dados reais e avalia as regras.</p><div class="flow-connection-hint">🔐 A conexão com o Mercado Livre é feita com OAuth; o Mavuri não pede seu token para colar no navegador.</div></div>
+      ${flowState.notice || flowState.error ? `<div class="notice flow-capture-feedback" role="status" style="margin:14px 0;background:${flowState.error ? "#ffebe9" : "#eaf8f0"};border-radius:9px;padding:12px 15px;overflow-wrap:anywhere"><strong>${flowState.error ? "⚠️ Não foi possível concluir" : "✓ Resultado da captura"}</strong><p style="margin:6px 0 0">${escapeHtml(flowState.error || flowState.notice)}</p></div>` : ""}
       <form data-flow-capture><div class="flow-capture-grid">
         <label><span>Links de afiliado oficiais</span><textarea name="affiliateUrl" rows="4" required placeholder="Cole 1 ou vários links https://meli.la/... separados por espaço ou nova linha" autocomplete="off">${escapeHtml(flowCaptureDraft)}</textarea><small class="flow-field-hint">Você pode colar vários links do Mercado Livre de uma vez, separados por espaço ou por nova linha. O Mavuri processa cada link individualmente.</small></label>
       </div><div class="form-actions"><button class="primary" type="submit">⚡ Capturar no Flow</button></div></form>
@@ -1576,22 +1577,34 @@ function bindEvents() {
 
           const successCount = capturedOffers.length
           const failureCount = failures.length
-          const notice = failureCount === 0
-            ? `${successCount} oferta(s) capturada(s); regras de distribuição avaliadas.`
-            : successCount
-              ? `${successCount} oferta(s) capturada(s). ${failureCount} link(s) ficaram pendentes para nova tentativa.`
-              : ''
-
-          const error = failureCount
-            ? failures.map((item) => `${item.affiliateUrl}: ${item.message}`).join(' | ')
-            : ''
-
+          let deliverySummary = ''
+          if (successCount) {
+            try {
+              const ids = [...new Set(capturedOffers.map(item => item.offer?.id).filter(Boolean))]
+              const { data: jobs, error: jobsError } = await supabase.from('flow_delivery_jobs')
+                .select('offer_id,status').eq('user_id', session.user.id).in('offer_id', ids)
+              if (jobsError) throw jobsError
+              const deliveredIds = new Set((jobs || []).map(job => job.offer_id))
+              const noMatchingRule = ids.filter(id => !deliveredIds.has(id)).length
+              const sent = (jobs || []).filter(job => job.status === 'sent').length
+              const waiting = (jobs || []).filter(job => ['queued', 'processing'].includes(job.status)).length
+              const failed = (jobs || []).filter(job => job.status === 'failed').length
+              deliverySummary = ` ${sent} envio(s) confirmado(s), ${waiting} aguardando/processando, ${failed} falha(s).` +
+                (noMatchingRule ? ` ${noMatchingRule} produto(s) não encaminhado(s): nenhuma regra foi atendida.` : '')
+            } catch {
+              deliverySummary = ' Consulte a fila de distribuição para confirmar o envio.'
+            }
+          }
+          const notice = successCount ? `${successCount} oferta(s) salvas no Mavuri.${deliverySummary}` : ''
+          const error = failureCount ? failures.map(item => `${item.affiliateUrl}: ${item.message}`).join(' | ') : ''
           flowState = { ...flowState, loaded: false, notice, error }
           await render()
+          document.querySelector('.flow-capture-feedback')?.scrollIntoView({ block: 'center', behavior: 'auto' })
         } catch (error) {
           console.error(error)
           flowState = { ...flowState, error: error.message || 'Não foi possível capturar as ofertas.', notice: '' }
           await render()
+          document.querySelector('.flow-capture-feedback')?.scrollIntoView({ block: 'center', behavior: 'auto' })
         } finally {
           if (button && document.body.contains(button)) {
             button.disabled = false
