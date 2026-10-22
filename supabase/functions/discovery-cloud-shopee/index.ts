@@ -1,4 +1,5 @@
 import {collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOTAS,selectShopeeBalancedCandidates,diagnoseShopeeSources} from "./shopee-core.mjs";
+import {simulateShopeeCloudSelection,SHOPEE_CLOUD_POLICY} from "./shopee-policy.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -127,6 +128,31 @@ Deno.serve(async(req: Request)=>{
         {itemId:"2",productName:"Notebook SSD",priceMin:2000,priceDiscountRate:0.08,offerLink:"https://s.shopee.com.br/b",imageUrl:"https://example.com/b.jpg"}
       ];
       return respond({ok:true,mode:"fixture",dry_run:true,cloud_publishing:false,summary:previewSummary(collectUniqueOffers(fixtures))});
+    }
+    if(mode==="policy_fixture") {
+      // Intentionally hard-coded fixture only. No secrets / API / DB / delivery.
+      const offer=(itemid: string,discount_percentage: number)=>({
+        itemid,title:"Fone bluetooth modelo "+itemid,price:90,sale_price:90,
+        discount_percentage,
+        affiliate_url:"https://s.shopee.com.br/fixture"+itemid,
+        image_link:"https://example.com/fixture.jpg",
+        global_category1:"Mobile & Gadgets",channel_ids:["fixture-geral"],
+        _mavuri_api:{shop_id:"fixture-shop",commission_rate:0.12,sales:12}
+      });
+      const report=simulateShopeeCloudSelection({
+        candidates:[offer("old",50),offer("eligible",30),offer("below",3)],
+        sent_history:[{
+          itemid:"old",channel_id:"fixture-geral",sent_at:"2026-10-22T12:00:00Z",
+          published_price:90,status:"sent"
+        }],
+        pending_history:[],connected_telegram_channel_ids:["fixture-geral"],
+        now_iso:"2026-10-22T18:00:00Z"
+      });
+      return respond({ok:true,mode:"policy_fixture",dry_run:true,cloud_publishing:false,
+        policy:SHOPEE_CLOUD_POLICY,
+        result:{selected_unique_offers:report.selected_unique_offers,
+          projected_delivery_jobs:report.projected_delivery_jobs,
+          counts:report.counts}});
     }
     if(mode!=="live_preview") return respond({error:"unsupported_mode"},400);
     // Explicitly disabled by default. Live preview cannot write or publish.
