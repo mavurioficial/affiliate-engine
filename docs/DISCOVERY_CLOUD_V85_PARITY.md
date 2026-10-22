@@ -13,8 +13,8 @@ Este documento é um checklist técnico baseado no arquivo V85 original enviado 
 | Bloqueio 48h mesmo produto/canal | Regra-alvo V85; há divergências entre runner e ingest de produção | Simulação bloqueia 48h; 46 bloqueios em uma auditoria | **SOMENTE SIMULAÇÃO; NÃO ALTEROU INGEST REAL** |
 | Liberação por queda REAL de preço >=10% | Regra-alvo, no pipeline atual há múltiplas camadas de cooldown | Consulta snapshots antigos e compara; não confirma preço exato renderizado | **SOMENTE SIMULAÇÃO / AUDITAR PREÇO** |
 | Bloqueio 24h variante de outro vendedor | Desejado no Mavuri, identidade por produto/catálogo | Heurística de título provisória sem shop_id histórico | **NÃO VALIDADO EM DADOS REAIS** |
-| Filtros, categorias e quatro canais | Regras reais e overrides do banco | V14 comparador shadow copia classificador de ingest e interpreta as quatro regras; não aplica overrides SQL posteriores, nem autoriza publicação | **SOMENTE COMPARAÇÃO** |
-| Diversidade sem prejudicar categoria Outros | Regras e categorias ativas no Flow | 13/19 bloqueios por categoria Outros em v13; 32/80 'outros' na v14 | **EM AJUSTE; NÃO MUDAR LIMITES SEM VALIDAÇÃO** |
+| Filtros, categorias e quatro canais | Regras reais, dezenas de triggers SQL e revisões manuais | v14 compara a classificação de entrada; v15 também lê a categoria/tag efetivas de candidatos que JÁ estão no banco | **SOMENTE COMPARAÇÃO; PRODUTOS NOVOS SEM HISTÓRICO** |
+| Diversidade sem prejudicar categoria Outros | Classificação final no Flow inclui gatilhos SQL e revisões manuais | 13/19 bloqueios por categoria Outros na simulação, 32/80 'outros' na v14; v15 compara candidatos já armazenados com sua categoria efetiva no banco | **V15 EM DIAGNÓSTICO; NÃO MUDAR LIMITES SEM VALIDAÇÃO** |
 | Link de afiliado em todos os envios | Runner utiliza fontes/geração afiliada | API fornece offerLink; ainda não provou equivalência final de rastreamento e sub IDs | **PARCIAL** |
 | Seleção e publicação Shopee nos canais | Runner V85 chama `flow-shopee-ingest` e `flow-worker` | `discovery-cloud-shopee` não escreve nem chama ingest ou worker | **NÃO IMPLEMENTADO** |
 | Prioridade de cupons, fora da meta | V85 descobre vouchers Shopee, cupons ML/Magalu, consolidando publicação | Não portada no novo executor | **NÃO IMPLEMENTADO** |
@@ -30,6 +30,22 @@ Este documento é um checklist técnico baseado no arquivo V85 original enviado 
 3. **ML / Magalu / cupons:** extrair dependências de Chrome/MTProto para executores protegidos ou arquitetura independente; nunca versionar cookies, sesssões ou tokens locais.
 4. **Cutover atômico:** compartilhar o lease com executor local (ou desligá-lo de forma explicitamente verificada), habilitar Cron 30min só no momento da troca, validar limites e rastreamento, rollback preparado.
 
-**Situação factual ao atualizar:** somente `discovery-cloud-shopee` v14 está implantada; `discovery_cloud_control.enabled=false`, `active_executor=local`; nenhum Cron de Discovery. PR #19 permanece DRAFT. Não fazer merge, não desligar o PC.
+**Situação factual ao atualizar:** somente `discovery-cloud-shopee` v15 está implantada; `discovery_cloud_control.enabled=false`, `active_executor=local`; nenhum Cron de Discovery. PR #19 permanece DRAFT. Não fazer merge, não desligar o PC.
 
 **Cuidado semântico:** nunca apresentar `7/8` da simulação como oferta efetivamente publicada, nem os `matched_candidates_by_rule` como jobs que seriam autorizados. O candidato pode combinar regras de mais de um canal; a mesma oferta única só conta uma vez por ciclo.
+
+## Diagnóstico acrescentado em 22/10/2026 — Shopee Cloud v15
+
+Verificação atual do Supabase: existem **vários gatilhos BEFORE INSERT/UPDATE** em `flow_offers` que refinam e sobrescrevem classificação (marketplace map, regras semânticas, cozinha, sofá, skincare, tecnologia, etc.), incluindo a guarda de **revisões manuais** como última prioridade. Uma cópia isolada do classificador `flow-shopee-ingest` não é equivalente à **categoria final persistida**.
+
+Agregados das 145 ofertas Shopee recentes: 145 com `metadata.mavuri.category_slug` consistente com a FK `mavuri_category_id`; 12 com fonte `manual_approved/manual_corrected`, confirmando a necessidade de preservação manual.
+
+A função `discovery-cloud-shopee` **v15** mantém `general_audit` read-only e acrescenta `db_category_parity`:
+- Consulta apenas `flow_offers` dos mesmos `itemId` numéricos descobertos via API (até 80), via **GET PostgREST, JWT do proprietário e RLS**, sem service-role.
+- Cruza classificação preliminar (`classifyShopee`) com categoria e tags **efetivamente persistidas** em `metadata.mavuri.category_slug` e `mavuri_tags`.
+- Informa quantos candidatos estão armazenados, quantos são novos sem registro, divergências e transições agregadas, quantas revisões manuais atingiram o conjunto e diferenças preliminares de correspondência às quatro regras de canal.
+- **Não inventa categoria final para produto novo.** **Não reclassifica registros.** Não expõe IDs, URL, preço, título, credencial ou destino Telegram na resposta/log.
+- Retorno só de indicadores agregados; logs incluem os contadores necessários para validação sem pedir screenshot dos produtos ao usuário.
+- Testes puros de snapshot já corrigido, decisão manual, produto novo sem linha, multi-canal, não exposição de dados privados, além da checagem Deno, passaram na CI (run 39849035322).
+- **Pendente:** invocação real autenticada da v15 para validar filtro PostgREST `source_ref=in.(...)` e RLS em ambiente real. O resultado ainda não demonstra paridade completa com os gatilhos, apenas lê sua consequência para produtos existentes.
+
