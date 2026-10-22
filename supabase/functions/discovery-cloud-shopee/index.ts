@@ -81,11 +81,23 @@ Deno.serve(async(req: Request)=>{
     if(!userId) return respond({error:"unauthorized"},401);
     const input=await req.json().catch(()=>({}));
     const mode=String(input?.mode || "health");
-    if(mode==="health") return respond({
-      ok:true,stage:"shopee_read_only",cloud_publishing:false,cloud_schedule:false,
-      local_runner_must_remain_active:true,
-      live_preview_enabled:flag(Deno.env.get("MAVURI_SHOPEE_CLOUD_PREVIEW_ENABLED"))
-    });
+    if(mode==="health") {
+      const previewEnabled=flag(Deno.env.get("MAVURI_SHOPEE_CLOUD_PREVIEW_ENABLED"));
+      const ownerConfigured=Boolean(Deno.env.get("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID"));
+      const ownerAuthorized=userId===Deno.env.get("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID");
+      const appIdConfigured=Boolean(Deno.env.get("SHOPEE_AFFILIATE_APP_ID"));
+      const apiSecretConfigured=Boolean(Deno.env.get("SHOPEE_AFFILIATE_SECRET"));
+      return respond({
+        ok:true,stage:"shopee_read_only",cloud_publishing:false,cloud_schedule:false,
+        local_runner_must_remain_active:true,
+        live_preview_enabled:previewEnabled,
+        preview_owner_configured:ownerConfigured,
+        preview_owner_matches_session:ownerAuthorized,
+        shopee_app_id_configured:appIdConfigured,
+        shopee_api_secret_configured:apiSecretConfigured,
+        ready_for_live_preview:previewEnabled && ownerAuthorized && appIdConfigured && apiSecretConfigured
+      });
+    }
     if(mode==="fixture"){
       const fixtures=[
         {itemId:"1",productName:"Liquidificador",priceMin:199,priceDiscountRate:0.2,offerLink:"https://s.shopee.com.br/a",imageUrl:"https://example.com/a.jpg"},
