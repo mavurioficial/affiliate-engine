@@ -1,5 +1,6 @@
 import {collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOTAS,selectShopeeBalancedCandidates,diagnoseShopeeSources} from "./shopee-core.mjs";
 import {simulateShopeeCloudSelection,SHOPEE_CLOUD_POLICY} from "./shopee-policy.mjs";
+import {summarizeShopeeSentHistory} from "./shopee-history.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -96,6 +97,41 @@ async function livePreview() {
     source_diagnostics:diagnoseShopeeSources(pools,selection)
   };
 }
+// GET-only, user's own Supabase JWT. RLS is the authoritative permission check.
+async function ownerRlsGet(req: Request, table: string, params: Record<string,string>) {
+  const base=String(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"");
+  const keys=JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")||"{}");
+  const apikey=keys.default||Deno.env.get("SUPABASE_ANON_KEY")||"";
+  const authorization=req.headers.get("authorization")||"";
+  if(!base||!apikey||!/^Bearer\s+\S+$/i.test(authorization))throw Error("history_auth_unavailable");
+  const url=new URL(base+"/rest/v1/"+table);
+  for(const [k,v] of Object.entries(params))url.searchParams.set(k,v);
+  const res=await fetch(url,{method:"GET",headers:{apikey,Authorization:authorization,Accept:"application/json"},signal:AbortSignal.timeout(12000)});
+  if(!res.ok)throw Error("history_rest_"+res.status);
+  const rows=await res.json();
+  if(!Array.isArray(rows))throw Error("history_not_array");
+  return rows;
+}
+async function readShopeeHistory(req: Request) {
+  const marketplaces=await ownerRlsGet(req,"flow_marketplaces",{select:"id",slug:"eq.shopee",limit:"1"});
+  const id=String(marketplaces[0]?.id||"");
+  if(!id)throw Error("shopee_marketplace_not_found");
+  const now=new Date(),since=new Date(now.getTime()-7*24*3600000).toISOString();
+  const rows=[];
+  for(let page=0;page<10;page++){
+    const batch=await ownerRlsGet(req,"flow_delivery_logs",{
+      select:"created_at,channel_id,status,metadata,flow_offers!inner(source_ref,marketplace_id)",
+      status:"eq.sent",created_at:"gte."+since,
+      "flow_offers.marketplace_id":"eq."+id,
+      order:"created_at.asc",limit:"500",offset:String(page*500)
+    });
+    rows.push(...batch);
+    if(batch.length<500)break;
+    if(page===9)throw Error("history_too_many_rows");
+  }
+  return summarizeShopeeSentHistory(rows,{since_iso:since,now_iso:now.toISOString()});
+}
+
 Deno.serve(async(req: Request)=>{
   if(req.method === "OPTIONS") return new Response(null,{status:204,headers:JSON_HEADERS});
   if(req.method !== "POST") return respond({error:"post_only"},405);
@@ -128,6 +164,16 @@ Deno.serve(async(req: Request)=>{
         {itemId:"2",productName:"Notebook SSD",priceMin:2000,priceDiscountRate:0.08,offerLink:"https://s.shopee.com.br/b",imageUrl:"https://example.com/b.jpg"}
       ];
       return respond({ok:true,mode:"fixture",dry_run:true,cloud_publishing:false,summary:previewSummary(collectUniqueOffers(fixtures))});
+    }
+    if(mode==="history_preview") {
+      const owner=String(Deno.env.get("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID")||"");
+      if(!owner||userId!==owner)return respond({error:"history_owner_only"},403);
+      const summary=await readShopeeHistory(req);
+      console.log("[discovery-cloud-shopee] history sent="+summary.sent_deliveries+
+        " snapshots="+summary.snapshot_price_valid+
+        " repeats48="+summary.same_item_channel_repeat_within_48h);
+      return respond({ok:true,mode:"history_preview",dry_run:true,cloud_publishing:false,
+        cloud_schedule:false,summary});
     }
     if(mode==="policy_fixture") {
       // Intentionally hard-coded fixture only. No secrets / API / DB / delivery.
