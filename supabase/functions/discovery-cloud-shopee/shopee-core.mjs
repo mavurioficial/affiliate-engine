@@ -126,6 +126,44 @@ export function collectUniqueOffers(nodes, limit = 80) {
   }
   return [...unique.values()];
 }
+// Diagnose API responses without recording product identifiers, titles, prices,
+// affiliate URLs or credentials. No network / database work.
+export function diagnoseShopeeSources(pools, selection) {
+  const seenAcross=new Set();
+  const out={};
+  for(const spec of SHOPEE_V85_SPECS) {
+    const rows=Array.isArray(pools?.[spec.label])?pools[spec.label]:[];
+    const seenHere=new Set();
+    let valid=0,invalid=0,duplicatesWithinSource=0,duplicatesEarlierSource=0,discount10=0;
+    for(const node of rows) {
+      const offer=mapShopeeApiProduct(node);
+      if(!offer) { invalid++; continue; }
+      valid++;
+      if(seenHere.has(offer.itemid)) { duplicatesWithinSource++; continue; }
+      seenHere.add(offer.itemid);
+      if(seenAcross.has(offer.itemid)) duplicatesEarlierSource++;
+      else seenAcross.add(offer.itemid);
+      if(Number(offer.discount_percentage || 0)>=10) discount10++;
+    }
+    const selectedCount=selection?.selected_by_source?.[spec.label]||0;
+    out[spec.label]={
+      received:rows.length,valid,invalid,
+      unique_in_source:seenHere.size,
+      duplicates_within_source:duplicatesWithinSource,
+      duplicates_from_earlier_sources:duplicatesEarlierSource,
+      discount_at_least_10:discount10,
+      selected:selectedCount,
+      reason_if_zero_selected:
+        selectedCount>0?null:
+        rows.length===0?"api_returned_no_products":
+        valid===0?"no_valid_affiliate_offers":
+        seenHere.size===duplicatesEarlierSource?"all_overlap_earlier_sources":
+        "no_remaining_reserved_slots"
+    };
+  }
+  return out;
+}
+
 export function previewSummary(offers) {
   const rows = Array.isArray(offers) ? offers : [];
   return {
