@@ -42,3 +42,34 @@ export async function retryFailedDeliveries() {
   if (error) throw error
   return data || []
 }
+
+/**
+ * Publicação solicitada explicitamente pelo operador. Não consulta regras
+ * automáticas de desconto, categoria ou diversidade. A fila permanece
+ * responsável pelo envio físico aos destinos escolhidos.
+ */
+export async function enqueueManualOfferDeliveries(offer, selectedChannelIds) {
+  const user = (await supabase.auth.getUser()).data.user
+  if (!user) throw new Error('Faça login novamente no Mavuri.')
+  if (!offer?.id || !offer?.affiliate_url || !/^https:\/\//i.test(offer.affiliate_url)) {
+    throw new Error('A oferta precisa estar salva e ter um link de afiliado HTTPS válido.')
+  }
+  const ids = [...new Set((selectedChannelIds || []).filter(Boolean))]
+  if (!ids.length) throw new Error('Selecione pelo menos um destino.')
+  const { data: channels, error: channelError } = await supabase.from('flow_channels')
+    .select('id,name,type,status').eq('user_id',user.id).in('id',ids)
+  if (channelError) throw channelError
+  if (!channels || channels.length !== ids.length || channels.some(c => c.status !== 'connected')) {
+    throw new Error('Um dos destinos não está conectado ou não pertence ao Mavuri.')
+  }
+  const { data: rows, error } = await supabase.from('flow_delivery_jobs').upsert(
+    ids.map(channelId => ({
+      user_id: user.id, offer_id: offer.id, channel_id: channelId,
+      status: 'queued', attempts: 0, scheduled_for: new Date().toISOString(),
+      delivery_key: `${offer.id}:${channelId}`
+    })),
+    { onConflict: 'user_id,delivery_key', ignoreDuplicates: true }
+  ).select('id,channel_id,status')
+  if (error) throw error
+  return { queued: rows || [], skipped: ids.length - (rows || []).length, channels }
+}
