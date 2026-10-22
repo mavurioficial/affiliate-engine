@@ -88,3 +88,15 @@ Cloud Shopee v16 está **somente em diagnóstico**; `discovery_cloud_control.ena
 - `scripts/test-discovery-cloud-shopee-queue-release-gate.mjs` e `scripts/test-discovery-cloud-shopee-queue-sql-draft.mjs` aprovados no GitHub Actions run **39854422379**, junto com `deno check`.
 
 **Antes de aplicar a proposta SQL**: testar em banco separado ou transação controlada, confirmar que a UNIQUE parcial não quebra o fanout atual/concorrente nem os scripts existentes; revisar prioridades de classificação e regras dos quatro canais; só depois criar migration formal. Publicador/runner de produção não foram modificados. O próximo estágio de trabalho é uma RPC de inserção transacional com locks e decisão pós-persistência, também restrita a `enabled=true`, `active_executor='cloud'` e run válido. NUNCA expor `service_role` no navegador ou habilitar Cron antes do cutover completo.
+
+
+## Enqueue draft security strengthening (22/10/2026)
+
+O rascunho `docs/sql/SHOPEE_CLOUD_ATOMIC_ENQUEUE_DRAFT.sql` foi reforçado, **sem aplicação ao Supabase**:
+- verifica que o marketplace de entrada é realmente `shopee`, não apenas um UUID fornecido pelo chamador;
+- compara a categoria final guardada no metadata com a categoria referenciada pela FK `mavuri_category_id`;
+- rejeita canais duplicados ou nulos e verifica que cada canal pertence ao usuário correto, está conectado/ativo, tem destino e é um dos quatro Telegram autorizados;
+- preserva validação de executor, lease e conta afiliada já prevista.
+- retorna sempre `accepted=false` com `transactional_policy_not_implemented`, mesmo quando outras verificações passarem.
+
+O rascunho **não** executa o roteamento `flow_rules` definitivo, a deduplicação transacional nem cria jobs. Não é um publicador. Testes estáticos foram ampliados; a próxima etapa requer a implementação segura em ambiente isolado, com concorrência real, antes de qualquer migração DDL para produção.
