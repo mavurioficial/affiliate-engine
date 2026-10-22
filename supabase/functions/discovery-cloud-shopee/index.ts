@@ -2,6 +2,7 @@ import {collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOT
 import {simulateShopeeCloudSelection,SHOPEE_CLOUD_POLICY} from "./shopee-policy.mjs";
 import {summarizeShopeeSentHistory} from "./shopee-history.mjs";
 import {simulateShopeeGeneralAudit,validateShopeeGeneralRule} from "./shopee-general-audit.mjs";
+import {compareShopeeRoutingShadow,validateShopeeRoutingRules} from "./shopee-routing-shadow.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -148,7 +149,7 @@ async function readPagedForShopee(req: Request,table:string,filter:Record<string
 async function liveGeneralAudit(req: Request) {
   const [rules,channels,marketplaces]=await Promise.all([
     ownerRlsGet(req,"flow_rules",{
-      select:"name,enabled,conditions,actions",name:"eq.SHOPEE — Geral",enabled:"eq.true"
+      select:"name,enabled,conditions,actions",enabled:"eq.true"
     }),
     ownerRlsGet(req,"flow_channels",{
       select:"id,type,status,external_ref",type:"eq.telegram"
@@ -158,6 +159,7 @@ async function liveGeneralAudit(req: Request) {
   const marketplaceId=String(marketplaces[0]?.id||"");
   if(!marketplaceId)throw Error("audit_shopee_marketplace_missing");
   validateShopeeGeneralRule(rules,channels); // fail closed BEFORE further API/history queries
+  validateShopeeRoutingRules(rules,channels); // verify all 4 active Telegram routes
   // Fail before calling Shopee API if the live general rule has drifted.
   // Validator is called from the pure simulation even when history is empty.
   const moment=new Date(),since=new Date(moment.getTime()-48*3600000).toISOString();
@@ -178,10 +180,11 @@ async function liveGeneralAudit(req: Request) {
     offers:cloudPool.internal_offers,rules,channels,sentRows,pendingRows,
     now_iso:moment.toISOString()
   });
+  const routingShadow=compareShopeeRoutingShadow(cloudPool.internal_offers,rules,channels);
   return {ok:true,mode:"general_audit",dry_run:true,cloud_publishing:false,
     cloud_schedule:false,source_counts:cloudPool.selected_by_source,
     source_discount_at_least_10:cloudPool.summary.discount_at_least_10,
-    ...report};
+    ...report,routing_shadow:routingShadow};
 }
 
 Deno.serve(async(req: Request)=>{
