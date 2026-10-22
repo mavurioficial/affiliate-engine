@@ -3,6 +3,7 @@ import {simulateShopeeCloudSelection,SHOPEE_CLOUD_POLICY} from "./shopee-policy.
 import {summarizeShopeeSentHistory} from "./shopee-history.mjs";
 import {simulateShopeeGeneralAudit,validateShopeeGeneralRule} from "./shopee-general-audit.mjs";
 import {compareShopeeRoutingShadow,validateShopeeRoutingRules} from "./shopee-routing-shadow.mjs";
+import {compareShopeeDbCategoryParity} from "./shopee-db-category-parity.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -146,6 +147,25 @@ async function readPagedForShopee(req: Request,table:string,filter:Record<string
   }
   throw Error("audit_page_limit");
 }
+async function readPersistedShopeeCategories(
+  req: Request, marketplaceId: string, offers: Array<{itemid:string}>
+) {
+  // Only numeric itemIds from trusted affiliate API are allowed in a PostgREST "in" filter.
+  const ids=[...new Set(offers.map(x=>String(x.itemid||"").trim()))]
+    .filter(x=>/^[0-9]{1,24}$/.test(x)).slice(0,80);
+  if(!ids.length)return [];
+  const rows=await ownerRlsGet(req,"flow_offers",{
+    select:"source_ref,mavuri_tags,metadata,captured_at",
+    marketplace_id:"eq."+marketplaceId,
+    source_ref:"in.("+ids.join(",")+")",
+    order:"captured_at.desc",
+    limit:"300"
+  });
+  if(rows.length===300)throw Error("audit_persisted_result_limit");
+  // DO NOT return rows: they may contain private offer metadata.
+  return rows;
+}
+
 async function liveGeneralAudit(req: Request) {
   const [rules,channels,marketplaces]=await Promise.all([
     ownerRlsGet(req,"flow_rules",{
@@ -181,10 +201,12 @@ async function liveGeneralAudit(req: Request) {
     now_iso:moment.toISOString()
   });
   const routingShadow=compareShopeeRoutingShadow(cloudPool.internal_offers,rules,channels);
+  const persistedRows=await readPersistedShopeeCategories(req,marketplaceId,cloudPool.internal_offers);
+  const dbParity=compareShopeeDbCategoryParity(cloudPool.internal_offers,persistedRows,rules,channels);
   return {ok:true,mode:"general_audit",dry_run:true,cloud_publishing:false,
     cloud_schedule:false,source_counts:cloudPool.selected_by_source,
     source_discount_at_least_10:cloudPool.summary.discount_at_least_10,
-    ...report,routing_shadow:routingShadow};
+    ...report,routing_shadow:routingShadow,db_category_parity:dbParity};
 }
 
 Deno.serve(async(req: Request)=>{
@@ -230,7 +252,18 @@ Deno.serve(async(req: Request)=>{
       console.log("[discovery-cloud-shopee] general_audit candidates="+report.candidates_considered+
         " projected="+report.projected_unique_offers+
         " history_matched="+report.history.sent_matched+
-        " pending_matched="+report.history.pending_matched);
+        " pending_matched="+report.history.pending_matched+
+        " db_category_comparable="+report.db_category_parity.comparable_candidates+
+        " db_category_differences="+report.db_category_parity.ingest_vs_database_category_mismatches);
+      console.log("[discovery-cloud-shopee] db_category_parity="+JSON.stringify({
+        total:report.db_category_parity.candidates_total,
+        existing:report.db_category_parity.comparable_candidates,
+        unknown:report.db_category_parity.missing_in_database,
+        manual:report.db_category_parity.manual_approved_or_corrected,
+        changes:report.db_category_parity.category_transitions,
+        route_gains:report.db_category_parity.channel_rules.newly_matched_by_stored,
+        route_losses:report.db_category_parity.channel_rules.no_longer_matched_by_stored
+      }));
       return respond(report);
     }
     if(mode==="history_preview") {
