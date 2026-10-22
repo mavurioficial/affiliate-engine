@@ -75,6 +75,16 @@ function dateAgeHours(date,now) {
   const timestamp=Date.parse(String(date||""));
   return Number.isFinite(timestamp)?(now-timestamp)/(60*60*1000):Number.POSITIVE_INFINITY;
 }
+/**
+ * @typedef {Object} ShopeePolicyInput
+ * @property {Array<Record<string, any>>} [candidates]
+ * @property {Array<Record<string, any>>} [sent_history]
+ * @property {Array<Record<string, any>>} [pending_history]
+ * @property {string[]} [connected_telegram_channel_ids]
+ * @property {string} [now_iso]
+ * @property {number} [target]
+ */
+/** @param {ShopeePolicyInput} param0 */
 export function simulateShopeeCloudSelection({
   candidates=[], sent_history=[], pending_history=[], connected_telegram_channel_ids=[],
   now_iso="2026-10-22T18:00:00Z", target=SHOPEE_CLOUD_POLICY.target_unique_offers
