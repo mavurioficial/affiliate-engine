@@ -1,0 +1,115 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {mapShopeeApiProduct,collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS} from "./shopee-core.mjs";
+
+/**
+ * Cloud Discovery V85 phase A — READ ONLY.
+ * NO INSERTS, NO publish calls, NO Cron, NO activation of the cloud lease.
+ * Default behavior is unavailable for live probes unless explicit secret flag is set.
+ */
+const JSON_HEADERS = {"content-type":"application/json; charset=utf-8","cache-control":"no-store"};
+const API_URL = "https://open-api.affiliate.shopee.com.br/graphql";
+const flag = (v: string | undefined)=> /^(true|1|yes)$/i.test(String(v || ""));
+
+function respond(body: Record<string,unknown>, status=200) {
+  return new Response(JSON.stringify(body),{status,headers:JSON_HEADERS});
+}
+async function authenticate(req: Request): Promise<string | null> {
+  const bearer = req.headers.get("Authorization") || "";
+  const token = /^Bearer\s+(\S+)$/i.exec(bearer)?.[1];
+  if (!token) return null;
+  const url = Deno.env.get("SUPABASE_URL") || "";
+  const keys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}");
+  const apikey = keys.default || Deno.env.get("SUPABASE_ANON_KEY") || "";
+  if (!url || !apikey) return null;
+  const response = await fetch(url + "/auth/v1/user",{
+    headers: { Authorization: "Bearer " + token, apikey },
+    signal:AbortSignal.timeout(7000)
+  });
+  if (!response.ok) return null;
+  const user = await response.json();
+  return typeof user?.id === "string" ? user.id : null;
+}
+function queryFor(spec: {listType:number;sortType:number},page:number,limit:number) {
+  return `{ productOfferV2(listType: ${spec.listType}, sortType: ${spec.sortType}, page: ${page}, limit: ${limit}) {
+    nodes {itemId productName productLink offerLink imageUrl priceMin priceMax priceDiscountRate sales ratingStar
+      commissionRate sellerCommissionRate shopeeCommissionRate commission shopId shopName shopType periodStartTime periodEndTime}
+    pageInfo {page limit hasNextPage} } }`;
+}
+async function signedShopeeQuery(query: string) {
+  const appId = Deno.env.get("SHOPEE_AFFILIATE_APP_ID") || "";
+  const secret = Deno.env.get("SHOPEE_AFFILIATE_SECRET") || "";
+  if (!appId || !secret) throw new Error("shopee_credentials_missing");
+  const body = JSON.stringify({query});
+  const timestamp = Math.floor(Date.now()/1000);
+  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(`${appId}${timestamp}${body}${secret}`));
+  const signature=Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  const response=await fetch(API_URL,{
+    method:"POST",
+    headers:{"Content-Type":"application/json",
+      "Authorization":`SHA256 Credential=${appId}, Timestamp=${timestamp}, Signature=${signature}`},
+    body,signal:AbortSignal.timeout(12000)
+  });
+  if (!response.ok) throw new Error("shopee_http_" + response.status);
+  const data=await response.json();
+  if (Array.isArray(data?.errors) && data.errors.length) throw new Error("shopee_graphql_error");
+  return data?.data?.productOfferV2 || {nodes:[],pageInfo:{}};
+}
+async function livePreview() {
+  const unique=new Map<string,ReturnType<typeof mapShopeeApiProduct>>();
+  const sources=[];
+  // V85: up to 80 unique items, 30 per page, up to 3 pages for each list.
+  for(const spec of SHOPEE_V85_SPECS) {
+    for(let page=1;page<=3;page++) {
+      const payload=await signedShopeeQuery(queryFor(spec,page,30));
+      const nodes=Array.isArray(payload.nodes)?payload.nodes:[];
+      for(const n of nodes) {
+        const offer=mapShopeeApiProduct(n);
+        if(!offer || unique.has(offer.itemid)) continue;
+        unique.set(offer.itemid,offer);
+        if(unique.size>=80) break;
+      }
+      sources.push({list:spec.label,page,received:nodes.length,unique:unique.size});
+      if(unique.size>=80 || nodes.length<30) break;
+    }
+    if(unique.size>=80) break;
+  }
+  return {summary:previewSummary([...unique.values()]),sources};
+}
+Deno.serve(async(req: Request)=>{
+  if(req.method !== "POST") return respond({error:"post_only"},405);
+  try{
+    const userId=await authenticate(req);
+    if(!userId) return respond({error:"unauthorized"},401);
+    const input=await req.json().catch(()=>({}));
+    const mode=String(input?.mode || "health");
+    if(mode==="health") return respond({
+      ok:true,stage:"shopee_read_only",cloud_publishing:false,cloud_schedule:false,
+      local_runner_must_remain_active:true,
+      live_preview_enabled:flag(Deno.env.get("MAVURI_SHOPEE_CLOUD_PREVIEW_ENABLED"))
+    });
+    if(mode==="fixture"){
+      const fixtures=[
+        {itemId:"1",productName:"Liquidificador",priceMin:199,priceDiscountRate:0.2,offerLink:"https://s.shopee.com.br/a",imageUrl:"https://example.com/a.jpg"},
+        {itemId:"1",productName:"Liquidificador",priceMin:199,priceDiscountRate:0.2,offerLink:"https://s.shopee.com.br/a",imageUrl:"https://example.com/a.jpg"},
+        {itemId:"2",productName:"Notebook SSD",priceMin:2000,priceDiscountRate:0.08,offerLink:"https://s.shopee.com.br/b",imageUrl:"https://example.com/b.jpg"}
+      ];
+      return respond({ok:true,mode:"fixture",dry_run:true,cloud_publishing:false,summary:previewSummary(collectUniqueOffers(fixtures))});
+    }
+    if(mode!=="live_preview") return respond({error:"unsupported_mode"},400);
+    // Explicitly disabled by default. Live preview cannot write or publish.
+    if(!flag(Deno.env.get("MAVURI_SHOPEE_CLOUD_PREVIEW_ENABLED")))
+      return respond({error:"live_preview_disabled",dry_run:true},403);
+    const ownerId=String(Deno.env.get("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID") || "");
+    if(!ownerId || userId!==ownerId) return respond({error:"not_authorized_for_live_preview"},403);
+    if(!Deno.env.get("SHOPEE_AFFILIATE_APP_ID") || !Deno.env.get("SHOPEE_AFFILIATE_SECRET"))
+      return respond({error:"shopee_credentials_missing",dry_run:true},503);
+    const result=await livePreview();
+    console.log("[discovery-cloud-shopee] preview candidates="+result.summary.candidates+" requests="+result.sources.length);
+    return respond({ok:true,mode:"live_preview",dry_run:true,cloud_publishing:false,...result});
+  }catch(err) {
+    const reason=err instanceof Error?err.message:"unknown";
+    // Never log request headers, Shopee signatures, credentials or affiliate URLs.
+    console.error("[discovery-cloud-shopee] "+String(reason).slice(0,120));
+    return respond({ok:false,error:/^shopee_(credentials_missing|http_\d+|graphql_error)$/.test(reason)?reason:"preview_failed"},502);
+  }
+});
