@@ -63,7 +63,7 @@ export function simulateShopeeGeneralAudit({
     now_iso,target:8
   });
   return {
-    mode:"general_only", read_only:true,
+    scope:"shopee_general_only", read_only:true,
     disclaimer:"Simulation for Shopee — Geral only. Other channels, cross-seller identity, approval triggers and actual publishing are not validated.",
     candidates_considered:eligibleSource.length,
     history:counters,
