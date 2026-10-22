@@ -56,6 +56,9 @@ matching_rules AS (
 )
 SELECT (
   (SELECT count(*) FROM known_rules)=4
+  AND (SELECT count(DISTINCT name) FROM known_rules
+       WHERE name IN ('SHOPEE — Geral','SHOPEE — Mulher',
+                      'SHOPEE — Casa & Cozinha','SHOPEE — Tecnologia'))=4
   AND (SELECT count(*) FROM matching_rules)=1
   AND EXISTS (
     SELECT 1 FROM valid_offer o CROSS JOIN matching_rules r
