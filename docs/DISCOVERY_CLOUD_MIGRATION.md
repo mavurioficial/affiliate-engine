@@ -57,7 +57,7 @@ Auditoria **do `flow-shopee-ingest` implantado v8**:
 - Janela de republicação para a mesma oferta/canal é **24h** (não 48h). Consulta status `sent` e `queued/processing` por canal.
 - Famílias amplas têm limite 1 por ciclo e uma janela de **1h** por canal, não a janela de 24h para variantes do mesmo produto vendidas por outros vendedores.
 - `dry_run=true` não calcula `offers_selected` corretamente para itens novos: o código não cria `offerId` e interrompe antes da contagem. Portanto **não usar a resposta de produção como simulação autorizadora**.
-- `flow_offers.price` muda ao atualizar ofertas; **não é histórico imutável do preço efetivamente divulgado**. A exceção de queda >=10% não pode ser liberada com segurança sem snapshot por publicação.
+- `flow_offers.price` muda ao atualizar ofertas e não serve como histórico. **Correção da auditoria:** um gatilho existente (`mavuri_delivery_log_snapshot_offer`) já armazena o preço em `flow_delivery_logs.metadata.offer_snapshot.price` na inserção de cada entrega `sent`. Verificar consistência antes de utilizar para liberar a exceção >=10%.
 - Metadados da API (`_mavuri_api.commission_rate`, vendedor) são gerados pelo Discovery V85, mas o ingest não os persiste no campo `metadata.shopee`; atualmente a comissão não participa da seleção de ofertas.
 
 Adicionada na branch apenas (nenhuma alteração no `flow-shopee-ingest` implantado):
@@ -72,9 +72,27 @@ A política de simulação:
 - Exige `now_iso` explícito para evitar cálculos com relógio parado.
 - Testes cobrem 48h, 24h, queda 10%, queda insuficiente, sessão com preço histórico ausente, duplicação, contagem por canal, limite 8, candidato bloqueado sem consumir vaga e ranking por comissão em descontos empatados.
 
-`mode=policy_fixture` somente exercita amostras simuladas no Supabase, não lê o histórico de entregas e **não cria publicação**. Esta política ainda NÃO substitui a seleção de produção, nem pode autorizar um cutover sem snapshots confiáveis de preços publicados e integração segura ao backend.
+`mode=policy_fixture` somente exercita amostras simuladas no Supabase e **não cria publicação**. `mode=history_preview` lê o histórico real via PostgREST sob a sessão autenticada do próprio usuário e RLS (sem service key) e responde apenas com contadores agregados. Nenhuma dessas funções substitui a seleção de produção. Ainda exigem integração de candidatos e regras com o backend, validação do snapshot no instante exato do envio e exclusão mútua Windows/nuvem.
 
-**Fase seguinte obrigatória:** projetar a captura imutável de `published_price` no momento real da publicação e validar a identidade `family_signature` de produtos equivalentes. Depois, construir simulador ligado ao banco somente leitura para comparar com decisões efetivas, garantir lease compartilhado Windows/nuvem e só então habilitar ingest para publicação.
+**Fase seguinte obrigatória:** aproveitar o snapshot existente, confrontando seu valor com o texto enviado e avaliando a pequena janela entre envio Telegram e inserção do log; fortalecer a garantia de imutabilidade conforme necessário. Validar a identidade `family_signature` entre vendedores e adicionar `shop_id`/comissão na ingestão futura, apenas após revisão. Comparar as decisões do simulador com o histórico real; integrar o lease compartilhado Windows/nuvem e só então habilitar ingest para publicação.
+
+### Histórico de publicações e preço publicado (auditoria em 22/10/2026)
+
+**Achado:** já existe gatilho `public.mavuri_delivery_log_snapshot_offer()` em `BEFORE INSERT` de `flow_delivery_logs`, que captura automaticamente `flow_offers.price`, desconto, cupom, fingerprint e data de captura em `metadata.offer_snapshot` ao registrar entrega `sent`. O worker chama Telegram e depois grava o `sent` em `flow_delivery_logs`; o gatilho coleta o preço do banco nesse instante. Dados das 463 entregas Shopee `sent` dos últimos sete dias: **463 com snapshot de preço numérico positivo**.
+
+**Cuidado:** o registro ocorre logo **após** o envio; uma alteração concorrente em `flow_offers` entre a montagem da mensagem e o registro do log pode causar divergência. A tabela não é formalmente imutável. Para cutover seguro, avaliar persistir o preço **exatamente renderizado** na mensagem e proteger histórico contra alterações, sem prejudicar a operação atual.
+
+Comparação retroativa por `source_ref + channel_id`, janela de observação 7 dias, distância entre envios inferior a 48h: **132 pares**, dos quais **2** registravam queda de preço >=10% entre snapshots e **130** não registravam queda comprovada >=10%. São indicadores de possível violação da nova política (aplicada prospectivamente), não uma alteração retroativa de publicações. A janela limita a comparação do primeiro evento de cada produto/canal.
+
+Nos últimos três dias, nenhuma das 149 ofertas Shopee cadastradas recentemente possuía `shop_id` nem `commission_rate` em `metadata.shopee`; `shop_name` estava presente em 149. A versão de ingestão atual descarta alguns campos disponíveis no retorno da API. **Não é seguro validar a regra de produto equivalente de outro vendedor usando somente nomes de loja**.
+
+Implantado `discovery-cloud-shopee` **v11**, com modo `history_preview`:
+- autentica o usuário dono via JWT Supabase e `MAVURI_SHOPEE_CLOUD_OWNER_USER_ID`;
+- executa **somente GET** em `flow_marketplaces` e `flow_delivery_logs` com relação `flow_offers`, sempre com JWT do usuário e políticas RLS existentes;
+- consulta até 7 dias de histórico `sent` da Shopee, paginando em até 5.000 linhas e falhando explicitamente se exceder o limite;
+- retorna **apenas contadores agregados** de snapshots, produtos, canais, pares no bloqueio 48h e ocorrências com queda >=10%, nunca IDs, títulos, URLs ou segredos.
+- Código novo `shopee-history.mjs` e testes `scripts/test-discovery-cloud-shopee-history.mjs`, passando no CI; **a rota precisa ser testada pelo usuário autenticado no Mavuri para confirmar PostgREST em execução real**.
+- Nenhum novo Cron, update, insert ou publicação. `discovery_cloud_control.enabled=false` e origem `local`.
 
 ### Primeira função cloud implantada (sem publicação)
 
