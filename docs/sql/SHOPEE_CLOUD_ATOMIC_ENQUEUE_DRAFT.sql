@@ -21,8 +21,9 @@ DECLARE
   v_offer public.flow_offers%ROWTYPE;
   v_category text;
   v_channel uuid;
-  v_inserted int := 0;
-  v_key text;
+  v_verified_channels integer;
+  v_shopee_marketplace boolean;
+  v_category_fk text;
 BEGIN
   -- Service-role authentication AND explicit expected account identity.
   IF coalesce(auth.jwt()->>'role','') <> 'service_role' THEN
@@ -64,10 +65,41 @@ BEGIN
      OR v_offer.affiliate_url IS DISTINCT FROM p_expected_affiliate_url THEN
     RETURN jsonb_build_object('accepted',false,'reason','offer_changed');
   END IF;
+  -- The supplied marketplace ID must actually be Shopee.
+  SELECT EXISTS (
+    SELECT 1 FROM public.flow_marketplaces m
+    WHERE m.id=p_marketplace_id AND m.slug='shopee'
+  ) INTO v_shopee_marketplace;
+  IF NOT v_shopee_marketplace THEN
+    RETURN jsonb_build_object('accepted',false,'reason','marketplace_not_shopee');
+  END IF;
+
+  -- Strict FK/category parity: a manual review may have updated the FK
+  -- independently from the metadata supplied by the initial collector.
+  SELECT c.slug INTO v_category_fk
+  FROM public.mavuri_categories c WHERE c.id=v_offer.mavuri_category_id;
   v_category:=v_offer.metadata #>> '{mavuri,category_slug}';
   IF v_category IS NULL OR v_category<>p_expected_category_slug
+      OR v_category_fk IS DISTINCT FROM v_category
       OR v_offer.mavuri_category_id IS NULL OR v_offer.mavuri_tags IS NULL THEN
     RETURN jsonb_build_object('accepted',false,'reason','classification_changed');
+  END IF;
+
+  -- Validate destination scope, even though the DRAFT never queues.
+  -- Any invalid or disabled Telegram route fails the entire request.
+  IF EXISTS (SELECT 1 FROM unnest(p_channel_ids) AS id WHERE id IS NULL)
+    OR (SELECT count(DISTINCT id) FROM unnest(p_channel_ids) AS id)
+       <> array_length(p_channel_ids,1) THEN
+    RETURN jsonb_build_object('accepted',false,'reason','invalid_or_duplicate_channels');
+  END IF;
+  SELECT count(*) INTO v_verified_channels FROM public.flow_channels c
+  WHERE c.id=ANY(p_channel_ids) AND c.user_id=p_user_id
+    AND c.type='telegram' AND c.status IN ('active','connected')
+    AND c.external_ref IS NOT NULL
+    AND c.name IN ('Mavuri Ofertas','Mavuri Mulher',
+      'Mavuri Casa & Cozinha','Mavuri Tecnologia');
+  IF v_verified_channels<>array_length(p_channel_ids,1) THEN
+    RETURN jsonb_build_object('accepted',false,'reason','channel_scope_or_status_changed');
   END IF;
 
   -- A pending-job UNIQUE partial index must be present before this
@@ -99,6 +131,9 @@ END;
 $fn$;
 
 -- Required deployment review before any future application:
+-- 0. IMPORTANT: This DRAFT still cannot atomically validate the active channel
+--    rule conditions or account-specific affiliate membership end-to-end.
+--    The function remains hard-blocked; do not treat scope checks as authorization.
 -- 1. Move to private/secured RPC design with explicit REVOKE EXECUTE FROM PUBLIC,
 --    anon, authenticated; only grant service_role if absolutely required.
 -- 2. Validate the rule matching, cooldown/family checks, cycle caps and precise
