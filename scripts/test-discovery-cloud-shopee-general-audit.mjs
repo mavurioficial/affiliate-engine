@@ -38,6 +38,13 @@ assert.equal(output.decisions.same_product_price_drop_override,1);
 assert.equal(output.decisions.pending,1);
 assert.equal(output.decisions.discount_below_min,1);
 assert.equal(output.read_only,true);
+assert.equal(output.category_diagnostics.selected.casa,1);
+assert.equal(output.category_diagnostics.selected.informatica,1);
+assert.equal(output.category_diagnostics.selected.outros,1);
+assert.equal(output.category_diagnostics.blocked_by_recent_publication.beleza,1);
+assert.equal(Object.values(output.category_diagnostics.selected).reduce((a,b)=>a+b,0),output.projected_unique_offers);
+assert.equal(JSON.stringify(output.category_diagnostics).includes("https://"),false);
+
 assert.equal(JSON.stringify(output).includes("https://"),false);
 assert.equal(JSON.stringify(output).includes("general"),true); // generalized mode label only
 console.log("Shopee general-channel read-only audit regression OK.");
