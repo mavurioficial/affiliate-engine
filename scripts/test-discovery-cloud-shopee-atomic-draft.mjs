@@ -9,6 +9,14 @@ assert.match(sql,/FROM public\.flow_offers[\s\S]*?FOR UPDATE/);
 assert.match(sql,/affiliate_account_id=p_affiliate_account_id/);
 assert.match(sql,/v_offer\.affiliate_url IS DISTINCT FROM p_expected_affiliate_url/);
 assert.match(sql,/classification_changed/);
+assert.match(sql,/marketplace_not_shopee/);
+assert.match(sql,/v_category_fk IS DISTINCT FROM v_category/);
+assert.match(sql,/invalid_or_duplicate_channels/);
+assert.match(sql,/channel_scope_or_status_changed/);
+assert.match(sql,/c\.type='telegram'/);
+assert.match(sql,/c\.status IN \('active','connected'\)/);
+assert.match(sql,/c\.user_id=p_user_id/);
+
 assert.match(sql,/pending_unique_missing/);
 assert.match(sql,/reason','transactional_policy_not_implemented'/);
 assert.ok(!/\bINSERT INTO public\.flow_delivery_jobs\b/i.test(sql));
