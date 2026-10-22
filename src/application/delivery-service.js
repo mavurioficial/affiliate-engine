@@ -22,7 +22,7 @@ export async function enqueueOfferDeliveries(offer) {
 export async function listDeliveryJobs({ status } = {}) {
   const user = (await supabase.auth.getUser()).data.user
   if (!user) throw new Error('Usuário não autenticado.')
-  let query = supabase.from('flow_delivery_jobs').select('*').eq('user_id', user.id).order('created_at',{ascending:false}).limit(100)
+  let query = supabase.from('flow_delivery_jobs').select('*, offer:flow_offers(title,price,affiliate_url)').eq('user_id', user.id).order('created_at',{ascending:false}).limit(100)
   if (status) query=query.eq('status',status)
   const { data,error }=await query
   if(error) throw error
