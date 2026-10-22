@@ -33,6 +33,17 @@ Fonte: arquivo local `browser-discovery-v1(20261022-165219).mjs` e `package.json
 
 Notas de negócio conferidas: ML até 8, Shopee até 8, Magalu até 5 ofertas únicas; cupons fora da meta; ML Best Price antes de gerar link afiliado; no Shopee preço antigo desconhecido **não pode ser inventado**. A V85 contém uma chamada de republicação com parâmetros `cooldown_hours:24` e `price_drop_pct:5`, mas a função `flow-republication-policy` implantada normaliza para mínimos de 48h/10%. Essa diferença precisa de testes, não de suposições.
 
+### Resultado da primeira consulta Shopee live_preview (22/10/2026)
+
+Supabase Edge Logs: HTTP 200; 80 candidatos distintos em 3 chamadas `productOfferV2`. Console do usuário: 74 com desconto reportado >=10%, 80 com campo `offerLink` presente; **41/80 ficaram sem hint de categoria**. Os 80 vieram de `top-performance`, páginas 1, 2 e 3; `maior-comissao` e `recomendados` não foram consultados pela primeira versão. A presença de link não verifica atribuição de afiliado, nem significa 8 ofertas aprovadas pelo Flow.
+
+**Correção de diagnóstico implantada na versão v8 da Edge Function**:
+- Seleção balanceada do pool de até 80 ofertas por origem: `top-performance` 30, `maior-comissao` 25, `recomendados` 25. Prioridade de cada origem + backfill para preencher vagas; deduplicação global por `itemId`.
+- Consultas em rodadas de 1 página por origem, até 3 páginas/origem; busca páginas extras só quando necessário para preencher as cotas/faltas. Máximo 9 consultas GraphQL por prévia; nenhum envio.
+- Hints de categoria conservadores para árvore de Natal, toalha de banho/rosto, materiais de limpeza, fatiadores de cozinha, bicicletas ergométricas e suplementos esportivos, respeitando padrões reconhecidos pelo `flow-shopee-ingest`. Produtos ambíguos permanecem `unclassified`.
+- Retorno inclui `primary_by_source`, `selected_by_source`, `quota_by_source`, `backfill_added`, `classified` e `unclassified`.
+- Testes de quota, sobreposição, deduplicação e regressão das categorias; `deno check` aprovados no PR. **Necessário rodar nova prévia real para comparar a distribuição e verificar a resposta da API das outras listas.**
+
 ### Primeira função cloud implantada (sem publicação)
 
 `discovery-cloud-shopee` V1 implantada no Supabase, com `verify_jwt=true`. Código: `supabase/functions/discovery-cloud-shopee/`.
