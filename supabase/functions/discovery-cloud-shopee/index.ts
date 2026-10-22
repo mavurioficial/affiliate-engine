@@ -1,4 +1,4 @@
-import {mapShopeeApiProduct,collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS} from "./shopee-core.mjs";
+import {collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOTAS,selectShopeeBalancedCandidates} from "./shopee-core.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -58,25 +58,41 @@ async function signedShopeeQuery(query: string) {
   return data?.data?.productOfferV2 || {nodes:[],pageInfo:{}};
 }
 async function livePreview() {
-  const unique=new Map<string,ReturnType<typeof mapShopeeApiProduct>>();
+  const pools: Record<string, unknown[]> = Object.fromEntries(SHOPEE_V85_SPECS.map(spec=>[spec.label,[]]));
+  const exhausted: Record<string,boolean> = Object.fromEntries(SHOPEE_V85_SPECS.map(spec=>[spec.label,false]));
   const sources=[];
-  // V85: up to 80 unique items, 30 per page, up to 3 pages for each list.
-  for(const spec of SHOPEE_V85_SPECS) {
-    for(let page=1;page<=3;page++) {
+  let selection=selectShopeeBalancedCandidates(pools);
+  // Query one page of each source before expanding any one source:
+  // quotas: top=30, commission=25, recommended=25, up to 3 pages per source.
+  // Each query only reads Shopee GraphQL; no inserts, ingest, jobs or sends.
+  for(let page=1;page<=3;page++) {
+    for(const spec of SHOPEE_V85_SPECS) {
+      if(exhausted[spec.label]) continue;
       const payload=await signedShopeeQuery(queryFor(spec,page,30));
       const nodes=Array.isArray(payload.nodes)?payload.nodes:[];
-      for(const n of nodes) {
-        const offer=mapShopeeApiProduct(n);
-        if(!offer || unique.has(offer.itemid)) continue;
-        unique.set(offer.itemid,offer);
-        if(unique.size>=80) break;
-      }
-      sources.push({list:spec.label,page,received:nodes.length,unique:unique.size});
-      if(unique.size>=80 || nodes.length<30) break;
+      pools[spec.label].push(...nodes);
+      exhausted[spec.label]=nodes.length<30 || payload?.pageInfo?.hasNextPage===false;
+      sources.push({
+        list:spec.label,page,received:nodes.length,
+        accumulated:pools[spec.label].length,
+        has_next_page:!exhausted[spec.label]
+      });
     }
-    if(unique.size>=80) break;
+    selection=selectShopeeBalancedCandidates(pools);
+    const targetSatisfied=SHOPEE_V85_SPECS.every(spec =>
+      selection.primary_by_source[spec.label]>=SHOPEE_BALANCED_QUOTAS[spec.label] || exhausted[spec.label]
+    );
+    if(selection.offers.length>=80 && targetSatisfied) break;
+    if(SHOPEE_V85_SPECS.every(spec=>exhausted[spec.label])) break;
   }
-  return {summary:previewSummary([...unique.values()]),sources};
+  return {
+    summary:previewSummary(selection.offers),
+    sources,
+    selected_by_source:selection.selected_by_source,
+    primary_by_source:selection.primary_by_source,
+    quota_by_source:SHOPEE_BALANCED_QUOTAS,
+    backfill_added:selection.backfill_added
+  };
 }
 Deno.serve(async(req: Request)=>{
   if(req.method === "OPTIONS") return new Response(null,{status:204,headers:JSON_HEADERS});
@@ -120,7 +136,7 @@ Deno.serve(async(req: Request)=>{
     if(!Deno.env.get("SHOPEE_AFFILIATE_APP_ID") || !Deno.env.get("SHOPEE_AFFILIATE_SECRET"))
       return respond({error:"shopee_credentials_missing",dry_run:true},503);
     const result=await livePreview();
-    console.log("[discovery-cloud-shopee] preview candidates="+result.summary.candidates+" requests="+result.sources.length);
+    console.log("[discovery-cloud-shopee] preview candidates="+result.summary.candidates+" requests="+result.sources.length+" source_counts="+JSON.stringify(result.selected_by_source));
     return respond({ok:true,mode:"live_preview",dry_run:true,cloud_publishing:false,...result});
   }catch(err) {
     const reason=err instanceof Error?err.message:"unknown";
