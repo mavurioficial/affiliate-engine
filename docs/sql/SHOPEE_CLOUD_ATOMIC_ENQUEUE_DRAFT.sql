@@ -24,6 +24,10 @@ DECLARE
   v_verified_channels integer;
   v_shopee_marketplace boolean;
   v_category_fk text;
+  v_pending_or_recent boolean;
+  v_unique_in_cycle integer;
+  v_category_in_cycle integer;
+  v_cycle_keyprefix text;
 BEGIN
   -- Service-role authentication AND explicit expected account identity.
   IF coalesce(auth.jwt()->>'role','') <> 'service_role' THEN
@@ -113,6 +117,54 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- Use the active run UUID in stable idempotency keys (NOT random UUIDs).
+  -- These checks are still only preflight; final atomic INSERT is disabled.
+  v_cycle_keyprefix := 'shopee-cloud:' || p_run_id::text || ':';
+  SELECT count(DISTINCT j.offer_id) INTO v_unique_in_cycle
+  FROM public.flow_delivery_jobs j
+  WHERE j.user_id=p_user_id
+    AND left(j.delivery_key,length(v_cycle_keyprefix))=v_cycle_keyprefix
+    AND j.status IN ('queued','processing','sent');
+  IF v_unique_in_cycle >= LEAST(8,v_cfg.max_shopee) THEN
+    RETURN jsonb_build_object('accepted',false,'reason','shopee_cycle_max_unique');
+  END IF;
+
+  -- Limit maximum two UNIQUE offers with the same effective database category
+  -- in this cloud run. Multiple channels for a single offer count only once.
+  SELECT count(DISTINCT j.offer_id) INTO v_category_in_cycle
+  FROM public.flow_delivery_jobs j
+  JOIN public.flow_offers o ON o.id=j.offer_id
+  JOIN public.mavuri_categories mc ON mc.id=o.mavuri_category_id
+  WHERE j.user_id=p_user_id
+    AND left(j.delivery_key,length(v_cycle_keyprefix))=v_cycle_keyprefix
+    AND j.status IN ('queued','processing','sent')
+    AND mc.slug=v_category;
+  IF v_category_in_cycle >= 2 THEN
+    RETURN jsonb_build_object('accepted',false,'reason','shopee_cycle_category_cap');
+  END IF;
+
+  -- Exact item/channel cooldown. A different account or duplicate flow_offer
+  -- row does not evade it when marketplace + source_ref match.
+  -- A verified price-drop exception will need its own immutable rendered-price
+  -- check; do NOT approximate it using current mutable offer.price here.
+  FOREACH v_channel IN ARRAY p_channel_ids LOOP
+    SELECT EXISTS(
+      SELECT 1
+      FROM public.flow_delivery_jobs j
+      JOIN public.flow_offers prior ON prior.id=j.offer_id
+      WHERE j.user_id=p_user_id AND j.channel_id=v_channel
+        AND prior.user_id=p_user_id AND prior.marketplace_id=p_marketplace_id
+        AND prior.source_ref=v_offer.source_ref
+        AND (
+          j.status IN ('queued','processing')
+          OR (j.status='sent' AND j.sent_at>=now()-interval '48 hours')
+        )
+    ) INTO v_pending_or_recent;
+    IF v_pending_or_recent THEN
+      RETURN jsonb_build_object('accepted',false,'reason','shopee_recent_or_pending_48h');
+    END IF;
+  END LOOP;
+
   -- A pending-job UNIQUE partial index must be present before this
   -- function can ever be allowed to insert; the runtime guard must verify it.
   IF NOT EXISTS (
@@ -123,9 +175,9 @@ BEGIN
     RETURN jsonb_build_object('accepted',false,'reason','pending_unique_missing');
   END IF;
 
-  -- DRAFT INTENTIONALLY FAILS CLOSED: the complete routing validation,
-  -- final category rule matching, per-cycle quotas and reliable price
-  -- snapshot/cross-seller identity checks are not inside this transaction yet.
+  -- DRAFT INTENTIONALLY FAILS CLOSED: the 24h verified cross-seller
+  -- family check, precise rendered-price drop exception, max-1 broad family
+  -- per cycle, and atomic job insert have NOT been integrated/tested.
   -- Never remove this block until those checks are implemented and tested.
   RETURN jsonb_build_object(
     'accepted',false,'reason','transactional_policy_not_implemented',
