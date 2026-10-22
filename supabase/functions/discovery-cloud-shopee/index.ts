@@ -1,7 +1,7 @@
 import {collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOTAS,selectShopeeBalancedCandidates,diagnoseShopeeSources} from "./shopee-core.mjs";
 import {simulateShopeeCloudSelection,SHOPEE_CLOUD_POLICY} from "./shopee-policy.mjs";
 import {summarizeShopeeSentHistory} from "./shopee-history.mjs";
-import {simulateShopeeGeneralAudit} from "./shopee-general-audit.mjs";
+import {simulateShopeeGeneralAudit,validateShopeeGeneralRule} from "./shopee-general-audit.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -157,6 +157,7 @@ async function liveGeneralAudit(req: Request) {
   ]);
   const marketplaceId=String(marketplaces[0]?.id||"");
   if(!marketplaceId)throw Error("audit_shopee_marketplace_missing");
+  validateShopeeGeneralRule(rules,channels); // fail closed BEFORE further API/history queries
   // Fail before calling Shopee API if the live general rule has drifted.
   // Validator is called from the pure simulation even when history is empty.
   const moment=new Date(),since=new Date(moment.getTime()-48*3600000).toISOString();
