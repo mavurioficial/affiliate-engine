@@ -15,6 +15,10 @@ assert.equal(shopeePriceDropPercent(undefined,90),null);
 assert.equal(SHOPEE_CLOUD_POLICY.same_item_cooldown_hours,48);
 assert.equal(SHOPEE_CLOUD_POLICY.same_product_other_seller_cooldown_hours,24);
 assert.equal(compareShopeeCandidates(mk("1",30),mk("2",20))<0,true);
+const highCommission={...mk("high",30),_mavuri_api:{shop_id:"test",commission_rate:0.2,sales:10}};
+const lowCommission={...mk("low",30),_mavuri_api:{shop_id:"test",commission_rate:0.05,sales:10}};
+assert.equal(compareShopeeCandidates(highCommission,lowCommission)<0,true); // Tie-break
+assert.equal(compareShopeeCandidates(mk("discount",31),highCommission)<0,true); // Better discount wins
 const samePrice=simulateShopeeCloudSelection({
  ...base,candidates:[mk("1")],
  sent_history:[{itemid:"1",channel_id:"g",sent_at:"2026-10-21T18:00:00Z",published_price:90,status:"sent"}]
