@@ -22,7 +22,7 @@ const root =
 
 let session = null
 let page = 'operations'
-let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], publicationCounts: [], error: '', notice: '', manualDraft: null, manualMode: false }
+let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], publicationCounts: [], publicationTitles: {}, error: '', notice: '', manualDraft: null, manualMode: false }
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
 let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
 let categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
@@ -384,7 +384,13 @@ async function loadFlowState() {
     ])
     if (clicksResult.error) throw clicksResult.error
     if (publicationResult.error) throw publicationResult.error
-    flowState = { loading: false, loaded: true, offers, rules, jobs, channels, clicks: clicksResult.data || [], publicationCounts: publicationResult.data || [], error: flowState.error, notice: flowState.notice, manualDraft: flowState.manualDraft || null, manualMode: flowState.manualMode || false }
+    const topIds = (publicationResult.data || []).slice().sort((a,b)=>Number(b.general_count)-Number(a.general_count)).slice(0,10).map(x=>x.offer_id)
+    const { data: namedOffers, error: namesError } = topIds.length
+      ? await supabase.from('flow_offers').select('id,title').eq('user_id',user.id).in('id',topIds)
+      : { data: [], error: null }
+    if (namesError) throw namesError
+    const publicationTitles = Object.fromEntries((namedOffers || []).map(x=>[x.id,x.title]))
+    flowState = { loading: false, loaded: true, offers, rules, jobs, channels, clicks: clicksResult.data || [], publicationCounts: publicationResult.data || [], publicationTitles, error: flowState.error, notice: flowState.notice, manualDraft: flowState.manualDraft || null, manualMode: flowState.manualMode || false }
   } catch (error) {
     flowState = { ...flowState, loading: false, loaded: true, error: error.message || 'Não foi possível carregar o Flow.' }
   }
@@ -549,7 +555,7 @@ function flowPage() {
       <div class="flow-panel"><div class="section-title"><h2>Mais publicados no Telegram</h2><p>Histórico confirmado por produto. Contagem do canal geral separada dos nichos; não inclui envios com falha.</p></div>
         ${(flowState.publicationCounts || []).slice().sort((a,b)=>Number(b.general_count)-Number(a.general_count)).slice(0,10).map((entry)=>{
           const offer = flowState.offers.find(o=>o.id===entry.offer_id)
-          const productName = offer?.title || 'Produto do histórico (fora das últimas 50 ofertas)'
+          const productName = offer?.title || flowState.publicationTitles?.[entry.offer_id] || 'Produto do histórico'
           return `<div class="flow-row" style="gap:15px;align-items:center">
             <div style="min-width:0;flex:1"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(productName)}">${escapeHtml(productName)}</strong>
             <small>${Number(entry.telegram_count)} envios no Telegram (todos os canais) · última publicação ${escapeHtml(formatDateTimeBR(entry.last_sent_at))}</small></div>
