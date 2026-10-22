@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+const sql=readFileSync("docs/sql/SHOPEE_CLOUD_ATOMIC_ENQUEUE_DRAFT.sql","utf8");
+assert.match(sql,/DRAFT ONLY\. DO NOT RUN IN PRODUCTION/);
+assert.match(sql,/coalesce\(auth\.jwt\(\)->>'role',''\) <> 'service_role'/);
+assert.match(sql,/discovery_cloud_control WHERE id=true FOR UPDATE/);
+assert.match(sql,/lease_expires_at<=clock_timestamp\(\)/);
+assert.match(sql,/FROM public\.flow_offers[\s\S]*?FOR UPDATE/);
+assert.match(sql,/affiliate_account_id=p_affiliate_account_id/);
+assert.match(sql,/v_offer\.affiliate_url IS DISTINCT FROM p_expected_affiliate_url/);
+assert.match(sql,/classification_changed/);
+assert.match(sql,/pending_unique_missing/);
+assert.match(sql,/reason','transactional_policy_not_implemented'/);
+assert.ok(!/\bINSERT INTO public\.flow_delivery_jobs\b/i.test(sql));
+assert.ok(!/\bUPDATE mavuri_internal\.discovery_cloud_control\b/i.test(sql));
+console.log("Shopee atomic enqueue draft: fail-closed SQL contract validated, NO DDL run.");
