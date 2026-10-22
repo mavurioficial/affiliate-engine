@@ -70,4 +70,27 @@ assert.equal(poor.selected_unique_offers,1);
 assert.equal(poor.counts.discount_below_min,1);
 assert.equal(normalizePercent(-1),0);
 assert.equal(shopeeFamilySignature("X"),null);
+// A blocked high-discount item must NOT consume one of the eight unique slots.
+const eightLater=Array.from({length:8},(_,i)=>({
+ ...mk("eligible"+i,35-i),
+ title:"Oferta Distinta Modelo "+i,
+ global_category1:i%4===0?"Beauty":i%4===1?"Home & Living":i%4===2?"Computers & Accessories":"Sports & Outdoors"
+}));
+const afterBlocked=simulateShopeeCloudSelection({
+ ...base,candidates:[mk("blocked",90),...eightLater],
+ sent_history:[{itemid:"blocked",channel_id:"g",sent_at:"2026-10-22T17:00:00Z",status:"sent"}]
+});
+assert.equal(afterBlocked.selected_unique_offers,8);
+assert.equal(afterBlocked.counts.same_product_48h,1);
+const insufficient=simulateShopeeCloudSelection({
+ ...base,candidates:[mk("1")],
+ sent_history:[{itemid:"1",channel_id:"g",sent_at:"2026-10-22T17:00:00Z",published_price:99.9,status:"sent"}]
+});
+assert.equal(insufficient.counts.same_product_48h,1); // 9.91% drop < 10%
+const expired48=simulateShopeeCloudSelection({
+ ...base,candidates:[mk("1")],
+ sent_history:[{itemid:"1",channel_id:"g",sent_at:"2026-10-20T17:59:59Z",published_price:90,status:"sent"}]
+});
+assert.equal(expired48.selected_unique_offers,1);
+
 console.log("Shopee cloud selection policy tests passed; no DB/API/publication.");
