@@ -1,4 +1,3 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {mapShopeeApiProduct,collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS} from "./shopee-core.mjs";
 
 /**
