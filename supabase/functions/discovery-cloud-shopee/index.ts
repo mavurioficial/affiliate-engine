@@ -1,4 +1,4 @@
-import {collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOTAS,selectShopeeBalancedCandidates} from "./shopee-core.mjs";
+import {collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOTAS,selectShopeeBalancedCandidates,diagnoseShopeeSources} from "./shopee-core.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -91,7 +91,8 @@ async function livePreview() {
     selected_by_source:selection.selected_by_source,
     primary_by_source:selection.primary_by_source,
     quota_by_source:SHOPEE_BALANCED_QUOTAS,
-    backfill_added:selection.backfill_added
+    backfill_added:selection.backfill_added,
+    source_diagnostics:diagnoseShopeeSources(pools,selection)
   };
 }
 Deno.serve(async(req: Request)=>{
@@ -136,7 +137,7 @@ Deno.serve(async(req: Request)=>{
     if(!Deno.env.get("SHOPEE_AFFILIATE_APP_ID") || !Deno.env.get("SHOPEE_AFFILIATE_SECRET"))
       return respond({error:"shopee_credentials_missing",dry_run:true},503);
     const result=await livePreview();
-    console.log("[discovery-cloud-shopee] preview candidates="+result.summary.candidates+" requests="+result.sources.length+" source_counts="+JSON.stringify(result.selected_by_source));
+    console.log("[discovery-cloud-shopee] preview candidates="+result.summary.candidates+" requests="+result.sources.length+" source_counts="+JSON.stringify(result.selected_by_source)+" source_diagnostics="+JSON.stringify(result.source_diagnostics));
     return respond({ok:true,mode:"live_preview",dry_run:true,cloud_publishing:false,...result});
   }catch(err) {
     const reason=err instanceof Error?err.message:"unknown";
