@@ -102,6 +102,8 @@ export function simulateShopeeCloudSelection({
     preview_only:true,history_price_snapshot_required_for_price_override:true,
     connected_channels_user_supplied:true,no_queue_writes:true
   }};
+  const categoryAudit={selected:{},blocked_by_diversity:{},blocked_by_recent_publication:{},eligible_after_cooldown:{}};
+  const increment=(section,bucket)=>{const name=String(bucket||"outros");categoryAudit[section][name]=(categoryAudit[section][name]||0)+1;};
   const byCategory=new Map(),byBroadFamily=new Map(),seenIds=new Set();
   const history=(sent_history||[]).filter(x=>x?.status==="sent"||!x?.status);
   const waiting=(pending_history||[]).filter(x=>!x?.status||["queued","processing"].includes(x.status));
@@ -113,6 +115,7 @@ export function simulateShopeeCloudSelection({
     if(Number(offer?.discount_percentage||0)<SHOPEE_CLOUD_POLICY.min_discount_percent){results.counts.discount_below_min++;continue;}
     const channels=candidateActiveChannels(offer,connected_telegram_channel_ids);
     if(!channels.length){results.counts.no_active_channel++;continue;}
+    const bucket=shopeeCategoryBucket(offer);
     const family=shopeeFamilySignature(offer.title),shop=String(offer?._mavuri_api?.shop_id||"");
     const eligible=[];
     let overrideCount=0;
@@ -123,7 +126,7 @@ export function simulateShopeeCloudSelection({
       if(matching.length) {
         // With no immutable last SENT price snapshot, fail closed; comparing to mutable offer price is unsafe.
         const drop=shopeePriceDropPercent(matching[0].published_price,price);
-        if(drop===null||drop<SHOPEE_CLOUD_POLICY.significant_price_drop_percent){results.counts.same_product_48h++;continue;}
+        if(drop===null||drop<SHOPEE_CLOUD_POLICY.significant_price_drop_percent){results.counts.same_product_48h++;increment("blocked_by_recent_publication",bucket);continue;}
         overrideCount++;
       }
       if(family && shop && history.some(h=>
@@ -135,14 +138,16 @@ export function simulateShopeeCloudSelection({
       eligible.push(channel);
     }
     if(!eligible.length)continue;
+    increment("eligible_after_cooldown",bucket);
     if(results.selected_unique_offers>=limit){results.counts.target_reached++;continue;}
-    const category=shopeeCategoryBucket(offer);
+    const category=bucket;
     const broad=shopeeBroadFamily(offer.title);
-    if((byCategory.get(category)||0)>=SHOPEE_CLOUD_POLICY.max_category_per_cycle){results.counts.category_diversity++;continue;}
+    if((byCategory.get(category)||0)>=SHOPEE_CLOUD_POLICY.max_category_per_cycle){results.counts.category_diversity++;increment("blocked_by_diversity",category);continue;}
     if(broad&&(byBroadFamily.get(broad)||0)>=SHOPEE_CLOUD_POLICY.max_broad_family_per_cycle){results.counts.broad_family_diversity++;continue;}
     byCategory.set(category,(byCategory.get(category)||0)+1);
     if(broad)byBroadFamily.set(broad,(byBroadFamily.get(broad)||0)+1);
     results.selected_unique_offers++;
+    increment("selected",category);
     results.projected_delivery_jobs+=eligible.length;
     results.counts.same_product_price_drop_override+=overrideCount;
     results.selected.push({
@@ -150,5 +155,6 @@ export function simulateShopeeCloudSelection({
       discount_percent:Number(offer.discount_percentage),channel_count:eligible.length
     });
   }
+  results.category_audit=categoryAudit;
   return results;
 }
