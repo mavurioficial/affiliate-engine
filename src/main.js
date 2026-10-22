@@ -11,7 +11,7 @@ import {
 import { listOffers } from './application/offer-service.js'
 import { loadOfferRequests, changeOfferRequestStatus, renderOfferRequests } from './application/offer-requests.js?v=0.1.49'
 import { listRules } from './application/rule-service.js'
-import { listDeliveryJobs, retryFailedDeliveries } from './application/delivery-service.js'
+import { listDeliveryJobs, retryFailedDeliveries, enqueueManualOfferDeliveries } from './application/delivery-service.js?v=0.1.51'
 import { captureMercadoLivreOffer } from './application/mercadolivre-offer-service.js'
 import { createRule } from './application/rule-service.js'
 import { createChannel, listChannels } from './application/channel-service.js'
@@ -22,7 +22,7 @@ const root =
 
 let session = null
 let page = 'operations'
-let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '' }
+let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '', manualDraft: null }
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
 let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
 let categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
@@ -383,7 +383,7 @@ async function loadFlowState() {
       supabase.from('flow_clicks').select('id,offer_id,channel_id,tracking_id,click_count,last_clicked_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1000)
     ])
     if (clicksResult.error) throw clicksResult.error
-    flowState = { loading: false, loaded: true, offers, rules, jobs, channels, clicks: clicksResult.data || [], error: '', notice: flowState.notice }
+    flowState = { loading: false, loaded: true, offers, rules, jobs, channels, clicks: clicksResult.data || [], error: '', notice: flowState.notice, manualDraft: flowState.manualDraft || null }
   } catch (error) {
     flowState = { ...flowState, loading: false, loaded: true, error: error.message || 'Não foi possível carregar o Flow.' }
   }
@@ -420,7 +420,29 @@ function flowPage() {
       ${flowState.notice || flowState.error ? `<div class="notice flow-capture-feedback" role="status" style="margin:14px 0;background:${flowState.error ? "#ffebe9" : "#eaf8f0"};border-radius:9px;padding:12px 15px;overflow-wrap:anywhere"><strong>${flowState.error ? "⚠️ Não foi possível concluir" : "✓ Resultado da captura"}</strong><p style="margin:6px 0 0">${escapeHtml(flowState.error || flowState.notice)}</p></div>` : ""}
       <form data-flow-capture><div class="flow-capture-grid">
         <label><span>Links de afiliado oficiais</span><textarea name="affiliateUrl" rows="4" required placeholder="Cole 1 ou vários links https://meli.la/... separados por espaço ou nova linha" autocomplete="off">${escapeHtml(flowCaptureDraft)}</textarea><small class="flow-field-hint">Você pode colar vários links do Mercado Livre de uma vez, separados por espaço ou por nova linha. O Mavuri processa cada link individualmente.</small></label>
-      </div><div class="form-actions"><button class="primary" type="submit">⚡ Capturar no Flow</button></div></form>
+      </div>
+      <div style="margin:14px 0;padding:14px;border:1px solid #d4e4f7;border-radius:12px;background:#f3f8ff">
+        <label style="display:flex;align-items:center;gap:10px;font-weight:750"><input type="checkbox" name="manualMode" value="yes" style="width:18px;height:18px;flex-shrink:0"> Publicar manualmente (ignorar regras de desconto)</label>
+        <p style="margin:7px 0 0;color:#496485;font-size:13px">Para atender a um pedido de cliente. O Mavuri captura o produto e mostra uma prévia; você confirma os canais antes de enviar. Não exige desconto mínimo.</p>
+      </div>
+      <div class="form-actions"><button class="primary" type="submit">⚡ Capturar no Flow</button></div></form>
+      ${flowState.manualDraft ? `<div id="manual-publish-preview" class="flow-manual-preview" style="margin-top:19px;border:2px solid #2b7bcb;border-radius:13px;padding:18px;background:#f2f8ff">
+        <h3 style="margin:0 0 8px">📢 Confirmar publicação manual</h3>
+        <p style="margin:0 0 14px;color:#466484">Publicação solicitada por você. As regras automáticas de desconto NÃO serão aplicadas.</p>
+        <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin-bottom:14px">
+          ${flowState.manualDraft.image_url ? `<img src="${escapeHtml(flowState.manualDraft.image_url)}" alt="" style="width:90px;height:90px;object-fit:contain;background:white;border-radius:10px" referrerpolicy="no-referrer">` : ''}
+          <div style="flex:1;min-width:230px"><strong>${escapeHtml(flowState.manualDraft.title)}</strong><br>
+          <span style="color:#1260b2;font-size:20px;font-weight:800">${formatMoney(flowState.manualDraft.price)}</span>
+          <span style="font-size:12px;color:#526c8a">${flowState.manualDraft.discount_percent != null ? ` · ${escapeHtml(flowState.manualDraft.discount_percent)}% OFF` : ''}</span>
+          <div><a href="${escapeHtml(flowState.manualDraft.affiliate_url)}" target="_blank" rel="noopener noreferrer">Conferir link de afiliado ↗</a></div></div>
+        </div>
+        <form data-manual-publish>
+          <fieldset style="border:0;padding:0;margin:0 0 14px"><legend style="font-weight:750;margin-bottom:9px">Escolha onde publicar:</legend>
+            ${flowState.channels.filter(channel => channel.status === 'connected').map(channel => `<label style="display:flex;align-items:center;gap:10px;margin:8px 0"><input type="checkbox" name="manualChannel" value="${escapeHtml(channel.id)}" ${/Mavuri Ofertas/i.test(channel.name) ? 'checked' : ''}> ${escapeHtml(channel.name)} (${escapeHtml(channel.type)})</label>`).join('')}
+          </fieldset>
+          <p style="font-size:12px;color:#496485">Os canais de nicho não são selecionados por padrão. Reenvios duplicados ao mesmo canal serão bloqueados.</p>
+          <div class="form-actions" style="gap:10px"><button type="button" data-manual-cancel>Cancelar</button><button type="submit" class="primary">✅ Confirmar e publicar nos canais escolhidos</button></div>
+        </form></div>` : ''}
     </section>
     <section class="flow-pipeline">
       <div class="flow-node"><span>01</span><strong>Captura</strong><small>Mercado Livre</small></div><div class="flow-arrow">→</div>
@@ -1445,7 +1467,13 @@ function bindEvents() {
             .filter(Boolean)
         )]
         const productUrl = null
+        const manualMode = data.get('manualMode') === 'yes'
 
+        if (manualMode && affiliateUrls.length !== 1) {
+          flowState = { ...flowState, error: 'A publicação manual aceita um link por vez para você conferir o produto.', notice: '' }
+          await render()
+          return
+        }
         if (!affiliateUrls.length) {
           throw new Error('Cole pelo menos um link de afiliado oficial do Mercado Livre.')
         }
@@ -1530,7 +1558,9 @@ function bindEvents() {
 
           const capture = (affiliateUrl) => captureMercadoLivreOffer(productUrl, {
             accessToken: session.access_token,
-            affiliateUrl
+            affiliateUrl,
+            sourceType: manualMode ? 'manual' : 'api',
+            enqueueAutomatically: !manualMode
           })
 
           let connection = await getMeliConnectionStatus()
@@ -1575,6 +1605,14 @@ function bindEvents() {
             getFlowCaptureDraftStorage()?.clear()
           }
 
+          if (manualMode && capturedOffers.length) {
+            const o = capturedOffers[0].offer
+            if (!o?.affiliate_url) throw new Error('A oferta capturada não possui link de afiliado válido.')
+            flowState = { ...flowState, manualDraft: o, notice: 'Produto capturado. Confira a prévia e escolha os canais para publicar.', error: '' }
+            await render()
+            document.querySelector('#manual-publish-preview')?.scrollIntoView({ block: 'center' })
+            return
+          }
           const successCount = capturedOffers.length
           const failureCount = failures.length
           let deliverySummary = ''
@@ -1614,6 +1652,35 @@ function bindEvents() {
       }
     )
   }
+
+  document.querySelector('[data-manual-cancel]')?.addEventListener('click', async () => {
+    flowState = { ...flowState, manualDraft: null, notice: 'Publicação manual cancelada.', error: '' }
+    await render()
+  })
+  document.querySelector('[data-manual-publish]')?.addEventListener('submit', async event => {
+    event.preventDefault()
+    const form = event.currentTarget
+    const button = form.querySelector('button[type="submit"]')
+    const ids = [...form.querySelectorAll('[name="manualChannel"]:checked')].map(input => input.value)
+    if (!ids.length) { window.alert('Selecione pelo menos um canal para publicar.'); return }
+    if (!flowState.manualDraft) return
+    if (!window.confirm('Confirmar publicação manual para ' + ids.length + ' canal(is), ignorando as regras automáticas?')) return
+    button.disabled = true
+    button.textContent = 'Enfileirando publicação...'
+    try {
+      const result = await enqueueManualOfferDeliveries(flowState.manualDraft, ids)
+      flowState = { ...flowState, manualDraft: null, loaded: false, error: '',
+        notice: result.queued.length + ' publicação(ões) inserida(s) na fila manual.' +
+          (result.skipped ? ' ' + result.skipped + ' envio(s) já existentes, sem duplicação.' : '') +
+          ' O worker confirmará a entrega.' }
+      await render()
+      document.querySelector('.flow-capture-feedback')?.scrollIntoView({ block: 'center' })
+    } catch (error) {
+      flowState = { ...flowState, error: error?.message || 'Falha ao publicar manualmente.', notice: '' }
+      await render()
+      document.querySelector('#manual-publish-preview')?.scrollIntoView({ block: 'center' })
+    }
+  })
 
   const flowRuleForm = document.querySelector('[data-flow-rule]')
   if (flowRuleForm) {
