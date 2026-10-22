@@ -11,7 +11,7 @@ import {
 import { listOffers } from './application/offer-service.js'
 import { loadOfferRequests, changeOfferRequestStatus, renderOfferRequests } from './application/offer-requests.js?v=0.1.49'
 import { listRules } from './application/rule-service.js'
-import { listDeliveryJobs, retryFailedDeliveries, enqueueManualOfferDeliveries } from './application/delivery-service.js?v=0.1.51'
+import { listDeliveryJobs, retryFailedDeliveries, enqueueManualOfferDeliveries } from './application/delivery-service.js?v=0.1.53'
 import { captureMercadoLivreOffer } from './application/mercadolivre-offer-service.js?v=0.1.51'
 import { createRule } from './application/rule-service.js'
 import { createChannel, listChannels } from './application/channel-service.js'
@@ -497,7 +497,21 @@ function flowPage() {
         <button data-flow-worker class="primary" ${queued || processing ? '' : 'disabled'}>▶ Processar fila</button>
         <button data-flow-retry ${failed ? '' : 'disabled'}>↻ Reenfileirar falhas (${failed})</button>
       </div>
-      ${flowState.jobs.slice(0,8).map((job) => `<div class="flow-row"><div><strong>${escapeHtml(flowState.channels.find((channel) => channel.id === job.channel_id)?.name || 'Canal')}</strong><small>${escapeHtml(job.status)} · tentativa ${Number(job.attempts || 0)}</small></div><span class="status-dot">${escapeHtml(job.error_message || job.status)}</span></div>`).join('') || '<div class="empty">A fila está vazia.</div>'}
+      ${flowState.jobs.slice(0,12).map((job) => {
+        const channel = flowState.channels.find((item) => item.id === job.channel_id)?.name || 'Canal'
+        const product = job.offer?.title || 'Produto indisponível'
+        const price = job.offer?.price != null ? formatMoney(job.offer.price) : null
+        const statusLabels = {queued:'Na fila',processing:'Processando',sent:'Enviado',failed:'Falhou'}
+        const statusText = statusLabels[job.status] || job.status
+        return `<div class="flow-row" style="align-items:center;gap:18px">
+          <div style="min-width:0;flex:1">
+            <strong style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(product)}">${escapeHtml(product)}</strong>
+            <small style="display:block;margin-top:5px">${escapeHtml(channel)}${price ? ' · '+escapeHtml(price) : ''} · ${escapeHtml(formatDateTimeBR(job.created_at))} · tentativa ${Number(job.attempts || 0)}</small>
+            ${job.status === 'failed' && job.error_message ? `<small style="display:block;margin-top:3px;color:#ae392c;overflow-wrap:anywhere">${escapeHtml(job.error_message)}</small>` : ''}
+          </div>
+          <span class="status-dot" style="flex:none" title="${escapeHtml(job.error_message || statusText)}">${escapeHtml(statusText)}</span>
+        </div>`
+      }).join('') || '<div class="empty">A fila está vazia.</div>'}
     </section>
     <section class="flow-columns">
       <div class="flow-panel"><div class="section-title"><h2>Performance</h2><p>Produtos e canais que já geraram cliques.</p></div>
