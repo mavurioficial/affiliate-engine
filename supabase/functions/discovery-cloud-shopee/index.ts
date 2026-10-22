@@ -80,7 +80,7 @@ async function livePreview() {
     }
     selection=selectShopeeBalancedCandidates(pools);
     const targetSatisfied=SHOPEE_V85_SPECS.every(spec =>
-      selection.primary_by_source[spec.label]>=SHOPEE_BALANCED_QUOTAS[spec.label] || exhausted[spec.label]
+      (selection.primary_by_source as Record<string,number>)[spec.label]>=(SHOPEE_BALANCED_QUOTAS as Record<string,number>)[spec.label] || exhausted[spec.label]
     );
     if(selection.offers.length>=80 && targetSatisfied) break;
     if(SHOPEE_V85_SPECS.every(spec=>exhausted[spec.label])) break;
