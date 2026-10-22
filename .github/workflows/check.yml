@@ -24,6 +24,7 @@ jobs:
       - run: node scripts/test-discovery-cloud-shopee-db-category-parity.mjs
       - run: node scripts/test-discovery-cloud-shopee-category-impact.mjs
       - run: node scripts/test-discovery-cloud-shopee-postpersist-plan.mjs
+      - run: node scripts/test-discovery-cloud-shopee-queue-release-gate.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
