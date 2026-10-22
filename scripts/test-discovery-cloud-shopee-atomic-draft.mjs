@@ -29,6 +29,12 @@ assert.match(sql,/shopee-cloud:/);
 assert.match(sql,/verified cross-seller/);
 assert.match(sql,/pending_unique_missing/);
 assert.match(sql,/reason','transactional_policy_not_implemented'/);
+assert.match(sql,/FROM unnest\(p_channel_ids\) AS entries\(channel_id\)/);
+assert.match(sql,/REVOKE ALL ON FUNCTION public\.mavuri_shopee_cloud_enqueue_draft/);
+assert.match(sql,/FROM PUBLIC, anon, authenticated/);
+assert.match(sql,/GRANT EXECUTE ON FUNCTION public\.mavuri_shopee_cloud_enqueue_draft/);
+assert.match(sql,/TO service_role/);
+
 assert.ok(!/\bINSERT INTO public\.flow_delivery_jobs\b/i.test(sql));
 assert.ok(!/\bUPDATE mavuri_internal\.discovery_cloud_control\b/i.test(sql));
 console.log("Shopee atomic enqueue draft: fail-closed SQL contract validated, NO DDL run.");
