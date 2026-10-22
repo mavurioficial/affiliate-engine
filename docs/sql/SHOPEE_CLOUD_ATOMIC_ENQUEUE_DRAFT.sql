@@ -91,8 +91,8 @@ BEGIN
 
   -- Validate destination scope, even though the DRAFT never queues.
   -- Any invalid or disabled Telegram route fails the entire request.
-  IF EXISTS (SELECT 1 FROM unnest(p_channel_ids) AS id WHERE id IS NULL)
-    OR (SELECT count(DISTINCT id) FROM unnest(p_channel_ids) AS id)
+  IF EXISTS (SELECT 1 FROM unnest(p_channel_ids) AS entries(channel_id) WHERE channel_id IS NULL)
+    OR (SELECT count(DISTINCT channel_id) FROM unnest(p_channel_ids) AS entries(channel_id))
        <> array_length(p_channel_ids,1) THEN
     RETURN jsonb_build_object('accepted',false,'reason','invalid_or_duplicate_channels');
   END IF;
@@ -192,6 +192,16 @@ BEGIN
   -- The BEFORE INSERT dedup trigger can RETURN NULL, so record actual result.
 END;
 $fn$;
+
+-- Revoke Postgres's default PUBLIC function-EXECUTE privilege.
+-- The draft is NOT APPLIED. If deployed later, only an authenticated
+-- service_role JWT should be permitted to invoke the RPC.
+REVOKE ALL ON FUNCTION public.mavuri_shopee_cloud_enqueue_draft(
+  uuid,uuid,uuid,uuid,uuid,uuid[],numeric,text,text
+) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.mavuri_shopee_cloud_enqueue_draft(
+  uuid,uuid,uuid,uuid,uuid,uuid[],numeric,text,text
+) TO service_role;
 
 -- Required deployment review before any future application:
 -- 0. Draft now checks each channel against a companion SQL rule matcher.
