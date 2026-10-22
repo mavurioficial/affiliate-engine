@@ -8,6 +8,17 @@ export function normalizeShopeeDiscount(value) {
 }
 export function inferShopeeCategoryHints(title) {
   const t = String(title || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // High-confidence hints from observed Shopee preview samples. Keep ambiguous products unclassified.
+  if (/\b(arvore de natal|pinheiro de natal|guirlanda de natal|enfeite de natal|ornamento natalino|decoracao natalina|pisca pisca)\b/.test(t))
+    return {global_category1:"Home & Living",global_category2:"Decoration",global_category3:null};
+  if (/\b(toalha de banho|toalha banho|toalha de rosto|toalha rosto|jogo de toalhas|toalha gigante|toalha banhao)\b/.test(t))
+    return {global_category1:"Home & Living",global_category2:"Bedding",global_category3:null};
+  if (/\b(esfregao|mop giratorio|mop spray|vassoura|rodo|espanador|limpador de piso|limpeza domestica)\b/.test(t))
+    return {global_category1:"Home & Living",global_category2:"Home Care Supplies",global_category3:null};
+  if (/\b(fatiador|cortador de legumes|descascador|ralador|mandolina de cozinha|espremedor manual)\b/.test(t))
+    return {global_category1:"Home & Living",global_category2:"Kitchenware",global_category3:null};
+  if (/\b(bicicleta ergometrica|esteira ergometrica|equipamento fitness|halteres|halter|creatina|whey protein|peso de academia)\b/.test(t))
+    return {global_category1:"Sports & Outdoors",global_category2:null,global_category3:null};
   if (/\b(chaleira|cozedor|egg cooker|forno eletrico|forninho|mixer|batedor|batedeira|picador|processador|moedor|liquidificador|cafeteira|sanduicheira|torradeira|air fryer|fritadeira|panela eletrica|pipoqueira|espremedor|cooktop|micro-ondas|microondas)\b/.test(t))
     return { global_category1:"Home Appliances",global_category2:"Kitchen Appliances",global_category3:null };
   if (/\b(criado mudo|criado-mudo|mesa de cabeceira|cabeceira|lencol|jogo de lencol|jogo de cama|fronha|cobertor|edredom|colcha|manta|travesseiro|protetor de colchao|colchao|ventilador de teto|ventilador|armario|organizador|organizadora|estante|prateleira|balde|lixeira|cabide|varal|tapete|cortina|luminaria|abajur|lampada|decoracao|vaso|difusor|umidificador)\b/.test(t))
@@ -62,6 +73,49 @@ export const SHOPEE_V85_SPECS = Object.freeze([
   { label:"maior-comissao",listType:1,sortType:5 },
   { label:"recomendados",listType:0,sortType:1 }
 ]);
+// Cloud-only read-only pool selection. Preserve the V85 source APIs,
+// but reserve room for all 3 lists instead of letting the first one fill the whole pool.
+export const SHOPEE_BALANCED_QUOTAS = Object.freeze({
+  "top-performance":30,
+  "maior-comissao":25,
+  "recomendados":25
+});
+export function selectShopeeBalancedCandidates(pools, limit = 80) {
+  const cap=Math.max(1,Math.min(80,Number(limit)||80));
+  const selected=new Map();
+  const extras=[];
+  const primaryBySource={};
+  const selectedBySource={};
+  for(const spec of SHOPEE_V85_SPECS) {
+    const rows=Array.isArray(pools?.[spec.label])?pools[spec.label]:[];
+    const quota=SHOPEE_BALANCED_QUOTAS[spec.label]||0;
+    primaryBySource[spec.label]=0;
+    selectedBySource[spec.label]=0;
+    const seenWithinSource=new Set();
+    for(const node of rows) {
+      const offer=mapShopeeApiProduct(node);
+      if(!offer || seenWithinSource.has(offer.itemid)) continue;
+      seenWithinSource.add(offer.itemid);
+      if(selected.has(offer.itemid)) continue;
+      if(primaryBySource[spec.label]<quota && selected.size<cap) {
+        selected.set(offer.itemid,offer);
+        primaryBySource[spec.label]++;
+        selectedBySource[spec.label]++;
+      } else {
+        extras.push({source:spec.label,offer});
+      }
+    }
+  }
+  let backfillAdded=0;
+  for(const {source,offer} of extras) {
+    if(selected.size>=cap) break;
+    if(selected.has(offer.itemid)) continue;
+    selected.set(offer.itemid,offer);
+    selectedBySource[source]++;
+    backfillAdded++;
+  }
+  return {offers:[...selected.values()],primary_by_source:primaryBySource,selected_by_source:selectedBySource,backfill_added:backfillAdded};
+}
 export function collectUniqueOffers(nodes, limit = 80) {
   const unique = new Map();
   for(const node of nodes || []) {
@@ -76,6 +130,8 @@ export function previewSummary(offers) {
   const rows = Array.isArray(offers) ? offers : [];
   return {
     candidates:rows.length,
+    classified:rows.filter(x=>Boolean(x.global_category1)).length,
+    unclassified:rows.filter(x=>!x.global_category1).length,
     discount_at_least_10:rows.filter(x=>Number(x.discount_percentage || 0) >= 10).length,
     affiliate_links_present:rows.filter(x=>Boolean(x.affiliate_url)).length,
     categories:rows.reduce((a,x)=>{const k=x.global_category1||"unclassified";a[k]=(a[k]||0)+1;return a;},{}),
