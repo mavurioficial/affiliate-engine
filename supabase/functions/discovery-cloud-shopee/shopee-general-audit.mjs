@@ -51,7 +51,7 @@ export function normalizeShopeeGeneralHistory(sentRows,pendingRows,candidateIds)
   return {sent,pending,counters};
 }
 export function simulateShopeeGeneralAudit({
-  offers, rules, channels, sentRows, pendingRows, now_iso
+  offers, rules, channels, sentRows, pendingRows, now_iso, category_overrides={}
 }) {
   const generalChannelId=validateShopeeGeneralRule(rules,channels);
   const eligibleSource=(Array.isArray(offers)?offers:[]).map(x=>({...x,channel_ids:[generalChannelId]}));
@@ -60,7 +60,7 @@ export function simulateShopeeGeneralAudit({
   const projected=simulateShopeeCloudSelection({
     candidates:eligibleSource,sent_history:sent,pending_history:pending,
     connected_telegram_channel_ids:[generalChannelId],
-    now_iso,target:8
+    now_iso,target:8,category_overrides
   });
   return {
     scope:"shopee_general_only", read_only:true,
