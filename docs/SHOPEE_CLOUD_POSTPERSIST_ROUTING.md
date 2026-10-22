@@ -118,3 +118,15 @@ A suite comprova, no planejador pós-persistência offline, os casos de:
 - canal desabilitado ou regra extra inesperada → falha fechada.
 
 **Escopo real:** testes offline do algoritmo com a cópia das condições, não teste de integração ao Supabase, não prova de transação atômica e não autoriza nenhum envio. A nuvem segue desativada e ainda faltam executor, coleta ML/Magalu e cupons.
+
+## Validação de roteamento e guardas da transação SQL — 22/10/2026
+
+A migração avançou da simples prova de conceito JavaScript para **um matcher SQL independente e somente rascunhado**, `docs/sql/SHOPEE_CLOUD_RULE_MATCH_DRAFT.sql`, referenciado por `SHOPEE_CLOUD_ATOMIC_ENQUEUE_DRAFT.sql`:
+- Exige exatamente as quatro regras Shopee conhecidas, ativas, sem condição adicional desconhecida ou duplicação, e canal Telegram conectado do mesmo usuário; caso contrário não autoriza a rota.
+- Verifica categoria final por FK `mavuri_category_id` e `metadata.mavuri.category_slug`, conta de afiliado conectada e condições `minDiscount/maxDiscount`, preço mínimo/máximo, categorias, tags incluídas/excluídas e palavras proibidas.
+- A versão em rascunho usa `SECURITY INVOKER` em schema interno, nega execução a `PUBLIC/anon/authenticated`; o rascunho da função de fila nega execução pública e prevê `service_role` explicitamente.
+- Teste real via **consulta agregada SELECT** (sem instalar função) sobre **120 ofertas Shopee armazenadas** confirmou que a expressão de avaliação encontra `Geral=111`, `Casa & Cozinha=48`, `Mulher=7`, `Tecnologia=7`. Estas são **correspondências de regras**, não jobs nem publicações; oferecem somente uma prova parcial de semântica para a SQL.
+- A operação SQL em rascunho acrescentou limites de **8 produtos únicos/ciclo**, **2 únicos/categoria/ciclo**, bloqueio conservador de **48h por source_ref / canal mesmo entre linhas duplicadas de ofertas** e prefixo determinístico `shopee-cloud:<run_id>:`; também confere UUID de run, executor, lease e correspondência de conta afiliada.
+- **Bloqueio de publicação mantido incondicionalmente**: a função retorna `accepted=false` com `transactional_policy_not_implemented`, nunca executa `INSERT`. Ainda faltam política comprovada de variante entre vendedores, exceção de preço renderizado ≥10%, família ampla por ciclo, inserção transacional, ensaios concorrentes e teste de integração no banco.
+- Todas as alterações deste marco foram feitas apenas em arquivos `docs/sql` do PR #19 e testes de CI; **nenhuma alteração DDL aplicada ao Supabase**. Nunca usar essas consultas como sinal de que há executor 24/7 já funcionando.
+
