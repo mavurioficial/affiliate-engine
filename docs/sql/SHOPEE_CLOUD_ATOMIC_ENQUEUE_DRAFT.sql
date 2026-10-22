@@ -102,6 +102,17 @@ BEGIN
     RETURN jsonb_build_object('accepted',false,'reason','channel_scope_or_status_changed');
   END IF;
 
+  -- Re-evaluate every proposed channel using the final persisted category,
+  -- active flow_rules and the current connected affiliate account. This helper
+  -- belongs to an UNDEPLOYED draft and never grants browser access.
+  FOREACH v_channel IN ARRAY p_channel_ids LOOP
+    IF NOT mavuri_internal.shopee_cloud_rule_matches_draft(
+      p_user_id,p_offer_id,v_channel
+    ) THEN
+      RETURN jsonb_build_object('accepted',false,'reason','channel_rule_mismatch');
+    END IF;
+  END LOOP;
+
   -- A pending-job UNIQUE partial index must be present before this
   -- function can ever be allowed to insert; the runtime guard must verify it.
   IF NOT EXISTS (
@@ -131,9 +142,10 @@ END;
 $fn$;
 
 -- Required deployment review before any future application:
--- 0. IMPORTANT: This DRAFT still cannot atomically validate the active channel
---    rule conditions or account-specific affiliate membership end-to-end.
---    The function remains hard-blocked; do not treat scope checks as authorization.
+-- 0. Draft now checks each channel against a companion SQL rule matcher.
+--    This matcher has NOT been applied or integration-tested; dynamic rule
+--    changes, price snapshots, cooldown and lock behavior still block release.
+--    The hard-coded refusal remains mandatory until all those checks pass.
 -- 1. Move to private/secured RPC design with explicit REVOKE EXECUTE FROM PUBLIC,
 --    anon, authenticated; only grant service_role if absolutely required.
 -- 2. Validate the rule matching, cooldown/family checks, cycle caps and precise
