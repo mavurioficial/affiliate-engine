@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {normalizeShopeeDiscount,inferShopeeCategoryHints,mapShopeeApiProduct,collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS} from "../supabase/functions/discovery-cloud-shopee/shopee-core.mjs";
+import {normalizeShopeeDiscount,inferShopeeCategoryHints,mapShopeeApiProduct,collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOTAS,selectShopeeBalancedCandidates} from "../supabase/functions/discovery-cloud-shopee/shopee-core.mjs";
 assert.equal(normalizeShopeeDiscount(0.2),20);
 assert.equal(normalizeShopeeDiscount(18.53),18.53);
 assert.equal(normalizeShopeeDiscount(null),null);
@@ -18,4 +18,43 @@ assert.equal(previewSummary(offers).discount_at_least_10,2);
 assert.equal(previewSummary(offers).affiliate_links_present,3);
 assert.equal(SHOPEE_V85_SPECS.length,3);
 assert.equal(collectUniqueOffers(Array.from({length:100},(_,i)=>node(String(i))),80).length,80);
+// Product samples actually observed in the first read-only cloud preview.
+for(const [title,expected] of [
+  ["Arvore de Natal Pinheiro 210cm","Home & Living"],
+  ["Toalha Banho Gigante E Rosto 100% Algodao","Home & Living"],
+  ["Esfregao Eletrico 9 em 1 Sem fio","Home & Living"],
+  ["Fatiador KITOP Descasca Legumes Pratico","Home & Living"],
+  ["Creatina Monohidratada Pura 300g","Sports & Outdoors"],
+  ["Bicicleta Ergometrica Spinning Academia","Sports & Outdoors"]
+]) assert.equal(inferShopeeCategoryHints(title).global_category1,expected,title);
+// Unknown items must stay unclassified rather than risking a wrong Telegram channel.
+assert.equal(inferShopeeCategoryHints("Massageador Portatil para Pescoco").global_category1,null);
+assert.equal(SHOPEE_BALANCED_QUOTAS["top-performance"],30);
+assert.equal(SHOPEE_BALANCED_QUOTAS["maior-comissao"],25);
+assert.equal(SHOPEE_BALANCED_QUOTAS["recomendados"],25);
+const list=(prefix,n)=>Array.from({length:n},(_,i)=>node(prefix+i));
+const balanced=selectShopeeBalancedCandidates({
+  "top-performance":list("top",80),
+  "maior-comissao":list("commission",80),
+  "recomendados":list("recommended",80)
+});
+assert.equal(balanced.offers.length,80);
+assert.deepEqual(balanced.selected_by_source,{"top-performance":30,"maior-comissao":25,"recomendados":25});
+assert.equal(balanced.backfill_added,0);
+assert.equal(new Set(balanced.offers.map(x=>x.itemid)).size,80);
+const overlap=selectShopeeBalancedCandidates({
+  "top-performance":list("top",30),
+  "maior-comissao":[...list("top",10),...list("com",30)],
+  "recomendados":list("rec",30)
+});
+assert.equal(overlap.offers.length,80);
+assert.deepEqual(overlap.selected_by_source,{"top-performance":30,"maior-comissao":25,"recomendados":25});
+const fallback=selectShopeeBalancedCandidates({
+  "top-performance":list("top",80),
+  "maior-comissao":[],
+  "recomendados":[]
+});
+assert.equal(fallback.offers.length,80);
+assert.equal(fallback.backfill_added,50);
+
 console.log("Shopee V85 cloud pure-function tests passed. No network or publications.");
