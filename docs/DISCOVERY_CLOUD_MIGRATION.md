@@ -50,6 +50,32 @@ O usuário confirmou a prévia balanceada: 80 candidatos, 71 com desconto ≥10%
 
 A consulta `listType=1,sortType=5` corresponde ao V85 local; não alterar parâmetros sem diagnosticar os dados retornados. A Edge Function `discovery-cloud-shopee` **v9**, implantada em modo somente leitura, adiciona `source_diagnostics` com quantidades por fonte: recebidos, válidos, campos ausentes, itens únicos, sobreposição entre listas, desconto ≥10% e motivo para contribuição zero. Registros no Supabase incluem somente contadores agregados — sem IDs de produtos, links, credenciais ou títulos. Testes de falha (lista vazia, itens inválidos, sobreposição), mapeamento e Deno CI aprovados. A próxima consulta read-only pelo usuário permitirá determinar a causa via log da função, sem novo print.
 
+### Política Shopee para nuvem — implementação de teste isolada (22/10/2026)
+
+Auditoria **do `flow-shopee-ingest` implantado v8**:
+- Seleciona até 8 ofertas únicas, mas a ordenação utiliza somente `discount_percentage`.
+- Janela de republicação para a mesma oferta/canal é **24h** (não 48h). Consulta status `sent` e `queued/processing` por canal.
+- Famílias amplas têm limite 1 por ciclo e uma janela de **1h** por canal, não a janela de 24h para variantes do mesmo produto vendidas por outros vendedores.
+- `dry_run=true` não calcula `offers_selected` corretamente para itens novos: o código não cria `offerId` e interrompe antes da contagem. Portanto **não usar a resposta de produção como simulação autorizadora**.
+- `flow_offers.price` muda ao atualizar ofertas; **não é histórico imutável do preço efetivamente divulgado**. A exceção de queda >=10% não pode ser liberada com segurança sem snapshot por publicação.
+- Metadados da API (`_mavuri_api.commission_rate`, vendedor) são gerados pelo Discovery V85, mas o ingest não os persiste no campo `metadata.shopee`; atualmente a comissão não participa da seleção de ofertas.
+
+Adicionada na branch apenas (nenhuma alteração no `flow-shopee-ingest` implantado):
+`supabase/functions/discovery-cloud-shopee/shopee-policy.mjs` e suíte `scripts/test-discovery-cloud-shopee-policy.mjs`.
+
+A política de simulação:
+- Mantém desconto como critério principal; comissão **apenas desempata descontos idênticos**; vendas desempata taxa igual.
+- Limita até 8 ofertas únicas, com decisão independente por canal: bloqueados **não consomem meta**, canais válidos remanescentes ainda podem ser usados.
+- Impede mesmo `itemid` enviado nos últimos **48h** por canal, exceto se o **preço enviado imutável** estiver disponível e o novo preço cair **>=10%**. Na ausência desse snapshot, falha de modo conservador (não autoriza exceção).
+- Impede `family_signature` idêntica divulgada em outro vendedor há menos de **24h**, por canal. A assinatura conservadora é uma aproximação derivada do título, não uma identidade comprovada de catálogo: **requer validação com dados reais** antes de produção.
+- Preserva limites de categorias/família durante o ciclo; não confunde quantidade de jobs por canais com contagem de ofertas únicas.
+- Exige `now_iso` explícito para evitar cálculos com relógio parado.
+- Testes cobrem 48h, 24h, queda 10%, queda insuficiente, sessão com preço histórico ausente, duplicação, contagem por canal, limite 8, candidato bloqueado sem consumir vaga e ranking por comissão em descontos empatados.
+
+`mode=policy_fixture` somente exercita amostras simuladas no Supabase, não lê o histórico de entregas e **não cria publicação**. Esta política ainda NÃO substitui a seleção de produção, nem pode autorizar um cutover sem snapshots confiáveis de preços publicados e integração segura ao backend.
+
+**Fase seguinte obrigatória:** projetar a captura imutável de `published_price` no momento real da publicação e validar a identidade `family_signature` de produtos equivalentes. Depois, construir simulador ligado ao banco somente leitura para comparar com decisões efetivas, garantir lease compartilhado Windows/nuvem e só então habilitar ingest para publicação.
+
 ### Primeira função cloud implantada (sem publicação)
 
 `discovery-cloud-shopee` V1 implantada no Supabase, com `verify_jwt=true`. Código: `supabase/functions/discovery-cloud-shopee/`.
