@@ -88,7 +88,8 @@ function enrichLandingProductFromSearch(product, results) {
 export async function captureMercadoLivreOffer(productUrl, {
   accessToken,
   affiliateUrl = null,
-  sourceType = 'api'
+  sourceType = 'api',
+  enqueueAutomatically = true
 } = {}) {
   let resolvedProductUrl = productUrl
   let resolvedAffiliateUrl = affiliateUrl
@@ -148,7 +149,7 @@ export async function captureMercadoLivreOffer(productUrl, {
       sourceTypeDetail: sourceType === 'api' ? 'mercadolivre_url' : sourceType
     }
   })
-  if (resolvedAffiliateUrl) await enqueueOfferDeliveries(result.offer)
+  if (resolvedAffiliateUrl && enqueueAutomatically) await enqueueOfferDeliveries(result.offer)
   return result.offer
 }
 
