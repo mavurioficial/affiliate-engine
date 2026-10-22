@@ -110,6 +110,21 @@ Saída protegida: **apenas contadores agregados**, categoria agregada e taxa mé
 
 A próxima etapa é invocar `general_audit` uma única vez pelo Mavuri autenticado, verificar logs e contadores e então portar os requisitos faltantes — sem cutover prematuro.
 
+### Auditoria real do canal geral confirmada (22/10/2026, v12) e v13
+
+Usuário executou `general_audit` com sessão Mavuri; logs Supabase mostraram HTTP 200 e `candidates=80 projected=7 history_matched=91 pending_matched=0`.
+
+Saída da simulação por canal geral, **não publica**:
+- 80 candidatos recebidos, dos quais **7 selecionados**;
+- 46 bloqueados por mesma oferta publicada nos últimos 48h;
+- 19 bloqueados por diversidade de categoria (bucket exato ainda não identificado);
+- 8 descontos inferiores a 10%;
+- 0 pendentes, 0 sem canal ativo, 0 exceções por queda >=10%, 0 atingiram a meta de 8;
+- 146 logs `sent` consultados nas 48h; 91 correspondem aos candidatos, **todos os 91 snapshots válidos**;
+- A seleção experimental usa categoria provisória do coletor, não toda a lógica de regras/overrides SQL vigente; logo o resultado 7 não é uma previsão exata de publicações em produção.
+
+**Próxima pergunta técnica:** dos 19 descartados por diversidade, quantos eram do bucket genérico `outros`? Não mudar o teto de 2 por categoria até confirmar. Foi implantada função `discovery-cloud-shopee` **v13**, que acrescenta indicadores agregados `category_diagnostics` na resposta da próxima auditoria `general_audit`: distribuição dos selecionados, bloqueados por diversidade, bloqueados por publicação recente e elegíveis pós-cooldown, separados por categorias predefinidas. Nenhuma alteração ao algoritmo de seleção, ao runner, banco ou publicador. Testes de regressão e Deno check aprovados (GitHub Actions run 39843054941).
+
 ### Primeira função cloud implantada (sem publicação)
 
 `discovery-cloud-shopee` V1 implantada no Supabase, com `verify_jwt=true`. Código: `supabase/functions/discovery-cloud-shopee/`.
