@@ -83,11 +83,12 @@ function dateAgeHours(date,now) {
  * @property {string[]} [connected_telegram_channel_ids]
  * @property {string} [now_iso]
  * @property {number} [target]
+ * @property {Record<string,string>} [category_overrides]
  */
 /** @param {ShopeePolicyInput} param0 */
 export function simulateShopeeCloudSelection({
   candidates=[], sent_history=[], pending_history=[], connected_telegram_channel_ids=[],
-  now_iso=null, target=SHOPEE_CLOUD_POLICY.target_unique_offers
+  now_iso=null, target=SHOPEE_CLOUD_POLICY.target_unique_offers, category_overrides={}
 }={}) {
   if(!now_iso)throw Error("now_iso_required");
   const now=Date.parse(now_iso);
@@ -115,7 +116,8 @@ export function simulateShopeeCloudSelection({
     if(Number(offer?.discount_percentage||0)<SHOPEE_CLOUD_POLICY.min_discount_percent){results.counts.discount_below_min++;continue;}
     const channels=candidateActiveChannels(offer,connected_telegram_channel_ids);
     if(!channels.length){results.counts.no_active_channel++;continue;}
-    const bucket=shopeeCategoryBucket(offer);
+    const fromStored=Object.prototype.hasOwnProperty.call(category_overrides,item)?String(category_overrides[item]||"").trim():"";
+    const bucket=/^[a-z][a-z0-9-]{1,48}$/.test(fromStored)?fromStored:shopeeCategoryBucket(offer);
     const family=shopeeFamilySignature(offer.title),shop=String(offer?._mavuri_api?.shop_id||"");
     const eligible=[];
     let overrideCount=0;
