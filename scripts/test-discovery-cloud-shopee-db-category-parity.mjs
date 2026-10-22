@@ -10,7 +10,7 @@ const rules=SHOPEE_EXPECTED_RULE_NAMES.map((name,i)=>({
       :i===3?{mavuriCategories:["eletronicos","informatica"],mavuriTagsAny:["eletronicos","informatica","celular"]}:{})
   },actions:{channel_ids:[ids[i]]}
 }));
-const channels=ids.map(id=>({id,type:"telegram",status:"connected",external_ref:"active"}));
+const channels=ids.map(id=>({id,type:"telegram",status:"connected",external_ref:"private_destination_marker_12345"}));
 const item=(id,title,category=null)=>({itemid:id,title,global_category1:category,global_category2:null,sale_price:80,discount_percentage:22});
 const db=(id,slug,tags,source="marketplace_category_map",date="2026-10-22T10:00:00Z")=>({
  source_ref:id,mavuri_tags:tags,metadata:{mavuri:{category_slug:slug,classification_source:source}},captured_at:date
@@ -43,6 +43,6 @@ assert.equal(report.channel_rules.stored_effective["SHOPEE — Casa & Cozinha"],
 assert.equal(report.channel_rules.stored_effective["SHOPEE — Tecnologia"],1);
 assert.equal(JSON.stringify(report).includes("Notebook"),false);
 assert.equal(JSON.stringify(report).includes("Brinco"),false);
-assert.equal(JSON.stringify(report).includes("active"),false);
+assert.equal(JSON.stringify(report).includes("private_destination_marker_12345"),false);
 assert.throws(()=>compareShopeeDbCategoryParity(offers,[],[],channels),/routing_rule_count_mismatch/);
 console.log("Shopee DB category parity shadow test passed: no database changes or sends.");
