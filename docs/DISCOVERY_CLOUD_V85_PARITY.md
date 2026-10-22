@@ -49,3 +49,21 @@ A função `discovery-cloud-shopee` **v15** mantém `general_audit` read-only e 
 - Testes puros de snapshot já corrigido, decisão manual, produto novo sem linha, multi-canal, não exposição de dados privados, além da checagem Deno, passaram na CI (run 39849035322).
 - **Pendente:** invocação real autenticada da v15 para validar filtro PostgREST `source_ref=in.(...)` e RLS em ambiente real. O resultado ainda não demonstra paridade completa com os gatilhos, apenas lê sua consequência para produtos existentes.
 
+
+## Auditoria v15 confirmada e próxima simulação — 22/10/2026
+
+`general_audit` v15 foi validado pelo proprietário via sessão Mavuri (POST HTTP 200). Nos logs da Edge Function:
+- 80 candidatos, 7 ofertas projetadas no canal geral, 91 entregas passadas correspondentes, nenhum job pendente;
+- 62 candidatos existem no banco com categoria/tags comparáveis; 18 são novos, sem categoria final;
+- 26/62 tiveram classificação de entrada diferente da categoria final (gatilhos/overrides SQL e revisão manual). **Duas** revisões manuais foram detectadas;
+- Correções e efeito em regras (somente candidatos conhecidos): `Mulher` +1, `Casa & Cozinha` +12 / -3, `Tecnologia` +1, `Geral` sem alteração. Correspondência à regra NÃO significa autorização de publicação;
+- Transições agregadas demonstram `outros -> cozinha` (6), `moda -> casa` (5) e outras; assim é inseguro usar categorias provisórias do V85 para autorizar nichos sem passar pelo banco.
+
+A nova simulação `shopee-category-impact.mjs` foi implementada na branch para comparar a projeção até 8 ofertas do canal geral:
+1. Cenário existente (categoria provisória);
+2. Cenário de *shadow* usando `metadata.mavuri.category_slug` efetivamente armazenada para o **mesmo itemId**, preservando as correções manuais;
+3. Produtos ainda não existentes continuam marcados como **categoria final desconhecida** — usa-se provisoriamente a categoria de descoberta apenas para quantificar a diferença, nunca para afirmar paridade;
+4. Retorna contagens agregadas de bloqueios por categoria, projeções antes/depois e quantos dos selecionados não têm categoria final confirmada. **Nenhuma publicação ou escrita.**
+
+O coletor na nuvem ainda NÃO aplica diretamente os gatilhos SQL em novos candidatos, nem produz resultados equivalentes aos quatro canais com cooldown completo. Deve-se submeter novos candidatos ao pipeline real sob controle transacional e exclusão mútua antes do cutover.
+
