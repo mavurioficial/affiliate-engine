@@ -61,6 +61,23 @@ export function compareShopeeCandidates(a,b) {
   if(sb!==sa)return sb-sa;
   return String(a?.itemid||"").localeCompare(String(b?.itemid||""));
 }
+// Exact monetary threshold check: never round a 9.995% drop to 10%.
+// Prices must have at most two decimal places, as confirmed for current Shopee
+// sent-price snapshots. Rejects fractional cents instead of guessing a price.
+function priceCentsStrict(value) {
+  if(value===null||value===undefined||value==="")return null;
+  const raw=String(value).trim();
+  if(!/^\\d{1,14}(?:\\.\\d{1,2})?$/.test(raw))return null;
+  const [unit,fraction=""]=raw.split(".");
+  const cents=BigInt(unit)*100n+BigInt((fraction+"00").slice(0,2));
+  return cents>0n?cents:null;
+}
+export function shopeeSignificantPriceDropStrict(previousPublishedPrice,currentPrice) {
+  const previous=priceCentsStrict(previousPublishedPrice);
+  const current=priceCentsStrict(currentPrice);
+  return previous!==null&&current!==null&&current<previous&&
+    (previous-current)*100n>=previous*10n;
+}
 export function shopeePriceDropPercent(previousPublishedPrice,currentPrice) {
   const old=Number(previousPublishedPrice),now=Number(currentPrice);
   if(!Number.isFinite(old)||!Number.isFinite(now)||old<=0||now<=0||now>=old)return null;
@@ -127,8 +144,7 @@ export function simulateShopeeCloudSelection({
         .sort((a,b)=>Date.parse(b.sent_at)-Date.parse(a.sent_at));
       if(matching.length) {
         // With no immutable last SENT price snapshot, fail closed; comparing to mutable offer price is unsafe.
-        const drop=shopeePriceDropPercent(matching[0].published_price,price);
-        if(drop===null||drop<SHOPEE_CLOUD_POLICY.significant_price_drop_percent){results.counts.same_product_48h++;increment("blocked_by_recent_publication",bucket);continue;}
+        if(!shopeeSignificantPriceDropStrict(matching[0].published_price,price)){results.counts.same_product_48h++;increment("blocked_by_recent_publication",bucket);continue;}
         overrideCount++;
       }
       if(family && shop && history.some(h=>
