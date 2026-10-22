@@ -22,7 +22,7 @@ const root =
 
 let session = null
 let page = 'operations'
-let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '', manualDraft: null }
+let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '', manualDraft: null, manualMode: false }
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
 let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
 let categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
@@ -371,7 +371,6 @@ function loginPage() {
 
 async function loadFlowState() {
   flowState.loading = true
-  flowState.error = ''
   try {
     const user = (await supabase.auth.getUser()).data.user
     if (!user) throw new Error('Usuário não autenticado.')
@@ -383,14 +382,13 @@ async function loadFlowState() {
       supabase.from('flow_clicks').select('id,offer_id,channel_id,tracking_id,click_count,last_clicked_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1000)
     ])
     if (clicksResult.error) throw clicksResult.error
-    flowState = { loading: false, loaded: true, offers, rules, jobs, channels, clicks: clicksResult.data || [], error: '', notice: flowState.notice, manualDraft: flowState.manualDraft || null }
+    flowState = { loading: false, loaded: true, offers, rules, jobs, channels, clicks: clicksResult.data || [], error: flowState.error, notice: flowState.notice, manualDraft: flowState.manualDraft || null, manualMode: flowState.manualMode || false }
   } catch (error) {
     flowState = { ...flowState, loading: false, loaded: true, error: error.message || 'Não foi possível carregar o Flow.' }
   }
 }
 
 function flowPage() {
-  const flowCaptureDraft = getFlowCaptureDraftStorage()?.read() || ''
   const sent = flowState.jobs.filter((job) => job.status === 'sent').length
   const queued = flowState.jobs.filter((job) => job.status === 'queued').length
   const processing = flowState.jobs.filter((job) => job.status === 'processing').length
@@ -419,10 +417,10 @@ function flowPage() {
       <div class="section-title"><h2>Capturar oferta</h2><p>Cole somente o link de afiliado do Mercado Livre. O Flow identifica o produto automaticamente, consulta os dados reais e avalia as regras.</p><div class="flow-connection-hint">🔐 A conexão com o Mercado Livre é feita com OAuth; o Mavuri não pede seu token para colar no navegador.</div></div>
       ${flowState.notice || flowState.error ? `<div class="notice flow-capture-feedback" role="status" style="margin:14px 0;background:${flowState.error ? "#ffebe9" : "#eaf8f0"};border-radius:9px;padding:12px 15px;overflow-wrap:anywhere"><strong>${flowState.error ? "⚠️ Não foi possível concluir" : "✓ Resultado da captura"}</strong><p style="margin:6px 0 0">${escapeHtml(flowState.error || flowState.notice)}</p></div>` : ""}
       <form data-flow-capture><div class="flow-capture-grid">
-        <label><span>Links de afiliado oficiais</span><textarea name="affiliateUrl" rows="4" required placeholder="Cole 1 ou vários links https://meli.la/... separados por espaço ou nova linha" autocomplete="off">${escapeHtml(flowCaptureDraft)}</textarea><small class="flow-field-hint">Você pode colar vários links do Mercado Livre de uma vez, separados por espaço ou por nova linha. O Mavuri processa cada link individualmente.</small></label>
+        <label><span>Links de afiliado oficiais</span><textarea name="affiliateUrl" rows="4" required placeholder="Exemplo: https://meli.la/SeuLinkDeAfiliado" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><small class="flow-field-hint">Você pode colar vários links do Mercado Livre de uma vez, separados por espaço ou por nova linha. O Mavuri processa cada link individualmente.</small></label>
       </div>
       <div style="margin:14px 0;padding:14px;border:1px solid #d4e4f7;border-radius:12px;background:#f3f8ff">
-        <label style="display:flex;align-items:center;gap:10px;font-weight:750"><input type="checkbox" name="manualMode" value="yes" style="width:18px;height:18px;flex-shrink:0"> Publicar manualmente (ignorar regras de desconto)</label>
+        <label style="display:flex;align-items:center;gap:10px;font-weight:750"><input type="checkbox" name="manualMode" value="yes" ${flowState.manualMode ? 'checked' : ''} style="width:18px;height:18px;flex-shrink:0"> Publicar manualmente (ignorar regras de desconto)</label>
         <p style="margin:7px 0 0;color:#496485;font-size:13px">Para atender a um pedido de cliente. O Mavuri captura o produto e mostra uma prévia; você confirma os canais antes de enviar. Não exige desconto mínimo.</p>
       </div>
       <div class="form-actions"><button class="primary" type="submit">⚡ Capturar no Flow</button></div></form>
@@ -1447,11 +1445,8 @@ function bindEvents() {
     const flowCaptureInput = flowCaptureForm.querySelector('[name="affiliateUrl"]')
     const flowCaptureDraftStorage = getFlowCaptureDraftStorage()
 
-    if (flowCaptureInput && flowCaptureDraftStorage) {
-      flowCaptureInput.addEventListener('input', () => {
-        flowCaptureDraftStorage.write(flowCaptureInput.value)
-      })
-    }
+    // No link should be prefilled across visits. Clear old browser drafts too.
+    flowCaptureDraftStorage?.clear()
 
     flowCaptureForm.addEventListener(
       'submit',
@@ -1468,6 +1463,9 @@ function bindEvents() {
         )]
         const productUrl = null
         const manualMode = data.get('manualMode') === 'yes'
+        flowState.manualMode = manualMode
+        flowState.notice = ''
+        flowState.error = ''
 
         if (manualMode && affiliateUrls.length !== 1) {
           flowState = { ...flowState, error: 'A publicação manual aceita um link por vez para você conferir o produto.', notice: '' }
@@ -1599,11 +1597,7 @@ function bindEvents() {
             }
           }
 
-          if (failures.length) {
-            getFlowCaptureDraftStorage()?.write(failures.map((item) => item.affiliateUrl).join('\n'))
-          } else {
-            getFlowCaptureDraftStorage()?.clear()
-          }
+          // The next capture starts with an empty field. Results are displayed below.
 
           if (manualMode && capturedOffers.length) {
             const o = capturedOffers[0].offer
@@ -1635,7 +1629,7 @@ function bindEvents() {
           }
           const notice = successCount ? `${successCount} oferta(s) salvas no Mavuri.${deliverySummary}` : ''
           const error = failureCount ? failures.map(item => `${item.affiliateUrl}: ${item.message}`).join(' | ') : ''
-          flowState = { ...flowState, loaded: false, notice, error }
+          flowState = { ...flowState, loaded: false, notice, error: error || (!successCount ? 'Nenhuma oferta foi capturada. Confira o link e tente novamente.' : '') }
           await render()
           document.querySelector('.flow-capture-feedback')?.scrollIntoView({ block: 'center', behavior: 'auto' })
         } catch (error) {
