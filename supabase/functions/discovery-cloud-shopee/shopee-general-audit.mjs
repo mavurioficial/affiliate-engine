@@ -70,6 +70,7 @@ export function simulateShopeeGeneralAudit({
     projected_unique_offers:projected.selected_unique_offers,
     projected_delivery_jobs:projected.projected_delivery_jobs,
     decisions:projected.counts,
+    category_diagnostics:projected.category_audit,
     average_selected_commission_percent:projected.selected.length?
       Math.round(projected.selected.reduce((a,x)=>a+x.commission_percent,0)/projected.selected.length*100)/100:null,
     selected_category_totals:projected.selected.reduce((out,x)=>{
