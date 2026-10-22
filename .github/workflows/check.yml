@@ -17,3 +17,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: node scripts/test-discovery-cloud-shopee.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check supabase/functions/discovery-cloud-shopee/index.ts
