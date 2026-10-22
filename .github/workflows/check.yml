@@ -24,6 +24,7 @@ jobs:
       - run: node scripts/test-discovery-cloud-shopee-db-category-parity.mjs
       - run: node scripts/test-discovery-cloud-shopee-category-impact.mjs
       - run: node scripts/test-discovery-cloud-shopee-postpersist-plan.mjs
+      - run: node scripts/test-discovery-cloud-shopee-live-rule-snapshot.mjs
       - run: node scripts/test-discovery-cloud-shopee-queue-release-gate.mjs
       - run: node scripts/test-discovery-cloud-shopee-queue-sql-draft.mjs
       - run: node scripts/test-discovery-cloud-shopee-atomic-draft.mjs
