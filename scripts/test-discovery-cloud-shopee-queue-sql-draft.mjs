@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+const sql=readFileSync("docs/sql/SHOPEE_CLOUD_QUEUE_GUARDS_DRAFT.sql","utf8");
+assert.match(sql,/DRAFT ONLY -- NOT APPLIED TO SUPABASE/);
+assert.match(sql,/CREATE UNIQUE INDEX IF NOT EXISTS flow_delivery_jobs_inflight_product_channel_uidx/);
+assert.match(sql,/ON public\.flow_delivery_jobs \(user_id,offer_id,channel_id\)/);
+assert.match(sql,/WHERE status IN \('queued','processing'\)/);
+assert.match(sql,/v_prefix in \('discovery','shopee','shopee-cloud','magalu','repub','amazon-collector'\)/);
+assert.match(sql,/if coalesce\(new\.delivery_key,''\) like 'shopee-cloud:%' then\s*return new;/i);
+assert.match(sql,/CREATE OR REPLACE FUNCTION public\.mavuri_delivery_job_before_insert\(\)/);
+assert.match(sql,/CREATE OR REPLACE FUNCTION public\.mavuri_delivery_job_fanout\(\)/);
+assert.equal((sql.match(/CREATE OR REPLACE FUNCTION/g)||[]).length,2);
+assert.ok(sql.includes("No scheduler should be enabled."));
+assert.ok(sql.includes("NOT AN AUTOMATIC MIGRATION"));
+assert.ok(!sql.includes("UPDATE mavuri_internal.discovery_cloud_control SET enabled=true"));
+console.log("Cloud queue SQL draft safety checks passed. DDL NOT applied.");
