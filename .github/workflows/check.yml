@@ -28,6 +28,7 @@ jobs:
       - run: node scripts/test-discovery-cloud-shopee-queue-release-gate.mjs
       - run: node scripts/test-discovery-cloud-shopee-queue-sql-draft.mjs
       - run: node scripts/test-discovery-cloud-shopee-atomic-draft.mjs
+      - run: node scripts/test-discovery-cloud-shopee-sql-matcher.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
