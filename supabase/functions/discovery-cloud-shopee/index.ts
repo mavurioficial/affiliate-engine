@@ -5,7 +5,11 @@ import {mapShopeeApiProduct,collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS}
  * NO INSERTS, NO publish calls, NO Cron, NO activation of the cloud lease.
  * Default behavior is unavailable for live probes unless explicit secret flag is set.
  */
-const JSON_HEADERS = {"content-type":"application/json; charset=utf-8","cache-control":"no-store"};
+const JSON_HEADERS = {"content-type":"application/json; charset=utf-8","cache-control":"no-store",
+  "access-control-allow-origin":"https://mavurioficial.github.io",
+  "access-control-allow-methods":"POST, OPTIONS",
+  "access-control-allow-headers":"authorization, x-client-info, apikey, content-type",
+  "vary":"Origin"};
 const API_URL = "https://open-api.affiliate.shopee.com.br/graphql";
 const flag = (v: string | undefined)=> /^(true|1|yes)$/i.test(String(v || ""));
 
@@ -75,6 +79,7 @@ async function livePreview() {
   return {summary:previewSummary([...unique.values()]),sources};
 }
 Deno.serve(async(req: Request)=>{
+  if(req.method === "OPTIONS") return new Response(null,{status:204,headers:JSON_HEADERS});
   if(req.method !== "POST") return respond({error:"post_only"},405);
   try{
     const userId=await authenticate(req);
