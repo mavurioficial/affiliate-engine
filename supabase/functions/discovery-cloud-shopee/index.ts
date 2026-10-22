@@ -1,6 +1,7 @@
 import {collectUniqueOffers,previewSummary,SHOPEE_V85_SPECS,SHOPEE_BALANCED_QUOTAS,selectShopeeBalancedCandidates,diagnoseShopeeSources} from "./shopee-core.mjs";
 import {simulateShopeeCloudSelection,SHOPEE_CLOUD_POLICY} from "./shopee-policy.mjs";
 import {summarizeShopeeSentHistory} from "./shopee-history.mjs";
+import {simulateShopeeGeneralAudit} from "./shopee-general-audit.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -59,7 +60,7 @@ async function signedShopeeQuery(query: string) {
   if (Array.isArray(data?.errors) && data.errors.length) throw new Error("shopee_graphql_error");
   return data?.data?.productOfferV2 || {nodes:[],pageInfo:{}};
 }
-async function livePreview() {
+async function livePreview(includeInternalOffers=false) {
   const pools: Record<string, unknown[]> = Object.fromEntries(SHOPEE_V85_SPECS.map(spec=>[spec.label,[]]));
   const exhausted: Record<string,boolean> = Object.fromEntries(SHOPEE_V85_SPECS.map(spec=>[spec.label,false]));
   const sources=[];
@@ -94,7 +95,8 @@ async function livePreview() {
     primary_by_source:selection.primary_by_source,
     quota_by_source:SHOPEE_BALANCED_QUOTAS,
     backfill_added:selection.backfill_added,
-    source_diagnostics:diagnoseShopeeSources(pools,selection)
+    source_diagnostics:diagnoseShopeeSources(pools,selection),
+    ...(includeInternalOffers ? {internal_offers:selection.offers} : {})
   };
 }
 // GET-only, user's own Supabase JWT. RLS is the authoritative permission check.
@@ -132,6 +134,55 @@ async function readShopeeHistory(req: Request) {
   return summarizeShopeeSentHistory(rows,{since_iso:since,now_iso:now.toISOString()});
 }
 
+// Strict owner-RLS read of real sent snapshots + pending jobs, general channel only.
+// Does not open the publishing path. No IDs, URLs or prices included in responses.
+async function readPagedForShopee(req: Request,table:string,filter:Record<string,string>) {
+  const all=[];
+  for(let page=0;page<10;page++){
+    const items=await ownerRlsGet(req,table,{...filter,limit:"500",offset:String(page*500)});
+    all.push(...items);
+    if(items.length<500)return all;
+  }
+  throw Error("audit_page_limit");
+}
+async function liveGeneralAudit(req: Request) {
+  const [rules,channels,marketplaces]=await Promise.all([
+    ownerRlsGet(req,"flow_rules",{
+      select:"name,enabled,conditions,actions",name:"eq.SHOPEE — Geral",enabled:"eq.true"
+    }),
+    ownerRlsGet(req,"flow_channels",{
+      select:"id,type,status,external_ref",type:"eq.telegram"
+    }),
+    ownerRlsGet(req,"flow_marketplaces",{select:"id",slug:"eq.shopee",limit:"1"})
+  ]);
+  const marketplaceId=String(marketplaces[0]?.id||"");
+  if(!marketplaceId)throw Error("audit_shopee_marketplace_missing");
+  // Fail before calling Shopee API if the live general rule has drifted.
+  // Validator is called from the pure simulation even when history is empty.
+  const moment=new Date(),since=new Date(moment.getTime()-48*3600000).toISOString();
+  const [sentRows,pendingRows]=await Promise.all([
+    readPagedForShopee(req,"flow_delivery_logs",{
+      select:"created_at,channel_id,status,metadata,flow_offers!inner(source_ref,marketplace_id)",
+      status:"eq.sent",created_at:"gte."+since,
+      "flow_offers.marketplace_id":"eq."+marketplaceId,order:"created_at.asc"
+    }),
+    readPagedForShopee(req,"flow_delivery_jobs",{
+      select:"channel_id,status,flow_offers!inner(source_ref,marketplace_id)",
+      status:"in.(queued,processing)",
+      "flow_offers.marketplace_id":"eq."+marketplaceId
+    })
+  ]);
+  const cloudPool=await livePreview(true);
+  const report=simulateShopeeGeneralAudit({
+    offers:cloudPool.internal_offers,rules,channels,sentRows,pendingRows,
+    now_iso:moment.toISOString()
+  });
+  return {ok:true,mode:"general_audit",dry_run:true,cloud_publishing:false,
+    cloud_schedule:false,source_counts:cloudPool.selected_by_source,
+    source_discount_at_least_10:cloudPool.summary.discount_at_least_10,
+    ...report};
+}
+
 Deno.serve(async(req: Request)=>{
   if(req.method === "OPTIONS") return new Response(null,{status:204,headers:JSON_HEADERS});
   if(req.method !== "POST") return respond({error:"post_only"},405);
@@ -164,6 +215,19 @@ Deno.serve(async(req: Request)=>{
         {itemId:"2",productName:"Notebook SSD",priceMin:2000,priceDiscountRate:0.08,offerLink:"https://s.shopee.com.br/b",imageUrl:"https://example.com/b.jpg"}
       ];
       return respond({ok:true,mode:"fixture",dry_run:true,cloud_publishing:false,summary:previewSummary(collectUniqueOffers(fixtures))});
+    }
+    if(mode==="general_audit") {
+      // Explicit user session, owner verification and live-preview flag required.
+      const owner=String(Deno.env.get("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID")||"");
+      if(!owner||userId!==owner)return respond({error:"audit_owner_only"},403);
+      if(!flag(Deno.env.get("MAVURI_SHOPEE_CLOUD_PREVIEW_ENABLED")))
+        return respond({error:"audit_disabled"},403);
+      const report=await liveGeneralAudit(req);
+      console.log("[discovery-cloud-shopee] general_audit candidates="+report.candidates_considered+
+        " projected="+report.projected_unique_offers+
+        " history_matched="+report.history.sent_matched+
+        " pending_matched="+report.history.pending_matched);
+      return respond(report);
     }
     if(mode==="history_preview") {
       const owner=String(Deno.env.get("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID")||"");
