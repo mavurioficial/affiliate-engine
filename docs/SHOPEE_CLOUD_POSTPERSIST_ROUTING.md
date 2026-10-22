@@ -68,3 +68,23 @@ Cloud Shopee v16 está **somente em diagnóstico**; `discovery_cloud_control.ena
 **Testes**: `scripts/test-discovery-cloud-shopee-postpersist-plan.mjs` cobre categorias pós-trigger, revisão manual, produto novo bloqueado, vínculo da conta afiliada, preço/URL divergente, pendentes, cooldown de 48h, exceção de preço condicionado a snapshot confiável, equivalência entre vendedores comprovada, decisões independentes por canal, limite de diversidade e 8 ofertas únicas e segurança dos agregados. GitHub Actions run `39852671008`: suite e Deno check **SUCESSO**.
 
 **Fase posterior antes de ativação**: integrar esse planejador a um executor transacional seguro, persistindo linhas e garantindo que as decisões usem as classificações após os gatilhos; bloquear qualquer caminho cloud de publicação até haver exclusão mútua entre Windows e nuvem, além de `shop_id` e histórico de preço renderizado confiáveis. O sistema V85 de produção não foi alterado.
+
+
+## Auditoria da fila e proteção transacional — 22/10/2026
+
+**Verificação real das funções e índices do Supabase:**
+- `trg_mavuri_delivery_job_before_insert` já limita reenvios automáticos por canal em **48h para produto igual**, **24h para produtos semelhantes** e permite queda de preço >=10% sob certas condições (capacidade/tamanho compatíveis). Isso é uma proteção extra em relação ao pré-filtro de 24h que ainda existe no `flow-shopee-ingest`. O uso de preço fallback em ofertas diferentes precisa ser revisado antes de proclamar equivalência à política V85.
+- `trg_mavuri_delivery_job_fanout` adiciona canais automaticamente (incluindo Geral) baseado na categoria final e em regras próprias, **não idênticas** às quatro regras `flow_rules`. Portanto, mesmo que o planejamento cloud decida dois canais, inserir um único job com o prefixo `shopee` pode causar envios adicionais fora dos filtros.
+- A única restrição UNIQUE existente nos jobs é `(user_id,delivery_key)`. Não existe restrição UNIQUE para `(user_id,offer_id,channel_id)` em jobs com status `queued/processing`; os pré-filtros feitos sob transações concorrentes não fornecem sozinhos exclusão mútua.
+- Auditoria atual: **zero** pares produto/canal duplicados simultaneamente em `queued/processing`; no momento da verificação não havia jobs nessa fila. Isso não garante ausência de corrida futura.
+- `mavuri_discovery_claim_run` e `mavuri_discovery_finish_run` já estão no Supabase e controlam apenas runs `cloud`, mas o V85 Windows **não compartilha** o lease. O controle `enabled=false` continua desativado.
+
+**Preparado, mas NÃO APLICADO ao banco (nem colocado como migration automática):**
+- `docs/sql/SHOPEE_CLOUD_QUEUE_GUARDS_DRAFT.sql` é uma proposta SQL de `UNIQUE` parcial para jobs pendentes e dos ajustes pontuais dos dois gatilhos existentes:
+  1. prefixo futuro `shopee-cloud:` continua recebendo o gatilho de cooldown automático;
+  2. gatilho de fanout **não** acrescenta outros canais aos jobs com prefixo `shopee-cloud:` (canais precisam ter sido autorizados após os gatilhos de classificação);
+  3. índices impedem dois jobs em voo para o mesmo produto/canal, mesmo sob concorrência.
+- `shopee-queue-release-gate.mjs` contém um verificador puro que exige **14 sinais de segurança**, incluindo executor cloud explicitamente ativo, runner local interrompido/fenciado, lease válido, unicidade de jobs pendentes, serialização entre escritores, classificação pós-trigger e checagem transacional do histórico, links e snapshot renderizado, WhatsApp desativado. **Ele não ativa nada**.
+- `scripts/test-discovery-cloud-shopee-queue-release-gate.mjs` e `scripts/test-discovery-cloud-shopee-queue-sql-draft.mjs` aprovados no GitHub Actions run **39854422379**, junto com `deno check`.
+
+**Antes de aplicar a proposta SQL**: testar em banco separado ou transação controlada, confirmar que a UNIQUE parcial não quebra o fanout atual/concorrente nem os scripts existentes; revisar prioridades de classificação e regras dos quatro canais; só depois criar migration formal. Publicador/runner de produção não foram modificados. O próximo estágio de trabalho é uma RPC de inserção transacional com locks e decisão pós-persistência, também restrita a `enabled=true`, `active_executor='cloud'` e run válido. NUNCA expor `service_role` no navegador ou habilitar Cron antes do cutover completo.
