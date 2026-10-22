@@ -94,6 +94,22 @@ Implantado `discovery-cloud-shopee` **v11**, com modo `history_preview`:
 - Código novo `shopee-history.mjs` e testes `scripts/test-discovery-cloud-shopee-history.mjs`, passando no CI; **a rota precisa ser testada pelo usuário autenticado no Mavuri para confirmar PostgREST em execução real**.
 - Nenhum novo Cron, update, insert ou publicação. `discovery_cloud_control.enabled=false` e origem `local`.
 
+### Auditoria real de candidatos para canal geral (etapa 22/10/2026)
+
+Foi preparado um simulador adicional, `shopee-general-audit.mjs`, mais testes `test-discovery-cloud-shopee-general-audit.mjs`, e modo Edge Function `general_audit` (implantação condicionada a CI aprovado). Ele cruza:
+
+1. Candidatos atuais `productOfferV2`, pool balanceado de até 80 produtos, sem gravar dados.
+2. A regra exata `SHOPEE — Geral` do usuário: marketplace Shopee e `minDiscount:10`; exige **somente essa condição**, `enabled=true`, canal Telegram único conectado. Se a regra mudou, o simulador **aborta** em vez de assumir roteamento.
+3. Logs `sent` da Shopee de até 48h, com `metadata.offer_snapshot.price` e `source_ref` associado via `flow_offers!inner`, filtrados por marketplace e pelas políticas RLS da conta autenticada.
+4. Jobs `queued` e `processing` da Shopee no canal geral, também via RLS.
+5. Módulo de política experimental `simulateShopeeCloudSelection`: bloqueio 48h por `itemid`/canal, exceção >=10% com snapshot anterior, limite até 8 produtos únicos, descontos >=10%, limites de diversidade e comissão somente como desempate.
+
+Saída protegida: **apenas contadores agregados**, categoria agregada e taxa média de comissão, sem URLs afiliadas, source_ref, chat_id, título, token, preço individual nem corpo de mensagens. O modo exige JWT autenticado + ID do dono + `MAVURI_SHOPEE_CLOUD_PREVIEW_ENABLED=true`. Faz somente POST de consulta à API afiliada Shopee e GETs PostgREST; **nunca chama ingest, Cron, Telegram ou grava banco**.
+
+**Escopo estrito:** apenas o canal **geral**. A classificação de nichos, a interpretação completa de categorias/overrides SQL e a regra de produto equivalente em outro vendedor **não estão validadas nesta auditoria**. A auditoria usa a classificação provisória do coletor e não substitui a função `flow-shopee-ingest`. O snapshot é gravado logo após o envio por trigger e precisa ser confrontado com o texto real para garantir precisão sob concorrência. O resultado é simulação, sujeito a novos envios simultâneos do runner local.
+
+A próxima etapa é invocar `general_audit` uma única vez pelo Mavuri autenticado, verificar logs e contadores e então portar os requisitos faltantes — sem cutover prematuro.
+
 ### Primeira função cloud implantada (sem publicação)
 
 `discovery-cloud-shopee` V1 implantada no Supabase, com `verify_jwt=true`. Código: `supabase/functions/discovery-cloud-shopee/`.
