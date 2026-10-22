@@ -22,7 +22,7 @@ const root =
 
 let session = null
 let page = 'operations'
-let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], error: '', notice: '', manualDraft: null, manualMode: false }
+let flowState = { loading: false, loaded: false, offers: [], rules: [], jobs: [], channels: [], clicks: [], publicationCounts: [], error: '', notice: '', manualDraft: null, manualMode: false }
 let dashboardOperationsState = { days: 1, data: null, loading: false, loaded: false, error: '' }
 let categoryReviewState = { days: 1, view: 'review', marketplace: '', offset: 0, data: null, loading: false, loaded: false, error: '', notice: '' }
 let categoryLearningState = { data: null, loaded: false, loading: false, error: '' }
@@ -374,21 +374,24 @@ async function loadFlowState() {
   try {
     const user = (await supabase.auth.getUser()).data.user
     if (!user) throw new Error('Usuário não autenticado.')
-    const [offers, rules, jobs, channels, clicksResult] = await Promise.all([
+    const [offers, rules, jobs, channels, clicksResult, publicationResult] = await Promise.all([
       listOffers({ limit: 50 }),
       listRules(),
       listDeliveryJobs(),
       listChannels(),
-      supabase.from('flow_clicks').select('id,offer_id,channel_id,tracking_id,click_count,last_clicked_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1000)
+      supabase.from('flow_clicks').select('id,offer_id,channel_id,tracking_id,click_count,last_clicked_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1000),
+      supabase.rpc('mavuri_publication_counts')
     ])
     if (clicksResult.error) throw clicksResult.error
-    flowState = { loading: false, loaded: true, offers, rules, jobs, channels, clicks: clicksResult.data || [], error: flowState.error, notice: flowState.notice, manualDraft: flowState.manualDraft || null, manualMode: flowState.manualMode || false }
+    if (publicationResult.error) throw publicationResult.error
+    flowState = { loading: false, loaded: true, offers, rules, jobs, channels, clicks: clicksResult.data || [], publicationCounts: publicationResult.data || [], error: flowState.error, notice: flowState.notice, manualDraft: flowState.manualDraft || null, manualMode: flowState.manualMode || false }
   } catch (error) {
     flowState = { ...flowState, loading: false, loaded: true, error: error.message || 'Não foi possível carregar o Flow.' }
   }
 }
 
 function flowPage() {
+  const countsByOffer = new Map((flowState.publicationCounts || []).map(x => [x.offer_id, x]))
   const sent = flowState.jobs.filter((job) => job.status === 'sent').length
   const queued = flowState.jobs.filter((job) => job.status === 'queued').length
   const processing = flowState.jobs.filter((job) => job.status === 'processing').length
@@ -539,9 +542,20 @@ function flowPage() {
         ${flowState.offers.slice(0,5).map((offer) => {
           const monetized = Boolean(offer.affiliate_url)
           const image = String(offer.image_url || '').trim()
-          return `<div class="flow-offer-row"><div class="flow-offer-thumb">${image ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" />` : '🛍️'}</div><div class="flow-offer-main"><strong>${escapeHtml(offer.title)}</strong><small>${escapeHtml(offer.source_type || 'manual')} · ${formatMoney(offer.price)}</small></div><span class="flow-offer-status ${monetized ? 'is-ready' : 'is-pending'}">${monetized ? 'Monetizável' : 'Sem afiliado'}</span></div>`
+          return `<div class="flow-offer-row"><div class="flow-offer-thumb">${image ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" />` : '🛍️'}</div><div class="flow-offer-main"><strong>${escapeHtml(offer.title)}</strong><small>${escapeHtml(offer.source_type || 'manual')} · ${formatMoney(offer.price)} · 📣 ${Number(countsByOffer.get(offer.id)?.general_count || 0)} vez(es) no geral</small></div><span class="flow-offer-status ${monetized ? 'is-ready' : 'is-pending'}">${monetized ? 'Monetizável' : 'Sem afiliado'}</span></div>`
         }).join('') || '<div class="empty">Nenhuma oferta capturada ainda.</div>'}
         </div>
+      </div>
+      <div class="flow-panel"><div class="section-title"><h2>Mais publicados no Telegram</h2><p>Histórico confirmado por produto. Contagem do canal geral separada dos nichos; não inclui envios com falha.</p></div>
+        ${(flowState.publicationCounts || []).slice().sort((a,b)=>Number(b.general_count)-Number(a.general_count)).slice(0,10).map((entry)=>{
+          const offer = flowState.offers.find(o=>o.id===entry.offer_id)
+          const productName = offer?.title || 'Produto do histórico (fora das últimas 50 ofertas)'
+          return `<div class="flow-row" style="gap:15px;align-items:center">
+            <div style="min-width:0;flex:1"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(productName)}">${escapeHtml(productName)}</strong>
+            <small>${Number(entry.telegram_count)} envios no Telegram (todos os canais) · última publicação ${escapeHtml(formatDateTimeBR(entry.last_sent_at))}</small></div>
+            <span class="status-dot" style="flex:none">${Number(entry.general_count)} no geral</span></div>`
+        }).join('') || '<div class="empty">Nenhuma publicação registrada.</div>'}
+        <small style="display:block;margin-top:12px">Produtos semelhantes de anúncios diferentes são contabilizados separadamente. Assim, King e Casal ainda aparecem como ofertas distintas.</small>
       </div>
       <div class="flow-panel"><div class="section-title"><h2>Fluxo operacional</h2><p>Capture → avalie → enfileire → publique.</p></div>
         <ol class="flow-hint-list"><li>Cadastre o canal Telegram.</li><li>Crie a regra.</li><li>Capture uma oferta que atenda às condições.</li><li>O job é criado automaticamente.</li><li>Processe a fila para publicar.</li></ol>
