@@ -100,3 +100,21 @@ O rascunho `docs/sql/SHOPEE_CLOUD_ATOMIC_ENQUEUE_DRAFT.sql` foi reforçado, **se
 - retorna sempre `accepted=false` com `transactional_policy_not_implemented`, mesmo quando outras verificações passarem.
 
 O rascunho **não** executa o roteamento `flow_rules` definitivo, a deduplicação transacional nem cria jobs. Não é um publicador. Testes estáticos foram ampliados; a próxima etapa requer a implementação segura em ambiente isolado, com concorrência real, antes de qualquer migração DDL para produção.
+
+
+## Regressão com condições reais dos 4 canais (22/10/2026)
+
+Adicionado `scripts/test-discovery-cloud-shopee-live-rule-snapshot.mjs` à CI. Os **campos de condições** são transcritos da consulta de leitura de `public.flow_rules` executada neste dia; IDs de destinos são **fictícios** no teste, para não compartilhar referências reais.
+
+A suite comprova, no planejador pós-persistência offline, os casos de:
+- produto com título feminino e categoria `casa` corrigida manualmente → Geral + Casa, não Mulher;
+- skincare classificado em `beleza` com tags apropriadas → Geral + Mulher;
+- tag masculina e palavras negadas → exclusão de Mulher;
+- notebook classificado em informática → Geral + Tecnologia;
+- `criado mudo` contendo termos de tecnologia → excluído de Tecnologia;
+- fritadeira na categoria `cozinha` → Geral + Casa;
+- revisão manual de um item cuja descrição sugere tecnologia, mas é `casa`, continua respeitada;
+- desconto menor que 10% → não publicado;
+- canal desabilitado ou regra extra inesperada → falha fechada.
+
+**Escopo real:** testes offline do algoritmo com a cópia das condições, não teste de integração ao Supabase, não prova de transação atômica e não autoriza nenhum envio. A nuvem segue desativada e ainda faltam executor, coleta ML/Magalu e cupons.
