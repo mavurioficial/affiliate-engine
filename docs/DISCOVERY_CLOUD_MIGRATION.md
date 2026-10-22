@@ -44,6 +44,12 @@ Supabase Edge Logs: HTTP 200; 80 candidatos distintos em 3 chamadas `productOffe
 - Retorno inclui `primary_by_source`, `selected_by_source`, `quota_by_source`, `backfill_added`, `classified` e `unclassified`.
 - Testes de quota, sobreposição, deduplicação e regressão das categorias; `deno check` aprovados no PR. **Necessário rodar nova prévia real para comparar a distribuição e verificar a resposta da API das outras listas.**
 
+### Segunda consulta Shopee cloud + investigação maior comissão (22/10/2026)
+
+O usuário confirmou a prévia balanceada: 80 candidatos, 71 com desconto ≥10% informado, 80 com campo de link afiliado, 45 classificados e 35 sem hint. `selected_by_source`: `top-performance=55`, `maior-comissao=0`, `recomendados=25`; `backfill_added=25`; total 5 chamadas de API. Esses dados **não estabelecem a causa** da ausência de itens da lista de maior comissão.
+
+A consulta `listType=1,sortType=5` corresponde ao V85 local; não alterar parâmetros sem diagnosticar os dados retornados. A Edge Function `discovery-cloud-shopee` **v9**, implantada em modo somente leitura, adiciona `source_diagnostics` com quantidades por fonte: recebidos, válidos, campos ausentes, itens únicos, sobreposição entre listas, desconto ≥10% e motivo para contribuição zero. Registros no Supabase incluem somente contadores agregados — sem IDs de produtos, links, credenciais ou títulos. Testes de falha (lista vazia, itens inválidos, sobreposição), mapeamento e Deno CI aprovados. A próxima consulta read-only pelo usuário permitirá determinar a causa via log da função, sem novo print.
+
 ### Primeira função cloud implantada (sem publicação)
 
 `discovery-cloud-shopee` V1 implantada no Supabase, com `verify_jwt=true`. Código: `supabase/functions/discovery-cloud-shopee/`.
