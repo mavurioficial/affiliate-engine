@@ -201,7 +201,7 @@ async function liveGeneralAudit(req: Request) {
     now_iso:moment.toISOString()
   });
   const routingShadow=compareShopeeRoutingShadow(cloudPool.internal_offers,rules,channels);
-  const persistedRows=await readPersistedShopeeCategories(req,marketplaceId,cloudPool.internal_offers);
+  const persistedRows=await readPersistedShopeeCategories(req,marketplaceId,cloudPool.internal_offers||[]);
   const dbParity=compareShopeeDbCategoryParity(cloudPool.internal_offers,persistedRows,rules,channels);
   return {ok:true,mode:"general_audit",dry_run:true,cloud_publishing:false,
     cloud_schedule:false,source_counts:cloudPool.selected_by_source,
