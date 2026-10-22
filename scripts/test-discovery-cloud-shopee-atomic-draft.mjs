@@ -17,6 +17,16 @@ assert.match(sql,/c\.type='telegram'/);
 assert.match(sql,/c\.status IN \('active','connected'\)/);
 assert.match(sql,/c\.user_id=p_user_id/);
 
+assert.match(sql,/shopee_cycle_max_unique/);
+assert.match(sql,/shopee_cycle_category_cap/);
+assert.match(sql,/shopee_recent_or_pending_48h/);
+assert.match(sql,/count\(DISTINCT j\.offer_id\)/);
+assert.match(sql,/prior\.source_ref=v_offer\.source_ref/);
+assert.match(sql,/prior\.marketplace_id=p_marketplace_id/);
+assert.match(sql,/j\.channel_id=v_channel/);
+assert.match(sql,/left\(j\.delivery_key,length\(v_cycle_keyprefix\)\)=v_cycle_keyprefix/);
+assert.match(sql,/shopee-cloud:/);
+assert.match(sql,/verified cross-seller/);
 assert.match(sql,/pending_unique_missing/);
 assert.match(sql,/reason','transactional_policy_not_implemented'/);
 assert.ok(!/\bINSERT INTO public\.flow_delivery_jobs\b/i.test(sql));
