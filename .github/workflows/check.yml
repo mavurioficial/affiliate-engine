@@ -2,7 +2,7 @@ name: Mavuri Check
 
 on:
   push:
-    branches: ["main", "feat/mavuri-flow-v1"]
+    branches: ["main", "feat/mavuri-flow-v1", "feat/discovery-cloud-foundation-20261022"]
   pull_request:
     branches: ["main"]
 
