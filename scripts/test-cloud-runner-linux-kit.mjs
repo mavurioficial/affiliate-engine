@@ -50,5 +50,19 @@ try{
  assert.match(shell,/MAVURI_CLOUD_LIVE_ENABLED/);
  assert.match(shell,/MAVURI_CLOUD_WINDOWS_STOPPED/);
  assert.match(shell,/validate-v85\.mjs/);
+ const probe=spawnSync(process.execPath,["scripts/cloud-runner/vm-healthcheck.mjs"],{
+  env:{...env,MAVURI_CHROME_PORT:"9222"},encoding:"utf8"
+ });
+ assert.equal(probe.status,2,"browser not present in CI and healthcheck stays read-only");
+ const report=JSON.parse(probe.stdout);
+ assert.equal(report.mode,"read_only");
+ assert.equal(report.cloud_live_enabled,false);
+ assert.equal(report.ok,false);
+ assert.ok(report.reasons.includes("chrome_not_running"));
+ const timer=readFileSync("systemd/mavuri-discovery.timer","utf8");
+ assert.ok(timer.includes("OnCalendar=*-*-* *:00,30:00"));
+ const unit=readFileSync("systemd/mavuri-chrome.service","utf8");
+ assert.ok(unit.includes("--remote-debugging-address=127.0.0.1"));
+ assert.ok(!unit.includes("--remote-debugging-address=0.0.0.0"));
  console.log("V85 VM sanitizer/preflight fail-closed tests passed (no network or publication).");
 }finally{rmSync(dir,{recursive:true,force:true});}
