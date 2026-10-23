@@ -20,6 +20,8 @@ const report={
  shopee_preview:{attempted:false,ok:false,read_only:true,
    candidate_count:null,projected_unique_offers:null,
    category_known:null,category_unknown:null,error_code:null},
+ shopee_one_offer:{attempted:false,ok:false,read_only:true,
+   selected_unique_offers:null,projected_jobs:null,error_code:null},
  error:null
 };
 try{
@@ -106,13 +108,40 @@ try{
              error_code:"browser_preview_failed"};
          }
        });
+       // Independent owner-only v1 preflight, deployed as a separate function.
+       // It only reads the live Shopee API and existing RLS-scoped DB rows.
+       // It cannot enqueue/send; metadata, URLs and identifiers never leave
+       // Supabase in the report.
+       report.shopee_one_offer=await page.evaluate(async()=>{
+         try{
+           const {supabase}=await import("/affiliate-engine/src/app/auth.js");
+           const {data,error}=await supabase.functions.invoke(
+             "discovery-cloud-shopee-preflight",
+             {body:{mode:"single_offer_preflight"}});
+           if(error||!data?.ok||data?.dry_run!==true||
+              data?.cloud_publishing!==false||data?.cloud_schedule!==false||
+              data?.safety?.ready_to_publish!==false||
+              data?.safety?.reads_only!==true){
+             return {attempted:true,ok:false,read_only:true,
+               selected_unique_offers:null,projected_jobs:null,
+               error_code:error?"preflight_invocation_failed":"unexpected_preflight_response"};
+           }
+           const n=(x)=>Number.isSafeInteger(x)&&x>=0?x:null;
+           return {attempted:true,ok:true,read_only:true,
+             selected_unique_offers:n(data.selected_unique_offers),
+             projected_jobs:n(data.projected_jobs),error_code:null};
+         }catch{return {attempted:true,ok:false,read_only:true,
+           selected_unique_offers:null,projected_jobs:null,
+           error_code:"preflight_browser_error"}}
+       });
      }
    }
  }catch(e){report.error=report.error||"mavuri_navigation_"+String(e?.name||"failure").slice(0,30)}
  await page.close();
  report.ok=report.meli_hub_status===200&&
    !report.meli_login_redirection&&report.mavuri_supabase_user_confirmed&&
-   (!report.shopee_preview_requested||report.shopee_preview.ok);
+   (!report.shopee_preview_requested||
+     (report.shopee_preview.ok&&report.shopee_one_offer.ok));
  if(!report.ok)process.exitCode=1;
 }catch(e){
  report.error=String(e?.message||"auth_smoke_error").slice(0,110);
