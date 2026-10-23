@@ -25,9 +25,11 @@ Deno.serve(async req=>{
    return reply({...status,reason:"explicit_confirmation_required"},400);
   stage="auth";
   const ctx=await authorizeOwner(req);
-  if(intent==="publish_single_general" &&
-    Deno.env.get("MAVURI_SHOPEE_PILOT_PUBLISH_ENABLED")!=="enabled_after_guard_review")
-   return reply({...status,reason:"live_pilot_paused"},423);
+  // The supervised 2026-10-23 Telegram publication succeeded.
+  // Lock further pilot writes even while the former project secret exists.
+  // Future automated cycles must use a separately audited, lease-protected path.
+  if(intent==="publish_single_general")
+   return reply({...status,reason:"single_pilot_complete_locked"},423);
   const appid=String(Deno.env.get("SHOPEE_AFFILIATE_APP_ID")||"").trim();
   const secret=String(Deno.env.get("SHOPEE_AFFILIATE_SECRET")||"");
   stage="account";
