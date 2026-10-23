@@ -346,6 +346,35 @@ Deno.serve(async(req: Request)=>{
       ];
       return respond({ok:true,mode:"fixture",dry_run:true,cloud_publishing:false,summary:previewSummary(collectUniqueOffers(fixtures))});
     }
+    if(mode==="verify_portal_app_id") {
+      // User enters ONLY the App ID copied from their authenticated Shopee
+      // Open API portal. No Secret, account password or short links accepted.
+      // Matching the App ID is NOT an official affiliate-account-id proof.
+      // This mode intentionally makes NO DB changes and sends NO messages.
+      const owner=String(Deno.env.get("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID")||"");
+      if(!owner||userId!==owner)return respond({error:"owner_only"},403);
+      if(!flag(Deno.env.get("MAVURI_SHOPEE_CLOUD_PREVIEW_ENABLED")))
+        return respond({error:"preview_disabled"},403);
+      const portalId=String(input?.portal_app_id||"").trim();
+      const configuredId=String(Deno.env.get("SHOPEE_AFFILIATE_APP_ID")||"").trim();
+      if(!/^[0-9]{5,24}$/.test(portalId))
+        return respond({ok:false,error:"invalid_app_id_format"},400);
+      if(!/^[0-9]{5,24}$/.test(configuredId))
+        return respond({ok:false,error:"api_app_id_unconfigured"},503);
+      const encoder=new TextEncoder();
+      const [a,b]=await Promise.all([
+        crypto.subtle.digest("SHA-256",encoder.encode(portalId)),
+        crypto.subtle.digest("SHA-256",encoder.encode(configuredId))
+      ]);
+      const x=new Uint8Array(a),y=new Uint8Array(b);
+      let mismatch=0;
+      for(let i=0;i<32;i++)mismatch|=(x[i]^y[i]);
+      return respond({
+        ok:true,read_only:true,no_publication:true,
+        app_id_matches_configured_api:mismatch===0,
+        account_binding_complete:false
+      });
+    }
     if(mode==="single_offer_preflight") {
       const owner=String(Deno.env.get("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID")||"");
       if(!owner||userId!==owner)return respond({error:"owner_only"},403);
