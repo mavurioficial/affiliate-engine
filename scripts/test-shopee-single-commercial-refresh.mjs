@@ -51,6 +51,14 @@ assert.ok(!JSON.stringify(aggregate).includes("newtoken"));
 assert.ok(!JSON.stringify(aggregate).includes("123456"));
 const edge=readFileSync("supabase/functions/discovery-cloud-shopee/index.ts","utf8");
 assert.match(edge,/summarizeCommercialRefresh\(\{candidates,stored_offers:validStored,scope\}\)/);
+assert.match(edge,/select:"id,marketplace_id,status,external_account_id,settings"/);
+assert.match(edge,/Deno\.env\.get\("SHOPEE_AFFILIATE_APP_ID"\)/);
+assert.match(edge,/account\.settings\?\.open_api_status==="active"/);
+assert.match(edge,/account\.settings\?\.open_api_app_id_sha256===hashedAppId/);
+assert.match(edge,/account\.external_account_id\?\.trim\(\)/);
+assert.match(edge,/account_binding:\{verified:accountBindingVerified/);
+assert.match(edge,/ready_for_write:false/);
+
 assert.doesNotMatch(edge,/\.insert\(|\.update\(|\.upsert\(|\.delete\(/);
 const sql=readFileSync("docs/sql/SHOPEE_SINGLE_COMMERCIAL_REFRESH_DRAFT.sql","utf8");
 assert.match(sql,/SECURITY INVOKER/);
