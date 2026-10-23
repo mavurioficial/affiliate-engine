@@ -1,0 +1,25 @@
+[Unit]
+Description=Mavuri V85 Discovery — one guarded 30-minute cycle
+After=network-online.target mavuri-chrome.service
+Wants=network-online.target
+Requires=mavuri-chrome.service
+ConditionPathExists=/opt/mavuri/affiliate-engine/private/browser-discovery-v85.cloud.mjs
+
+[Service]
+Type=oneshot
+User=mavuri
+Group=mavuri
+WorkingDirectory=/opt/mavuri/affiliate-engine
+Environment=HOME=/var/lib/mavuri
+EnvironmentFile=/etc/mavuri/discovery.env
+ExecStart=/usr/bin/bash /opt/mavuri/affiliate-engine/scripts/cloud-runner/run-v85.sh
+TimeoutStartSec=25min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/mavuri
+ReadWritePaths=/opt/mavuri/affiliate-engine/private
+
+[Install]
+WantedBy=multi-user.target
