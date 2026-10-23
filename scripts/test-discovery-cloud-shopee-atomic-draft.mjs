@@ -21,6 +21,11 @@ assert.match(sql,/shopee_cycle_max_unique/);
 assert.match(sql,/shopee_cycle_category_cap/);
 assert.match(sql,/shopee_recent_or_pending_48h/);
 assert.match(sql,/count\(DISTINCT j\.offer_id\)/);
+assert.match(sql,/v_offer_already_in_cycle/);
+assert.match(sql,/IF NOT v_offer_already_in_cycle AND/);
+assert.match(sql,/v_unique_in_cycle >= LEAST\(8,v_cfg\.max_shopee\)/);
+assert.match(sql,/v_category_in_cycle >= 2/);
+
 assert.match(sql,/prior\.source_ref=v_offer\.source_ref/);
 assert.match(sql,/prior\.marketplace_id=p_marketplace_id/);
 assert.match(sql,/j\.channel_id=v_channel/);
