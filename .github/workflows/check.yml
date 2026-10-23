@@ -37,6 +37,7 @@ jobs:
       - run: node scripts/test-discovery-cloud-shopee-live-rule-snapshot.mjs
       - run: node scripts/test-discovery-cloud-shopee-queue-release-gate.mjs
       - run: node scripts/test-discovery-cloud-shopee-queue-sql-draft.mjs
+      - run: node scripts/test-flow-delivery-inflight-unique-migration.mjs
       - run: node scripts/test-discovery-cloud-shopee-atomic-draft.mjs
       - run: node scripts/test-discovery-cloud-shopee-sql-matcher.mjs
       - uses: denoland/setup-deno@v2
