@@ -28,6 +28,7 @@ jobs:
       - run: node scripts/test-discovery-cloud-shopee-postpersist-plan.mjs
       - run: node scripts/test-discovery-cloud-shopee-single-preflight.mjs
       - run: node scripts/test-shopee-single-commercial-refresh.mjs
+      - run: node scripts/test-shopee-api-binding.mjs
       - run: node scripts/test-discovery-cloud-shopee-strict-price.mjs
       - run: node scripts/test-flow-worker-rendered-price-snapshot-candidate.mjs
       - run: node scripts/test-discovery-cloud-shopee-seller-metadata.mjs
@@ -40,5 +41,6 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check supabase/functions/discovery-cloud-shopee/index.ts
+      - run: deno check supabase/functions/discovery-cloud-shopee-binding/index.ts
       # Deployed worker v38 contains two pre-existing TypeScript issues at secret key selection.
       # Keep snapshot static regression until the live source can be type-narrowed safely.
