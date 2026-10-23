@@ -15,7 +15,7 @@ O caminho de VM preserva praticamente todo esse trabalho em vez de migrar os col
 
 ### Atenção ao custo/memória
 
-Oracle Always Free AMD `VM.Standard.E2.1.Micro` tem **1 GB RAM**, inadequado como padrão para Chrome + Node/MTProto concorrentes. Oracle Ampere A1 (ARM) pode oferecer mais memória grátis dentro da cota e **sujeito a disponibilidade**; Chrome/Chromium ARM, login e bibliotecas têm de ser testados. Para menor fricção, um VPS Linux com **4 GB ou mais** de RAM é uma hipótese de dimensionamento inicial, não garantia de desempenho. **Não mudar de plano/provedor nem criar VM paga sem aprovação.**
+Oracle Always Free AMD `VM.Standard.E2.1.Micro` tem **1 GB RAM**, inadequado como padrão para Chrome + Node/MTProto concorrentes. **A VM existente `mavuri-waha-amd` foi medida previamente em ~945 MiB RAM, com swap ~944 MiB e instabilidade SSH sob WAHA; NÃO tentar colocar o Discovery V85/Chrome nela.** Oracle Ampere A1 (ARM) pode oferecer mais memória grátis dentro da cota e **sujeito a disponibilidade**; Chrome/Chromium ARM, login e bibliotecas têm de ser testados. Para menor fricção, um VPS Linux com **4 GB ou mais** de RAM é uma hipótese de dimensionamento inicial, não garantia de desempenho. **Não mudar de plano/provedor nem criar VM paga sem aprovação.**
 
 ## Arquivos já criados
 
