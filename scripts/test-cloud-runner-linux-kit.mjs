@@ -12,7 +12,9 @@ try{
  'const TELEGRAM_USER_API_HASH = String(process.env.MAVURI_TELEGRAM_API_HASH || "TEST_ONLY_NOT_REAL").trim()',
  'const SHOPEE_API_SECRET = process.env.SHOPEE_AFFILIATE_SECRET || "TEST_ONLY_NOT_REAL"',
  'const AMAZON_COLLECTOR_LOCAL_TOKEN = process.env.MAVURI_AMAZON_COLLECTOR_LOCAL_TOKEN || "TEST_ONLY_NOT_REAL"',
+ 'async function startChrome() { if (await chromeReady()) return; }',
  'async function main() {}',
+ 'main().catch(e => { console.error(String(e.message)); process.exitCode = 78; });',
  'async function runShopeeTargetCycle() {}',
  'async function runMagaluTargetCycle() {}',
  'async function discoverMercadoLivreDiversifiedPool() {}',
@@ -26,6 +28,26 @@ try{
  assert.equal(existsSync(sanitized),true);
  const clean=readFileSync(sanitized,"utf8");
  assert.ok(!clean.includes("TEST_ONLY_NOT_REAL"));
+ assert.match(clean,/MAVURI_CLOUD_LIVE_ENABLED !== "YES_EXCLUSIVE_CLOUD_EXECUTOR"/);
+ assert.match(clean,/MAVURI_CLOUD_WINDOWS_STOPPED !== "CONFIRMED"/);
+ assert.match(clean,/MAVURI_AUTO_INGEST !== "true"/);
+ assert.match(clean,/cloud-cutover-reviewed/);
+ assert.match(clean,/Chromium gerenciado\/CDP indisponível/);
+ // Direct execution of a sanitized script without approved cutover cannot
+ // execute collectors, even if run-v85.sh was bypassed.
+ const direct=spawnSync(process.execPath,[sanitized],{encoding:"utf8",
+   env:{...process.env,MAVURI_CLOUD_LIVE_ENABLED:"NO",
+     MAVURI_CLOUD_WINDOWS_STOPPED:"NOT_CONFIRMED"},timeout:5000});
+ assert.equal(direct.status,78,"sanitized script must refuse standalone execution");
+ assert.match(direct.stderr,/cutover não autorizado/);
+ // A fake 'enabled' environment without a verified local marker also fails.
+ const directFalse=spawnSync(process.execPath,[sanitized],{encoding:"utf8",
+   env:{...process.env,MAVURI_CLOUD_LIVE_ENABLED:"YES_EXCLUSIVE_CLOUD_EXECUTOR",
+     MAVURI_CLOUD_WINDOWS_STOPPED:"CONFIRMED",MAVURI_AUTO_INGEST:"true",
+     MAVURI_CLOUD_CUTOVER_MARKER:join(dir,"nonexistent.marker")},timeout:5000});
+ assert.equal(directFalse.status,78);
+ assert.match(directFalse.stderr,/cutover não autorizado/);
+
  assert.ok(readFileSync(source,"utf8").includes("TEST_ONLY_NOT_REAL"));
  assert.equal(statSync(sanitized).mode&0o077,0,"sanitized source private only");
  const again=spawnSync(process.execPath,["scripts/cloud-runner/sanitize-v85.mjs",source,sanitized],{encoding:"utf8"});
