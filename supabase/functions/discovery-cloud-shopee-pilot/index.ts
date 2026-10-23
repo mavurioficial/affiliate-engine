@@ -13,6 +13,7 @@ const reply=(v:Record<string,unknown>,status=200)=>
 Deno.serve(async req=>{
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:hdr});
  if(req.method!=="POST")return reply({ok:false,reason:"post_only"},405);
+ let stage="request";
  const status={ok:false,ready:false,created:0,sent:0,
   destination:"Mavuri Ofertas",cloud_schedule:false,whatsapp:false};
  try{
@@ -106,7 +107,7 @@ Deno.serve(async req=>{
     "offers_ambiguous","queue_rejected","queue_not_confirmed","queue_no_id",
     "fanout_or_concurrency_detected","worker_failed"]);
   const safeReason=allowed.has(reason)?reason:"operation_failed";
-  console.error("[shopee-single-pilot] "+safeReason);
-  return reply({...status,reason:safeReason},500);
+  console.error("[shopee-single-pilot] "+safeReason+" stage="+stage);
+  return reply({...status,reason:safeReason,stage},500);
  }
 });
