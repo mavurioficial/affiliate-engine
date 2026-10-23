@@ -2,6 +2,25 @@
 -- Do not interrupt an already authorized cycle at 22:00.
 -- No new jobs or cloud enablement.
 
+
+-- Pure timestamp rule, testable without starting a run or publishing.
+CREATE OR REPLACE FUNCTION mavuri_internal.discovery_cloud_run_time_valid(
+  p_started_at timestamptz, p_lease_expires_at timestamptz, p_at timestamptz
+) RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER SET search_path=''
+AS $time$
+SELECT coalesce(
+  p_started_at <= p_at
+  AND p_at < p_lease_expires_at
+  AND p_at < p_started_at + interval '30 minutes'
+  AND mavuri_internal.discovery_cloud_within_publish_window(p_started_at),
+  false
+);
+$time$;
+REVOKE ALL ON FUNCTION mavuri_internal.discovery_cloud_run_time_valid(timestamptz,timestamptz,timestamptz)
+FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION mavuri_internal.discovery_cloud_run_time_valid(timestamptz,timestamptz,timestamptz)
+TO service_role;
+
 -- service-only verification by immutable run ID in the job key.
 -- A run starting at 21:59 can continue after 22:00, within a maximum of
 -- 30 minutes and its original (possibly shorter) lease.
@@ -24,9 +43,9 @@ BEGIN
     JOIN mavuri_internal.discovery_cloud_runs r ON r.id=run_id
     WHERE cfg.id=true AND cfg.enabled AND cfg.active_executor='cloud'
       AND r.executor='cloud' AND r.status='running'
-      AND r.started_at<=p_at AND r.lease_expires_at>p_at
-      AND p_at < r.started_at + interval '30 minutes'
-      AND mavuri_internal.discovery_cloud_within_publish_window(r.started_at)
+      AND mavuri_internal.discovery_cloud_run_time_valid(
+        r.started_at,r.lease_expires_at,p_at
+      )
   );
 END;
 $run_gate$;
