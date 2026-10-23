@@ -25,6 +25,7 @@ jobs:
       - run: node scripts/test-discovery-cloud-shopee-category-impact.mjs
       - run: node scripts/test-discovery-cloud-shopee-postpersist-plan.mjs
       - run: node scripts/test-discovery-cloud-shopee-strict-price.mjs
+      - run: node scripts/test-flow-worker-rendered-price-snapshot-candidate.mjs
       - run: node scripts/test-discovery-cloud-shopee-seller-metadata.mjs
       - run: node scripts/test-discovery-cloud-shopee-live-rule-snapshot.mjs
       - run: node scripts/test-discovery-cloud-shopee-queue-release-gate.mjs
@@ -35,3 +36,4 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check supabase/functions/discovery-cloud-shopee/index.ts
+      - run: deno check supabase/functions/flow-worker-v38-snapshot-candidate/index.ts
