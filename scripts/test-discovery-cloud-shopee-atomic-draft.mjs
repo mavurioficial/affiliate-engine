@@ -1,0 +1,45 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+const sql=readFileSync("docs/sql/SHOPEE_CLOUD_ATOMIC_ENQUEUE_DRAFT.sql","utf8");
+assert.match(sql,/DRAFT ONLY\. DO NOT RUN IN PRODUCTION/);
+assert.match(sql,/coalesce\(auth\.jwt\(\)->>'role',''\) <> 'service_role'/);
+assert.match(sql,/discovery_cloud_control WHERE id=true FOR UPDATE/);
+assert.match(sql,/lease_expires_at<=clock_timestamp\(\)/);
+assert.match(sql,/FROM public\.flow_offers[\s\S]*?FOR UPDATE/);
+assert.match(sql,/affiliate_account_id=p_affiliate_account_id/);
+assert.match(sql,/v_offer\.affiliate_url IS DISTINCT FROM p_expected_affiliate_url/);
+assert.match(sql,/classification_changed/);
+assert.match(sql,/marketplace_not_shopee/);
+assert.match(sql,/v_category_fk IS DISTINCT FROM v_category/);
+assert.match(sql,/invalid_or_duplicate_channels/);
+assert.match(sql,/channel_scope_or_status_changed/);
+assert.match(sql,/c\.type='telegram'/);
+assert.match(sql,/c\.status IN \('active','connected'\)/);
+assert.match(sql,/c\.user_id=p_user_id/);
+
+assert.match(sql,/shopee_cycle_max_unique/);
+assert.match(sql,/shopee_cycle_category_cap/);
+assert.match(sql,/shopee_recent_or_pending_48h/);
+assert.match(sql,/count\(DISTINCT j\.offer_id\)/);
+assert.match(sql,/v_offer_already_in_cycle/);
+assert.match(sql,/IF NOT v_offer_already_in_cycle AND/);
+assert.match(sql,/v_unique_in_cycle >= LEAST\(8,v_cfg\.max_shopee\)/);
+assert.match(sql,/v_category_in_cycle >= 2/);
+
+assert.match(sql,/prior\.source_ref=v_offer\.source_ref/);
+assert.match(sql,/prior\.marketplace_id=p_marketplace_id/);
+assert.match(sql,/j\.channel_id=v_channel/);
+assert.match(sql,/left\(j\.delivery_key,length\(v_cycle_keyprefix\)\)=v_cycle_keyprefix/);
+assert.match(sql,/shopee-cloud:/);
+assert.match(sql,/verified cross-seller/);
+assert.match(sql,/pending_unique_missing/);
+assert.match(sql,/reason','transactional_policy_not_implemented'/);
+assert.match(sql,/FROM unnest\(p_channel_ids\) AS entries\(channel_id\)/);
+assert.match(sql,/REVOKE ALL ON FUNCTION public\.mavuri_shopee_cloud_enqueue_draft/);
+assert.match(sql,/FROM PUBLIC, anon, authenticated/);
+assert.match(sql,/GRANT EXECUTE ON FUNCTION public\.mavuri_shopee_cloud_enqueue_draft/);
+assert.match(sql,/TO service_role/);
+
+assert.ok(!/\bINSERT INTO public\.flow_delivery_jobs\b/i.test(sql));
+assert.ok(!/\bUPDATE mavuri_internal\.discovery_cloud_control\b/i.test(sql));
+console.log("Shopee atomic enqueue draft: fail-closed SQL contract validated, NO DDL run.");

@@ -1,0 +1,25 @@
+[Unit]
+Description=Mavuri dedicated Chromium CDP for Mercado Livre discovery
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mavuri
+Group=mavuri
+WorkingDirectory=/var/lib/mavuri
+Environment=HOME=/var/lib/mavuri
+EnvironmentFile=/etc/mavuri/discovery.env
+# Adjust to the installed Chrome/Chromium path on this VM.
+# NEVER publish CDP port 9222 or expose it through a public IP.
+ExecStart=/usr/bin/bash -lc 'exec "$CHROME_PATH" --headless=new --disable-gpu --disable-dev-shm-usage --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 --user-data-dir="$MAVURI_CHROME_PROFILE" --no-first-run --no-default-browser-check about:blank'
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/mavuri
+
+[Install]
+WantedBy=multi-user.target
