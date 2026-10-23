@@ -4,6 +4,7 @@
 import {createClient} from "npm:@supabase/supabase-js@2";
 import {fetchCommercialCandidates} from "./source.ts";
 import {planFourChannelCycle} from "./cycle-plan.mjs";
+import {simulateExistingShopeeRefresh} from "./commercial-refresh-plan.mjs";
 const schedulerHash="3efb0f37ba962d865839b2beeffd672787e652b4059e4de53940403421cfd423";
 const json=(x:unknown,code=200)=>new Response(JSON.stringify(x),{status:code,
  headers:{"content-type":"application/json","cache-control":"no-store"}});
@@ -79,12 +80,49 @@ Deno.serve(async req=>{
      throw Error("delivery_history_incomplete");
    history=h.data;pending=p.data;
   }
-  const plan=planFourChannelCycle({candidates,stored,categories:cat.data,
+  // Signed API is the commercial source of truth. Only pre-existing,
+  // uniquely matched and already classified products may be refreshed.
+  // The service-only SQL RPC rejects changes to approved classifications.
+  const forecast=simulateExistingShopeeRefresh({candidates,
+    stored,pending,owner,marketplace:market[0].id,account:account.id});
+  const currentByRef=new Map(candidates.map(x=>[String(x.id),x]));
+  const previousById=new Map(stored.map(x=>[String(x.id),x]));
+  let refreshed=0,refreshRejected=0;
+  const effectiveStored=[];
+  for(const nextRow of forecast.rows){
+    const previous=previousById.get(String(nextRow.id));
+    if(!previous)throw Error("persisted_offer_lookup_failed");
+    if(Number(previous.price)===Number(nextRow.price)&&
+      String(previous.affiliate_url||"")===String(nextRow.affiliate_url||"")){
+      effectiveStored.push(previous);continue;
+    }
+    const fresh=currentByRef.get(String(previous.source_ref||""));
+    if(!fresh)throw Error("persisted_offer_lookup_failed");
+    const {data:patch,error:patchError}=await admin.rpc("mavuri_shopee_cloud_refresh_existing",{
+      p_run_id:runId,p_user_id:owner,p_offer_id:String(previous.id),
+      p_source_ref:String(previous.source_ref),
+      p_expected_old_price:previous.price,
+      p_expected_old_link:previous.affiliate_url,
+      p_current_price:fresh.price,
+      p_current_discount:fresh.discount,
+      p_current_link:fresh.url
+    });
+    if(patchError){refreshRejected++;effectiveStored.push(previous);continue;}
+    if(patch?.accepted===true){
+      if(patch?.updated===true)refreshed++;
+      effectiveStored.push({...previous,price:fresh.price,
+        discount_percent:fresh.discount,affiliate_url:fresh.url});
+    }else{refreshRejected++;effectiveStored.push(previous);}
+  }
+  console.log("[shopee-executor] catalog_refresh_checked="+forecast.stats.wouldRefresh+
+    " updated="+refreshed+" rejected="+refreshRejected+
+    " missing="+forecast.stats.unknownProduct);
+  const plan=planFourChannelCycle({candidates,stored:effectiveStored,categories:cat.data,
    channels:ch.data,rules:ru.data,history,pending,owner,
    marketplace:market[0].id,account:account.id,
    now:Date.now(),maxUnique:Math.min(8,safeInt(claim?.limits?.shopee))});
   if(!plan.ready)throw Error("cycle_plan_not_ready");
-  const byId=new Map(stored.map(x=>[String(x.id),x]));
+  const byId=new Map(effectiveStored.map(x=>[String(x.id),x]));
   for(const item of plan.selected){
     const record=byId.get(item.offer_id);
     if(!record)throw Error("selected_record_missing");
