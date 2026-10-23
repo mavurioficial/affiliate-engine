@@ -53,7 +53,7 @@ Deno.serve(async req=>{
     stage="cycle_four_channels";
     const ids=[...new Set(stored.map((r:any)=>String(r.id||""))
       .filter((id:string)=>/^[0-9a-f-]{36}$/i.test(id)))];
-    let recent=[],inflight=[];
+    let recent:Record<string,any>[]=[],inflight:Record<string,any>[]=[];
     if(ids.length){
       const filter="in.("+ids.join(",")+")";
       const cutoff=new Date(Date.now()-48*3600000).toISOString();
