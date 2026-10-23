@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Mavuri authenticated Chrome smoke. STRICTLY READ-ONLY.
 // Loads an ephemeral browser state from GitHub secrets, never writes DB,
-// never calls ingest, createLink, Telegram, WhatsApp, or coupon flows.
+// never invokes ingest, affiliate-link creation, Telegram, WhatsApp or coupons.
 import {chromium} from "playwright-core";
 import {unpackageMavuriAuthState} from "./auth-state.mjs";
 const bundle=process.env.MAVURI_AUTH_BUNDLE||"";
