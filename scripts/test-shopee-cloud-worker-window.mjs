@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+const s=readFileSync("supabase/functions/flow-worker/index.ts","utf8");
+assert.match(s,/async function shopeeCloudWindowOpen\(db: any\): Promise<boolean>/);
+assert.match(s,/db\.rpc\("mavuri_shopee_cloud_delivery_allowed"\)/);
+assert.match(s,/return !error && data===true/);
+const loop=s.indexOf("for (const job of jobs || [])");
+const claim=s.indexOf('.update({ status: "processing"',loop);
+const preclaim=s.indexOf('startsWith("shopee-cloud:")',loop);
+assert.ok(loop>=0&&preclaim>loop&&preclaim<claim,"check hours before claiming job");
+const telegram=s.indexOf('response = await fetch("https://api.telegram.org/bot"',claim);
+const latecheck=s.lastIndexOf('startsWith("shopee-cloud:")',telegram);
+assert.ok(latecheck>claim&&latecheck<telegram,"check again immediately before Telegram");
+assert.ok(s.slice(latecheck,telegram).includes('status:"queued"'),"outside-hours job deferred without sending");
+assert.ok(s.slice(latecheck,telegram).includes('15*60*1000'),"bounded defer");
+assert.ok(s.slice(latecheck,telegram).includes('if(postponed.error || !postponed.data)'),"fail closed");
+assert.ok(s.includes('String(job.delivery_key || "").startsWith("shopee-cloud:")'),"no blanket effect on legacy jobs");
+console.log("Worker Shopee cloud last-mile window fence: safety contract passed.");
