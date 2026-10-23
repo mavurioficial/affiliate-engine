@@ -50,6 +50,7 @@ jobs:
       - run: node scripts/test-shopee-legacy-writer-fence.mjs
       - run: node scripts/test-shopee-cloud-atomic-enqueue.mjs
       - run: node scripts/test-shopee-cloud-catalog-refresh.mjs
+      - run: node scripts/test-shopee-cloud-catalog-executor.mjs
       - run: node scripts/test-shopee-cloud-live-orchestration.mjs
       - run: node scripts/test-discovery-cloud-shopee-atomic-draft.mjs
       - run: node scripts/test-discovery-cloud-shopee-sql-matcher.mjs
