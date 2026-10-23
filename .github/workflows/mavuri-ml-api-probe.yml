@@ -1,0 +1,49 @@
+name: "Mavuri - diagnostico API ML (somente leitura)"
+on:
+  push:
+    branches: ["main"]
+    paths: [".github/workflows/mavuri-ml-api-probe.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mavuri-ml-api-readonly-probe
+  cancel-in-progress: false
+
+jobs:
+  official_api_probe:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: "API oficial Mercado Livre - sem cookies ou tokens"
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          // Read-only connectivity probes to public, documented ML API resources.
+          // Never use cookies, OAuth, affiliate sessions or response content.
+          const endpoints=[
+            ["ml_api_site", "https://api.mercadolibre.com/sites/MLB"],
+            ["ml_api_currency", "https://api.mercadolibre.com/currencies/BRL"],
+            ["ml_browser_home", "https://www.mercadolivre.com.br/"]
+          ];
+          for(const [name,url] of endpoints){
+            try{
+              const r=await fetch(url,{
+                method:"GET",redirect:"manual",signal:AbortSignal.timeout(12000),
+                headers:{"accept":"application/json"}
+              });
+              console.log(JSON.stringify({probe:name,http_status:r.status,
+                redirected:r.status>=300&&r.status<400}));
+              await r.body?.cancel();
+            }catch(e){
+              console.log(JSON.stringify({probe:name,error_code:
+                e?.name==="TimeoutError"?"timeout":"connection_error"}));
+            }
+          }
+          console.log(JSON.stringify({mode:"read_only",no_credentials:true,
+            no_affiliate_link_generation:true,no_database_writes:true,
+            no_publication:true,no_schedule:true}));
+          NODE
