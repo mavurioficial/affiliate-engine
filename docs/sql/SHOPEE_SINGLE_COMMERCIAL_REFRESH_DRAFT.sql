@@ -54,8 +54,9 @@ BEGIN
     JOIN public.flow_affiliate_accounts a ON a.marketplace_id=m.id
     WHERE m.id=p_marketplace_id AND m.slug='shopee'
       AND a.id=p_account_id AND a.user_id=p_user_id AND a.status='connected'
-      AND nullif(a.external_account_id,'') IS NOT NULL
       AND a.settings->>'open_api_status'='active'
+      AND a.settings->>'open_api_binding_source'='user_confirmed_portal_app_id'
+      AND a.settings->>'open_api_verified_at' IS NOT NULL
       AND a.settings->>'open_api_app_id_sha256'=p_api_app_id_sha256
   ) THEN
     RETURN jsonb_build_object('updated',false,'reason','api_account_binding_unverified');
