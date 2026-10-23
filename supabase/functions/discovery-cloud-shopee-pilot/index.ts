@@ -1,8 +1,8 @@
 // Owner-only single Shopee pilot, General Telegram channel only.
 // Preview is default. Publishing needs explicit intent and confirm=true.
 // No cron, no WhatsApp, no external Mercado Livre connections.
-import {authorizeOwner,readRows,verifyAccount} from "../discovery-cloud-shopee-refresh-one/db.ts";
-import {fetchCommercialCandidates} from "../discovery-cloud-shopee-refresh-one/source.ts";
+import {authorizeOwner,readRows,verifyAccount} from "./db.ts";
+import {fetchCommercialCandidates} from "./source.ts";
 import {chooseOne} from "./policy.ts";
 const hdr={"content-type":"application/json; charset=utf-8","cache-control":"no-store",
  "access-control-allow-origin":"https://mavurioficial.github.io",
