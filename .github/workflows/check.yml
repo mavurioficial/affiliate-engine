@@ -53,9 +53,9 @@ jobs:
       - run: node scripts/test-discovery-cloud-shopee-atomic-draft.mjs
       - run: node scripts/test-discovery-cloud-shopee-sql-matcher.mjs
       - uses: denoland/setup-deno@v2
-      - run: deno check supabase/functions/discovery-cloud-ml-origin-probe/index.ts
         with:
           deno-version: v2.x
+      - run: deno check supabase/functions/discovery-cloud-ml-origin-probe/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-binding/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-refresh-one/index.ts
