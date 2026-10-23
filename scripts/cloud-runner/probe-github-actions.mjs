@@ -53,6 +53,8 @@ function chromeTreeRam(root) {
 const dir=mkdtempSync(join(tmpdir(),"mavuri-cloud-probe-"));
 const fixedPort=19222;
 let browserStderr="";
+let browserStderrFirst="";
+let latestFetchError="";
 let child;
 try {
  if(!chrome)throw Error("chrome_not_preinstalled");
@@ -67,20 +69,34 @@ try {
   CHROME_USER_DATA_DIR:dir}});
  child.stderr?.on("data",chunk=>{
   browserStderr=(browserStderr+String(chunk)).slice(-1500);
+  browserStderrFirst=(browserStderrFirst+String(chunk)).slice(0,900);
  });
  child.on("error",err=>{
   browserStderr=(browserStderr+" [spawn-error:"+String(err?.code||"unknown")+"]").slice(-1500);
  });
  let port=fixedPort;
  let response=null;
- for(let i=0;i<100;i++){
+ for(let i=0;i<170;i++){
   if(child.exitCode!==null)throw Error("chrome_exit_"+child.exitCode);
   try{
     const trial=await fetch("http://127.0.0.1:"+port+"/json/version",
       {signal:AbortSignal.timeout(500)});
     if(trial.ok){response=trial;break}
-  }catch{}
+  }catch(e){latestFetchError=String(e?.cause?.code||e?.message||"unknown").slice(0,60)}
   await new Promise(resolve=>setTimeout(resolve,100));
+ }
+ if(!response) {
+  // Determine if Chrome bound the local port but Node's fetch had issues.
+  try{
+   const raw=execFileSync("curl",["--noproxy","*","--max-time","2","-fsS",
+     "http://127.0.0.1:"+port+"/json/version"],{encoding:"utf8",timeout:3000});
+   const meta=JSON.parse(raw);
+   if(meta?.Browser) {
+    report.devtools_http_ok=true;
+    report.chrome_version_present=true;
+    response={ok:true,json:async()=>meta};
+   }
+  }catch{}
  }
  if(!response)throw Error("chrome_cdp_port_timeout");
  const controller=new AbortController();
@@ -102,7 +118,10 @@ try {
  if(!report.passed)throw Error("browser_cdp_not_available");
 } catch(error){
  report.error=String(error?.message||"probe_error").slice(0,90);
- report.chrome_diagnostic=browserStderr.slice(-350).replace(/\\s+/g," ");
+ report.chrome_diagnostic_start=browserStderrFirst.slice(0,800).replace(/\s+/g," ");
+ report.chrome_diagnostic_end=browserStderr.slice(-450).replace(/\s+/g," ");
+ report.chrome_fetch_error=latestFetchError;
+ report.chrome_processes=child?.pid?chromeTreeRam(child.pid):null;
  process.exitCode=1;
 } finally {
  if(child?.pid) {
