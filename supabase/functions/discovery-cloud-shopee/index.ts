@@ -243,16 +243,22 @@ async function liveSingleOfferPreflight(req: Request,userId: string) {
   // Never infer affiliate ownership from a product's short URL alone.
   const account=accountMatches[0] as {
     external_account_id?:string|null;
-    settings?:{open_api_status?:string;open_api_app_id_sha256?:string}|null
+    settings?:{open_api_status?:string;open_api_app_id_sha256?:string;
+      open_api_binding_source?:string;open_api_verified_at?:string}|null
   };
   const apiAppId=String(Deno.env.get("SHOPEE_AFFILIATE_APP_ID")||"");
   const hashedAppId=apiAppId?
     Array.from(new Uint8Array(await crypto.subtle.digest(
       "SHA-256",new TextEncoder().encode(apiAppId))))
       .map(v=>v.toString(16).padStart(2,"0")).join(""):"";
+  // App ID + authenticated owner confirmation + live signed Shopee GraphQL
+  // is sufficient to bind the API credential. An affiliate publisher ID is
+  // separate, optional metadata and is NEVER invented from the App ID.
+  const confirmationTime=Date.parse(String(account.settings?.open_api_verified_at||""));
   const accountBindingVerified=Boolean(hashedAppId &&
-    account.external_account_id?.trim() &&
     account.settings?.open_api_status==="active" &&
+    account.settings?.open_api_binding_source==="user_confirmed_portal_app_id" &&
+    Number.isFinite(confirmationTime) &&
     /^[0-9a-f]{64}$/.test(account.settings?.open_api_app_id_sha256||"") &&
     account.settings?.open_api_app_id_sha256===hashedAppId);
 
@@ -306,8 +312,9 @@ async function liveSingleOfferPreflight(req: Request,userId: string) {
   // Diagnostic only; these numbers never authorize a write.
   return {...preflight,
     account_binding:{verified:accountBindingVerified,
+      affiliate_external_id_confirmed:Boolean(account.external_account_id?.trim()),
       ready_for_write:false,reason:accountBindingVerified?
-        "read_only_preflight":"open_api_account_binding_unverified"},
+        "api_credential_bound_read_only":"open_api_account_binding_unverified"},
     commercial_refresh:
       summarizeCommercialRefresh({candidates,stored_offers:validStored,scope})};
 
