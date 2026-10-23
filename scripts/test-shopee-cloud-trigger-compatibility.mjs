@@ -7,6 +7,7 @@ assert.match(sql,/v_automatic := v_prefix in \('discovery','shopee','shopee-clou
 assert.match(sql,/coalesce\(new\.delivery_key,''\) like 'shopee-cloud:%' then\s+return new;/);
 assert.match(sql,/if new.status <> 'queued' or pg_trigger_depth\(\) > 1 then/);
 assert.match(sql,/Publicacao manual deve respeitar apenas os canais escolhidos pelo operador/);
-assert.ok(!/DROP TRIGGER|DROP FUNCTION|CREATE TRIGGER|INSERT INTO|TRUNCATE|DELETE FROM/i.test(sql),
+assert.ok(!/DROP TRIGGER|DROP FUNCTION|CREATE TRIGGER|TRUNCATE|DELETE FROM/i.test(sql),
  "migration must preserve trigger identities and data");
+assert.match(sql,/insert into public\.flow_delivery_jobs/i, "existing fanout logic must remain intact");
 console.log("Shopee cloud trigger compatibility: static regression passed.");
