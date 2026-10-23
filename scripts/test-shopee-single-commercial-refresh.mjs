@@ -57,6 +57,13 @@ assert.match(edge,/account\.settings\?\.open_api_status==="active"/);
 assert.match(edge,/account\.settings\?\.open_api_app_id_sha256===hashedAppId/);
 assert.match(edge,/account\.external_account_id\?\.trim\(\)/);
 assert.match(edge,/account_binding:\{verified:accountBindingVerified/);
+assert.match(edge,/mode==="verify_portal_app_id"/);
+assert.match(edge,/crypto\.subtle\.digest\("SHA-256",encoder\.encode\(portalId\)\)/);
+assert.match(edge,/Deno\.env\.get\("SHOPEE_AFFILIATE_APP_ID"\)/);
+assert.match(edge,/app_id_matches_configured_api:mismatch===0/);
+assert.match(edge,/account_binding_complete:false/);
+assert.match(edge,/const owner=String\(Deno\.env\.get\("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID"\)/);
+
 assert.match(edge,/ready_for_write:false/);
 
 assert.doesNotMatch(edge,/\.insert\(|\.update\(|\.upsert\(|\.delete\(/);
