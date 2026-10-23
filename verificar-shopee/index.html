@@ -27,7 +27,7 @@ a{color:#1456b2}small{display:block;color:#586d87;margin-top:22px;line-height:1.
 <div class="logo">Mavuri Affiliate Engine · Verificação</div>
 <h1>Conferir a conta Shopee</h1>
 <p>Vamos conferir se o <strong>App ID da Open API</strong> mostrado na sua conta de afiliado é igual ao App ID utilizado pelo motor de ofertas Mavuri.</p>
-<p class="notice">Esta verificação é <strong>somente leitura</strong>. Não publica ofertas, não altera o banco e não ativa o robô. <strong>Nunca informe o Secret, senha ou código de login aqui.</strong></p>
+<p class="notice">A conferência é <strong>somente leitura</strong>. Depois de confirmar o App ID, você poderá escolher vincular a credencial à conta Shopee do Mavuri; isso atualiza <strong>somente a configuração da integração</strong>. Nenhuma etapa publica ofertas ou ativa o robô. <strong>Nunca informe Secret, senha ou código de login aqui.</strong></p>
 <p>Em outra aba, abra a <a href="https://affiliate.shopee.com.br/open_api" target="_blank" rel="noopener noreferrer">área Open API da Shopee</a> e localize o campo <strong>App ID</strong>.</p>
 <form id="form" autocomplete="off">
 <label for="portalAppId">App ID (somente os números)</label>
@@ -35,7 +35,8 @@ a{color:#1456b2}small{display:block;color:#586d87;margin-top:22px;line-height:1.
 <button id="verify" type="submit">Conferir App ID</button>
 </form>
 <div id="status" class="status" aria-live="polite">Verificando sua sessão do Mavuri...</div>
-<small>O App ID digitado é enviado apenas à função autenticada do Supabase para comparação e não é registrado no GitHub. O resultado confirma somente a correspondência do App ID; o vínculo do ID de afiliado ainda depende de validação separada.</small>
+<button id="bind" type="button" hidden>Confirmar vínculo da API Shopee</button>
+<small>O App ID digitado é enviado apenas à função autenticada do Supabase para comparação e não é registrado no GitHub. O botão de vínculo faz uma nova conferência na API oficial e registra a correspondência do App ID no cadastro da integração. O identificador externo de afiliado continua separado e não será inventado a partir do App ID.</small>
 </section>
 </main>
 <script type="module">
@@ -44,6 +45,8 @@ const form=document.getElementById("form");
 const field=document.getElementById("portalAppId");
 const status=document.getElementById("status");
 const button=document.getElementById("verify");
+const bindButton=document.getElementById("bind");
+let pendingAppId="";
 let authenticated=false;
 const show=(message,kind="")=>{
  status.className="status "+kind;
@@ -62,6 +65,8 @@ form.addEventListener("submit",async(event)=>{
  const appId=field.value.trim();
  if(!/^[0-9]{5,24}$/.test(appId))return show("Digite apenas os números do App ID.","error");
  button.disabled=true;
+ pendingAppId="";
+ bindButton.hidden=true;
  field.value="";
  show("Conferindo, sem publicar nem alterar dados...");
  try{
@@ -72,12 +77,39 @@ form.addEventListener("submit",async(event)=>{
    data?.no_publication!==true||data?.account_binding_complete!==false){
     return show("Não foi possível concluir a verificação. Nenhuma alteração foi realizada.","error");
   }
-  show(data.app_id_matches_configured_api===true?
-   "APP ID CONFERE. A credencial da API usada pelo Mavuri corresponde ao App ID que você informou. A vinculação completa ainda precisa ser finalizada; nenhuma oferta foi publicada.":
-   "APP ID NÃO CONFERE. Verifique o App ID na área Open API da mesma conta Shopee. Não informe seu Secret.",""+
-   (data.app_id_matches_configured_api===true?"success":"error"));
+  if(data.app_id_matches_configured_api===true) {
+    pendingAppId=appId;
+    bindButton.hidden=false;
+    show("APP ID CONFERE. Se quiser registrar essa credencial na conta Shopee do Mavuri, clique em Confirmar vínculo da API Shopee. Isso não publica ofertas nem ativa ciclos.","success");
+  }else {
+    show("APP ID NÃO CONFERE. Verifique o App ID na área Open API da mesma conta Shopee. Não informe seu Secret.","error");
+  }
  }catch{show("Erro de conexão com a verificação. Nenhuma alteração foi realizada.","error")}
  finally{button.disabled=false}
+});
+bindButton.addEventListener("click",async()=>{
+  if(!authenticated||!/^[0-9]{5,24}$/.test(pendingAppId))
+    return show("Confirme o App ID novamente antes de vincular.","error");
+  bindButton.disabled=true;
+  const appId=pendingAppId;
+  pendingAppId="";
+  show("Confirmando credencial com a API oficial e registrando o vínculo. Sem publicar ofertas...");
+  try{
+    const {data,error}=await supabase.functions.invoke(
+      "discovery-cloud-shopee-binding",
+      {body:{intent:"bind_shopee_open_api",portal_app_id:appId,confirm:true}});
+    if(error||data?.ok!==true||data?.bound!==true||
+       data?.publication_enabled!==false||data?.schedule_enabled!==false){
+      show("O vínculo não foi concluído. Nenhuma oferta foi publicada. Você pode conferir o App ID novamente.","error");
+      bindButton.hidden=true;
+      return;
+    }
+    show("VÍNCULO DA API CONFIRMADO. O App ID foi associado ao cadastro da integração Shopee do Mavuri. A identificação externa de afiliado permanece separada; ofertas e agendamentos continuam desligados.","success");
+    bindButton.hidden=true;
+  }catch{
+    show("Não foi possível concluir o vínculo. Nenhuma oferta foi publicada.","error");
+    bindButton.hidden=true;
+  }finally{bindButton.disabled=false}
 });
 </script>
 </body>
