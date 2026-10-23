@@ -1,0 +1,12 @@
+[Unit]
+Description=Mavuri V85 Discovery every 30 minutes (OFF until exclusive cloud cutover)
+After=network-online.target
+
+[Timer]
+OnCalendar=*-*-* *:00,30:00
+Persistent=true
+AccuracySec=1min
+Unit=mavuri-discovery.service
+
+[Install]
+WantedBy=timers.target
