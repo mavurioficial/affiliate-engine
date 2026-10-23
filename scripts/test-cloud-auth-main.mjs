@@ -28,6 +28,17 @@ assert.deepEqual(unpackageMavuriAuthState(packed.bundle,packed.key),filtered);
 assert.throws(()=>unpackageMavuriAuthState(packed.bundle,
   packageMavuriAuthState(original).key));
 assert.throws(()=>unpackageMavuriAuthState(packed.bundle,"bad"),/bad_auth_key/);
+const authStateSource=readFileSync("scripts/cloud-runner/auth-state.mjs","utf8");
+assert.match(authStateSource,/async function diagnose\(\)/);
+assert.match(authStateSource,/secret_values_not_logged:true/);
+assert.match(authStateSource,/ml_cookie_count:/);
+assert.match(authStateSource,/mavuri_origin_present:/);
+assert.match(authStateSource,/mavuri_storage_entries:/);
+assert.match(authStateSource,/ready_for_export:/);
+assert.match(authStateSource,/\["capture","diagnose"\]/);
+const diagnostic=spawnSync(process.execPath,
+  ["scripts/cloud-runner/auth-state.mjs","bad-mode"],{encoding:"utf8",timeout:5000});
+assert.equal(diagnostic.status,2);
 const smoke=readFileSync("scripts/cloud-runner/auth-smoke.mjs","utf8");
 for(const expected of ["safe_mode:\"read_only\"",
  "mavuri_supabase_user_confirmed","meli_hub_status",
