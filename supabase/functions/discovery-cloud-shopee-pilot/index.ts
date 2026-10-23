@@ -57,6 +57,7 @@ Deno.serve(async req=>{
   const chosen=chooseOne({candidates:offers,stored,categories,rules,general,
    owner:ctx.owner,marketplace:identity.marketplaceId,account:identity.accountId});
   if(!chosen)return reply({...status,ok:true,reason:"no_matching_current_offer"});
+  stage="pending";
   const active=await readRows(ctx,"flow_delivery_jobs",{
    select:"id",user_id:"eq."+ctx.owner,
    status:"in.(queued,processing)",limit:"2"});
