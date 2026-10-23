@@ -103,7 +103,12 @@ SELECT (
         NOT (r.conditions ? 'deniedWords')
         OR NOT EXISTS (
           SELECT 1 FROM jsonb_array_elements_text(r.conditions->'deniedWords') t
-          WHERE position(lower(t) IN lower(o.title))>0
+          -- JS matchesRule is case- and accent-insensitive; comparing only
+          -- lower() would miss "sofa" vs "sofá" and route a denied item.
+          WHERE position(
+            translate(lower(t),'áàãâäéèêëíìîïóòõôöúùûüç','aaaaaeeeeiiiiooooouuuuc')
+            IN translate(lower(o.title),'áàãâäéèêëíìîïóòõôöúùûüç','aaaaaeeeeiiiiooooouuuuc')
+          )>0
         )
       )
   )
