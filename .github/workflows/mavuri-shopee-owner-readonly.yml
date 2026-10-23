@@ -1,0 +1,40 @@
+name: "Mavuri - Shopee owner preflight (somente leitura)"
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths: [".github/workflows/mavuri-shopee-owner-readonly.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: mavuri-shopee-owner-preflight
+  cancel-in-progress: false
+jobs:
+  shopee_read_only:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: mavuri-auth-test
+    timeout-minutes: 6
+    env:
+      MAVURI_AUTO_INGEST: "false"
+      MAVURI_CLOUD_LIVE_ENABLED: "NO"
+      MAVURI_SHOPEE_PREVIEW: "1"
+    steps:
+      - name: "Checkout trusted main only"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: main
+      - name: "Setup Node 24"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: "Check isolated no-write preflight syntax"
+        run: node --check scripts/cloud-runner/shopee-owner-readonly.mjs
+      - name: "Install browser controller without postinstall scripts"
+        run: npm install --no-save --no-audit --no-fund --ignore-scripts playwright-core@1.55.0
+      - name: "Owner-only Shopee preview and preflight; no ML, no publication"
+        env:
+          MAVURI_AUTH_BUNDLE: ${{ secrets.MAVURI_AUTH_BUNDLE }}
+          MAVURI_AUTH_KEY: ${{ secrets.MAVURI_AUTH_KEY }}
+        run: node scripts/cloud-runner/shopee-owner-readonly.mjs
