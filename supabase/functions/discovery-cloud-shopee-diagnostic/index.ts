@@ -4,6 +4,7 @@
 import {authorizeOwner,readRows,verifyAccount} from "./db.ts";
 import {fetchCommercialCandidates} from "./source.ts";
 import {chooseOne} from "./policy.ts";
+import {planFourChannelCycle} from "./cycle-plan.mjs";
 const hdr={"content-type":"application/json; charset=utf-8","cache-control":"no-store",
  "access-control-allow-origin":"https://mavurioficial.github.io",
  "access-control-allow-methods":"POST,OPTIONS",
@@ -19,7 +20,7 @@ Deno.serve(async req=>{
  try{
   const payload=await req.json().catch(()=>({}));
   const intent=String(payload?.intent||"preview");
-  if(intent!=="diagnose_preinsert")
+  if(!["diagnose_preinsert","cycle_preview"].includes(intent))
    return reply({...status,reason:"invalid_intent"},400);
   stage="auth";
   const ctx=await authorizeOwner(req);
@@ -48,6 +49,38 @@ Deno.serve(async req=>{
    marketplace_id:"eq."+identity.marketplaceId,
    source_ref:"in.("+offers.map(x=>x.id).join(",")+")",limit:"250"});
   if(stored.length>=250)throw Error("offers_ambiguous");
+  if(intent==="cycle_preview"){
+    stage="cycle_four_channels";
+    const ids=[...new Set(stored.map((r:any)=>String(r.id||""))
+      .filter((id:string)=>/^[0-9a-f-]{36}$/i.test(id)))];
+    let recent=[],inflight=[];
+    if(ids.length){
+      const filter="in.("+ids.join(",")+")";
+      const cutoff=new Date(Date.now()-48*3600000).toISOString();
+      [recent,inflight]=await Promise.all([
+        readRows(ctx,"flow_delivery_jobs",{select:"offer_id,channel_id,status,sent_at",
+          user_id:"eq."+ctx.owner,offer_id:filter,status:"eq.sent",
+          sent_at:"gte."+cutoff,limit:"900"}),
+        readRows(ctx,"flow_delivery_jobs",{select:"offer_id,channel_id,status",
+          user_id:"eq."+ctx.owner,offer_id:filter,
+          status:"in.(queued,processing)",limit:"900"})
+      ]);
+      if(recent.length>=900||inflight.length>=900)throw Error("cycle_history_incomplete");
+    }
+    const cycle=planFourChannelCycle({candidates:offers,stored,categories,
+      channels,rules,history:recent,pending:inflight,owner:ctx.owner,
+      marketplace:identity.marketplaceId,account:identity.accountId,
+      now:Date.now(),maxUnique:8});
+    const perChannel=Object.fromEntries(channels.filter((c:any)=>
+      ["Mavuri Ofertas","Mavuri Mulher","Mavuri Casa & Cozinha","Mavuri Tecnologia"]
+        .includes(c.name)).map((c:any)=>[c.name,
+          cycle.jobs.filter((j:any)=>j.channel_id===String(c.id)).length]));
+    return reply({...status,ok:true,ready:cycle.ready,mode:"cycle_preview",
+      dry_run:true,publication_available:false,schedule_enabled:false,
+      scanned:offers.length,selected_unique:cycle.counts.selected,
+      projected_jobs:cycle.counts.jobs,by_channel:perChannel,
+      blocked:cycle.reason,counters:cycle.counts});
+  }
   stage="select_offer";
   const chosen=chooseOne({candidates:offers,stored,categories,rules,general,
    owner:ctx.owner,marketplace:identity.marketplaceId,account:identity.accountId});
