@@ -75,6 +75,7 @@ Deno.serve(async req=>{
   const jobKey="shopee-manual-test:cloud-pilot:20261023:"+
     chosen.itemId+":"+chosen.channelId;
   const u=new URL(ctx.base+"/rest/v1/flow_delivery_jobs");
+  stage="insert";
   const created=await fetch(u,{method:"POST",headers:{...ctx.headers,
     "content-type":"application/json",Prefer:"return=representation"},
    body:JSON.stringify({user_id:ctx.owner,offer_id:chosen.offerId,
