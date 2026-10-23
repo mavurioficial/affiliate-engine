@@ -63,6 +63,7 @@ Deno.serve(async req=>{
    status:"in.(queued,processing)",limit:"2"});
   if(active.length)return reply({...status,ok:true,reason:"other_jobs_pending"});
   const since=new Date(Date.now()-48*60*60*1000).toISOString();
+  stage="history";
   const previous=await readRows(ctx,"flow_delivery_jobs",{
    select:"id",user_id:"eq."+ctx.owner,
    offer_id:"eq."+chosen.offerId,channel_id:"eq."+chosen.channelId,
