@@ -40,6 +40,28 @@ if(text.includes(originalAmazon)) {
     '  if (process.env.MAVURI_CLOUD_AMAZON_COLLECTOR === "enabled") await ensureAmazonCollectorService()');
 }
 if(!text.includes("async function main()"))throw Error("Não parece ser o V85 auditado");
+// Cloud-only copy: protect against accidental direct execution of the generated
+// V85 file, bypassing run-v85.sh, its preflight and lock. This check runs
+// BEFORE coupons, Shopee, Magalu, ML, MTProto or any network operation.
+const mainMarker="async function main() {";
+if(text.split(mainMarker).length!==2)throw Error("Main V85 inesperado; revisão manual necessária");
+const guard=[
+ '  // Mavuri cloud cutover fence: no side effects until explicitly authorized.',
+ '  if (process.platform !== "linux" ||',
+ '      process.env.MAVURI_CLOUD_LIVE_ENABLED !== "YES_EXCLUSIVE_CLOUD_EXECUTOR" ||',
+ '      process.env.MAVURI_CLOUD_WINDOWS_STOPPED !== "CONFIRMED" ||',
+ '      process.env.MAVURI_AUTO_INGEST !== "true" ||',
+ '      !existsSync(process.env.MAVURI_CLOUD_CUTOVER_MARKER || "/var/lib/mavuri/.cloud-cutover-reviewed"))',
+ '    throw new Error("Mavuri cloud: cutover não autorizado. Nenhuma coleta/publicação iniciada.");'
+].join("\n");
+text=text.replace(mainMarker,mainMarker+"\n"+guard);
+// The Linux service owns Chrome. Never let the generated script spawn another
+// unmanaged browser when the private localhost CDP is unavailable.
+const chromeMarker="  if (await chromeReady()) return";
+if(text.split(chromeMarker).length!==2)throw Error("StartChrome V85 inesperado; revisão manual necessária");
+text=text.replace(chromeMarker,chromeMarker+"\n"+
+ '  if (process.platform === "linux") throw new Error("Mavuri cloud: Chromium gerenciado/CDP indisponível; não iniciar outro Chrome.");');
+
 writeFileSync(output,text,{encoding:"utf8",flag:"wx",mode:0o600});
 chmodSync(output,0o600);
 console.log("Cópia privada V85 produzida. Fallbacks removidos: "+changes.length+". Revise outras constantes e NUNCA publique o resultado no GitHub.");
