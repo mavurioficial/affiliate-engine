@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="referrer" content="no-referrer"/>
+<title>Mavuri | Conferir App ID Shopee</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#102746;background:#f3f7fd}
+*{box-sizing:border-box}body{margin:0}.shell{max-width:650px;margin:6vh auto;padding:20px}
+.card{background:#fff;border:1px solid #dce6f5;border-radius:18px;padding:27px;box-shadow:0 12px 36px #0c224012}
+.logo{color:#174d9e;font-size:13px;font-weight:800;letter-spacing:.09em;text-transform:uppercase}
+h1{font-size:clamp(24px,4vw,32px);line-height:1.15;margin:12px 0}p{color:#4b617e;line-height:1.6}
+.notice{padding:13px 14px;background:#eef5ff;border-radius:10px;font-size:14px}
+label{display:block;font-weight:700;margin-top:20px;margin-bottom:9px}
+input{width:100%;padding:14px 15px;border:1px solid #9cafc9;border-radius:10px;font-size:17px}
+button{background:#0d4baa;border:0;color:#fff;border-radius:10px;padding:13px 22px;font-weight:700;font-size:15px;margin-top:14px;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}
+.status{font-size:15px;min-height:28px;margin-top:16px;font-weight:650;white-space:pre-wrap}
+.error{color:#ac2828}.success{color:#137342}
+a{color:#1456b2}small{display:block;color:#586d87;margin-top:22px;line-height:1.5}
+</style>
+</head>
+<body>
+<main class="shell">
+<section class="card">
+<div class="logo">Mavuri Affiliate Engine · Verificação</div>
+<h1>Conferir a conta Shopee</h1>
+<p>Vamos conferir se o <strong>App ID da Open API</strong> mostrado na sua conta de afiliado é igual ao App ID utilizado pelo motor de ofertas Mavuri.</p>
+<p class="notice">Esta verificação é <strong>somente leitura</strong>. Não publica ofertas, não altera o banco e não ativa o robô. <strong>Nunca informe o Secret, senha ou código de login aqui.</strong></p>
+<p>Em outra aba, abra a <a href="https://affiliate.shopee.com.br/open_api" target="_blank" rel="noopener noreferrer">área Open API da Shopee</a> e localize o campo <strong>App ID</strong>.</p>
+<form id="form" autocomplete="off">
+<label for="portalAppId">App ID (somente os números)</label>
+<input type="text" id="portalAppId" name="portalAppId" inputmode="numeric" pattern="[0-9]{5,24}" minlength="5" maxlength="24" required autocomplete="off" spellcheck="false" placeholder="Digite o App ID da sua conta"/>
+<button id="verify" type="submit">Conferir App ID</button>
+</form>
+<div id="status" class="status" aria-live="polite">Verificando sua sessão do Mavuri...</div>
+<small>O App ID digitado é enviado apenas à função autenticada do Supabase para comparação e não é registrado no GitHub. O resultado confirma somente a correspondência do App ID; o vínculo do ID de afiliado ainda depende de validação separada.</small>
+</section>
+</main>
+<script type="module">
+import {supabase} from "../src/app/auth.js";
+const form=document.getElementById("form");
+const field=document.getElementById("portalAppId");
+const status=document.getElementById("status");
+const button=document.getElementById("verify");
+let authenticated=false;
+const show=(message,kind="")=>{
+ status.className="status "+kind;
+ status.textContent=message;
+};
+try{
+ const {data,error}=await supabase.auth.getUser();
+ authenticated=Boolean(!error&&data?.user?.id);
+ show(authenticated?
+  "Sessão do Mavuri validada. Pode conferir o App ID.":
+  "Você precisa entrar no painel do Mavuri nesta mesma janela antes de conferir.",authenticated?"":"error");
+}catch{show("Não foi possível validar sua sessão do Mavuri.","error")}
+form.addEventListener("submit",async(event)=>{
+ event.preventDefault();
+ if(!authenticated)return show("Entre no painel do Mavuri primeiro.","error");
+ const appId=field.value.trim();
+ if(!/^[0-9]{5,24}$/.test(appId))return show("Digite apenas os números do App ID.","error");
+ button.disabled=true;
+ field.value="";
+ show("Conferindo, sem publicar nem alterar dados...");
+ try{
+  const {data,error}=await supabase.functions.invoke(
+   "discovery-cloud-shopee-preflight",
+   {body:{mode:"verify_portal_app_id",portal_app_id:appId}});
+  if(error||data?.ok!==true||data?.read_only!==true||
+   data?.no_publication!==true||data?.account_binding_complete!==false){
+    return show("Não foi possível concluir a verificação. Nenhuma alteração foi realizada.","error");
+  }
+  show(data.app_id_matches_configured_api===true?
+   "APP ID CONFERE. A credencial da API usada pelo Mavuri corresponde ao App ID que você informou. A vinculação completa ainda precisa ser finalizada; nenhuma oferta foi publicada.":
+   "APP ID NÃO CONFERE. Verifique o App ID na área Open API da mesma conta Shopee. Não informe seu Secret.",""+
+   (data.app_id_matches_configured_api===true?"success":"error"));
+ }catch{show("Erro de conexão com a verificação. Nenhuma alteração foi realizada.","error")}
+ finally{button.disabled=false}
+});
+</script>
+</body>
+</html>
