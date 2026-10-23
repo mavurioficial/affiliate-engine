@@ -130,3 +130,18 @@ A migração avançou da simples prova de conceito JavaScript para **um matcher 
 - **Bloqueio de publicação mantido incondicionalmente**: a função retorna `accepted=false` com `transactional_policy_not_implemented`, nunca executa `INSERT`. Ainda faltam política comprovada de variante entre vendedores, exceção de preço renderizado ≥10%, família ampla por ciclo, inserção transacional, ensaios concorrentes e teste de integração no banco.
 - Todas as alterações deste marco foram feitas apenas em arquivos `docs/sql` do PR #19 e testes de CI; **nenhuma alteração DDL aplicada ao Supabase**. Nunca usar essas consultas como sinal de que há executor 24/7 já funcionando.
 
+
+## Auditoria de snapshots, preço exato e vendedor (22/10/2026)
+
+**Resultados READ-ONLY verificados em produção**:
+- `flow_delivery_logs` Shopee, últimos 7 dias: **479 eventos enviados, 479 snapshots numéricos válidos** em `metadata.offer_snapshot.price` (todos com no máximo 2 casas decimais); **66 snapshots têm preço diferente do `flow_offers.price` atual**. O campo é o preço salvo no evento de entrega; **ainda não foi comprovado** por inspeção de template/mensagem que corresponde ao preço exato renderizado ao cliente.
+- Banco Shopee: **538 produtos**, **0 com `metadata.shopee.shop_id`** e **0 com `verified_catalog_family`**; todos possuem `shop_name`. O feed GraphQL cloud expõe `shopId` como campo, e `mapShopeeApiProduct` já o carrega em `_mavuri_api.shop_id`, mas o publicador ativo `flow-shopee-ingest` não persiste essa informação. Portanto a regra de outro vendedor ainda **não pode ser considerada validada**.
+- Comprovado com um `SELECT`: `position(lower('sofa') in lower('Sofá'))=0` ao passo que normalizando acentos o resultado é 1. A expressão `deniedWords` do matcher SQL em rascunho foi corrigida com `translate(lower(...))` para não abrir rotas indevidas.
+
+**Correções implementadas na branch, sem publicar pela nuvem**:
+1. `shopeeSignificantPriceDropStrict` em `shopee-policy.mjs`: exige preços monetários válidos com até duas casas, compara em centavos usando `BigInt` e aplica a desigualdade exata `(antigo - novo)*100 >= antigo*10` sem arredondar. Corrige caso em que `shopeePriceDropPercent(1000,900.05)` exibe 10,00% após arredondar, embora a queda real seja 9,995% e **não autorize republicação**. A política simulada e o planejador pós-persistência agora compartilham essa decisão estrita; o valor arredondado não serve para autorizar.
+2. `SHOPEE_CLOUD_RULE_MATCH_DRAFT.sql`: comparação de palavras proibidas normalizada para acentos (ainda não aplicado ao banco).
+3. `SHOPEE_CLOUD_ATOMIC_ENQUEUE_DRAFT.sql`: **o mesmo produto em vários canais conta uma única vez** tanto no limite de 8 por ciclo como em 2 por categoria. A mesma oferta pode ir aos seus canais legítimos sem consumir outra posição. DRAFT continua sempre retornando `accepted=false`, sem `INSERT`.
+4. `shopee-seller-metadata.mjs`: projeção pura de `shopId`, `shopName`, comissões e comissão estimada do GraphQL para o futuro coletor/persistência. Identificadores inseguros são rejeitados, e a função **não fabrica `verified_catalog_family`**; seller ID **não comprova equivalência entre produtos**. Ainda não integrada ao ingest ativo nem à Edge Function instalada.
+
+**Testes automáticos**: `test-discovery-cloud-shopee-strict-price.mjs`, `test-discovery-cloud-shopee-seller-metadata.mjs`, regressões de política, planificador pós-persistência, guardas e Deno check passaram no GitHub Actions run **39875919417**. Testes são de funções puras e invariantes estáticos; a alteração SQL precisa de teste de integração isolado antes de aplicação, e o preço renderizado/metadata dos vendedores ainda exigem integração real.
