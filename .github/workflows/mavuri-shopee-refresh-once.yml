@@ -1,0 +1,39 @@
+name: "Mavuri - Shopee atualizar 1 oferta (sem publicar)"
+on:
+  push:
+    branches: ["main"]
+    paths: [".github/workflows/mavuri-shopee-refresh-once.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: mavuri-shopee-one-commercial-refresh
+  cancel-in-progress: false
+jobs:
+  refresh_one:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: mavuri-auth-test
+    timeout-minutes: 6
+    env:
+      MAVURI_CLOUD_LIVE_ENABLED: "NO"
+      MAVURI_AUTO_INGEST: "false"
+      MAVURI_SHOPEE_ONE_REFRESH: "EXPLICIT_ONE_RECORD"
+    steps:
+      - name: "Checkout trusted main without credentials"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: main
+      - name: "Node 24"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: "Validate single-refresh runner syntax"
+        run: node --check scripts/cloud-runner/shopee-owner-refresh-once.mjs
+      - name: "Install browser control only"
+        run: npm install --no-save --no-audit --no-fund --ignore-scripts playwright-core@1.55.0
+      - name: "Refresh at most 1 existing Shopee offer; no queues or Telegram"
+        env:
+          MAVURI_AUTH_BUNDLE: ${{ secrets.MAVURI_AUTH_BUNDLE }}
+          MAVURI_AUTH_KEY: ${{ secrets.MAVURI_AUTH_KEY }}
+        run: node scripts/cloud-runner/shopee-owner-refresh-once.mjs
