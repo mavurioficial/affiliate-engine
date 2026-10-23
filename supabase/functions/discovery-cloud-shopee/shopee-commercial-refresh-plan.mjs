@@ -1,5 +1,8 @@
 // Offline validation for one Shopee commercial refresh.
 // It never mutates database rows or publishes messages.
+/**
+ * @param {{candidate?: Record<string,any>,row?: Record<string,any>,scope?: Record<string,string>}} [input]
+ */
 export function prepareCommercialRefresh({candidate,row,scope}={}) {
   const reject=reason=>({eligible:false,reason});
   if(!scope || !scope.user_id || !scope.marketplace_id || !scope.affiliate_account_id)
@@ -46,6 +49,9 @@ export function prepareCommercialRefresh({candidate,row,scope}={}) {
 /**
  * Read-only aggregate over API candidates and already stored rows.
  * Never return IDs, links, prices or metadata in diagnostic output.
+ */
+/**
+ * @param {{candidates?: Array<Record<string,any>>,stored_offers?: Array<Record<string,any>>,scope?: Record<string,string>}} [input]
  */
 export function summarizeCommercialRefresh({candidates=[],stored_offers=[],scope}={}) {
   const storedById=new Map();
