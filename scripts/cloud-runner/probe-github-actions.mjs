@@ -22,6 +22,7 @@ const report={
  cpu_count:cpus().length,node_major:Number(process.versions.node.split(".")[0]),
  chromepath_found:Boolean(chrome),start:snapshot("before"),
  chrome_startup_ms:null,chrome_child_count:0,chrome_tree_rss_mb:null,
+ playwright_cdp_ok:false,playwright_clean_session:true,
  devtools_http_ok:false,chrome_version_present:false,
  end:null,passed:false,
  error:null
@@ -109,12 +110,30 @@ try {
   const meta=responseAgain.ok?await responseAgain.json():{};
   report.chrome_version_present=Boolean(meta?.Browser);
  } finally {clearTimeout(timer)}
+ if(process.env.MAVURI_PROBE_PLAYWRIGHT==="1"){
+   const {chromium}=await import("playwright-core");
+   const browser=await chromium.connectOverCDP(
+     "http://127.0.0.1:"+port,{timeout:15000});
+   try{
+     const context=browser.contexts()[0];
+     if(!context)throw Error("no_chrome_context");
+     const page=context.pages()[0]||await context.newPage();
+     await page.goto("about:blank",{waitUntil:"domcontentloaded",timeout:8000});
+     const state=await context.storageState();
+     report.playwright_clean_session=state.cookies.length===0&&
+       state.origins.length===0;
+     report.playwright_cdp_ok=page.url()==="about:blank"&&
+       report.playwright_clean_session;
+   }finally{await browser.close()}
+   if(!report.playwright_cdp_ok)throw Error("playwright_cdp_failed");
+ }
  report.chrome_startup_ms=Date.now()-started;
  await new Promise(resolve=>setTimeout(resolve,1000));
  const load=chromeTreeRam(child.pid);
  report.chrome_child_count=load.count;
  report.chrome_tree_rss_mb=load.rssMb;
- report.passed=report.devtools_http_ok&&report.chrome_version_present;
+ report.passed=report.devtools_http_ok&&report.chrome_version_present&&
+   (process.env.MAVURI_PROBE_PLAYWRIGHT!=="1"||report.playwright_cdp_ok);
  if(!report.passed)throw Error("browser_cdp_not_available");
 } catch(error){
  report.error=String(error?.message||"probe_error").slice(0,90);
