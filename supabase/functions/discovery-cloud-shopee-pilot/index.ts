@@ -83,6 +83,7 @@ Deno.serve(async req=>{
     scheduled_for:new Date().toISOString(),delivery_key:jobKey}),
    signal:AbortSignal.timeout(9000)});
   if(!created.ok)throw Error("queue_rejected");
+  stage="insert_return";
   const jobs=await created.json();
   if(!Array.isArray(jobs)||jobs.length!==1)throw Error("queue_not_confirmed");
   status.created=1;
