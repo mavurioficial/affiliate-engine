@@ -118,8 +118,7 @@ begin
    return null;
  end loop;
  return new;
-end $function$
-
+end $function$;
 
 CREATE OR REPLACE FUNCTION public.mavuri_delivery_job_fanout()
  RETURNS trigger
@@ -279,5 +278,4 @@ begin
 
   return new;
 end;
-$function$
-
+$function$;
