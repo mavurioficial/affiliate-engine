@@ -16,3 +16,4 @@ jobs:
           node-version: 20
       - run: npm run check
       - run: npm test
+      - run: node scripts/test-cloud-auth-main.mjs
