@@ -5,6 +5,7 @@ import {matchesRule,channelIdsForRule,diversityFamily} from "./shopee-production
 import {isAffiliateLink} from "./source.ts";
 const NAMES=new Set(["Mavuri Ofertas","Mavuri Mulher","Mavuri Casa & Cozinha","Mavuri Tecnologia"]);
 const cents=x=>Number.isFinite(Number(x))?Math.round(Number(x)*100):NaN;
+/** @param {Record<string, any>} input */
 export function planFourChannelCycle({
  candidates=[],stored=[],categories=[],channels=[],rules=[],
  history=[],pending=[],owner,marketplace,account,now=Date.now(),maxUnique=8
