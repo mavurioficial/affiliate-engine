@@ -15,6 +15,10 @@ const report={
  ok:false,safe_mode:"read_only",no_publication:true,private_state_not_logged:true,
  meli_hub_status:null,meli_host:null,meli_login_redirection:false,
  mavuri_login_status:null,mavuri_supabase_user_confirmed:false,
+ shopee_preview_requested:process.env.MAVURI_SHOPEE_PREVIEW==="1",
+ shopee_preview:{attempted:false,ok:false,read_only:true,
+   candidate_count:null,projected_unique_offers:null,
+   category_known:null,category_unknown:null,error_code:null},
  error:null
 };
 try{
@@ -47,18 +51,52 @@ try{
      {waitUntil:"domcontentloaded",timeout:14000});
    report.mavuri_login_status=response?.status()??null;
    if(report.mavuri_login_status===200){
-     report.mavuri_supabase_user_confirmed=await page.evaluate(async()=>{
+     const verified=await page.evaluate(async()=>{
        try{
          const {supabase}=await import("/affiliate-engine/src/app/auth.js");
          const result=await supabase.auth.getUser();
          return Boolean(!result.error&&result.data?.user?.id);
        }catch{return false}
      });
+     report.mavuri_supabase_user_confirmed=verified;
+     // The currently deployed discovery-cloud-shopee v16 general_audit endpoint
+     // is a READ-ONLY owner-scoped preview: no DB writes, jobs, or Telegram.
+     // No V85 runner is executed here. Only numerical aggregates are exposed.
+     if(verified&&report.shopee_preview_requested){
+       report.shopee_preview.attempted=true;
+       report.shopee_preview=await page.evaluate(async()=>{
+         try{
+           const {supabase}=await import("/affiliate-engine/src/app/auth.js");
+           const {data,error}=await supabase.functions.invoke(
+             "discovery-cloud-shopee",{body:{mode:"general_audit"}});
+           if(error||!data?.ok||data?.dry_run!==true||
+              data?.cloud_publishing!==false||data?.cloud_schedule!==false){
+             return {attempted:true,ok:false,read_only:true,
+               candidate_count:null,projected_unique_offers:null,
+               category_known:null,category_unknown:null,
+               error_code:error?"function_invocation_failed":"unexpected_preview_response"};
+           }
+           const safeInt=(n)=>Number.isSafeInteger(n)&&n>=0?n:null;
+           return {attempted:true,ok:true,read_only:true,
+             candidate_count:safeInt(data.candidates_considered),
+             projected_unique_offers:safeInt(data.projected_unique_offers),
+             category_known:safeInt(data.db_category_impact?.effective_categories_available),
+             category_unknown:safeInt(data.db_category_impact?.unknown_final_categories),
+             error_code:null};
+         }catch{
+           return {attempted:true,ok:false,read_only:true,
+             candidate_count:null,projected_unique_offers:null,
+             category_known:null,category_unknown:null,
+             error_code:"browser_preview_failed"};
+         }
+       });
+     }
    }
  }catch(e){report.error=report.error||"mavuri_navigation_"+String(e?.name||"failure").slice(0,30)}
  await page.close();
  report.ok=report.meli_hub_status===200&&
-   !report.meli_login_redirection&&report.mavuri_supabase_user_confirmed;
+   !report.meli_login_redirection&&report.mavuri_supabase_user_confirmed&&
+   (!report.shopee_preview_requested||report.shopee_preview.ok);
  if(!report.ok)process.exitCode=1;
 }catch(e){
  report.error=String(e?.message||"auth_smoke_error").slice(0,110);
