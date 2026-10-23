@@ -44,9 +44,12 @@ A saída pública mostra apenas flags e códigos de resposta:
 - `meli_hub_status` (200 indica que a página respondeu, mas isoladamente não garante autorização no Hub);
 - `meli_login_redirection` (true indica redirecionamento evidente para login);
 - `mavuri_supabase_user_confirmed` (true somente se `supabase.auth.getUser()` confirmar sessão válida sem retornar o ID);
+- `shopee_preview`: quando a sessão do Mavuri estiver válida, o mesmo teste invoca **`discovery-cloud-shopee` v16 no modo `general_audit`**, que consulta ofertas reais da API Shopee e históricos pelo Supabase sem criar jobs ou enviar mensagens. Exibe apenas `ok`, quantos produtos foram analisados (`candidate_count`), quantos seriam selecionados (`projected_unique_offers`), categorias finais conhecidas/desconhecidas e código de erro genérico. Nomes, preços, links, IDs e tokens não aparecem no log.
 - `no_publication=true` sempre.
 
 Se o Hub continuar com **403** mesmo restaurando a sessão, será necessário investigar autenticação, desafio do site ou restrições contra IPs de datacenter — **não tentar contornar mecanismos de segurança**. Podemos deixar a Shopee na nuvem via API enquanto avaliamos uma VPS/browser persistente para ML.
+
+**Importante:** um erro do Mercado Livre pode deixar o workflow com status geral vermelho **mesmo que a prévia Shopee tenha funcionado**. Confira os campos `meli_hub_status` e `shopee_preview.ok` independentemente. Se a sessão Mavuri não for validada, a prévia Shopee será pulada por segurança. O preview exige autorização de proprietário e flag previamente habilitada no Supabase; não muda nenhuma dessas configurações.
 
 ## 4. Próximo teste após autenticação aprovada
 
