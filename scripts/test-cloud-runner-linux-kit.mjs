@@ -9,6 +9,7 @@ try{
  const source=join(dir,"v85-private-original.mjs");
  const sanitized=join(dir,"v85-private-clean.mjs");
  const fixture=[
+ 'import {existsSync} from "node:fs";',
  'const TELEGRAM_USER_API_HASH = String(process.env.MAVURI_TELEGRAM_API_HASH || "TEST_ONLY_NOT_REAL").trim()',
  'const SHOPEE_API_SECRET = process.env.SHOPEE_AFFILIATE_SECRET || "TEST_ONLY_NOT_REAL"',
  'const AMAZON_COLLECTOR_LOCAL_TOKEN = process.env.MAVURI_AMAZON_COLLECTOR_LOCAL_TOKEN || "TEST_ONLY_NOT_REAL"',
