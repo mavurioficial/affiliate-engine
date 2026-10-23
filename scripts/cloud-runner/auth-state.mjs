@@ -37,7 +37,7 @@ async function readMavuriTabSession(context){
   }
   return null;
 }
-async function captureMavuriState(context){
+export async function captureMavuriState(context){
   const source=filterMavuriAuthState(await context.storageState());
   // An existing Chrome tab opened before connectOverCDP can be absent from
   // Playwright's origin snapshot. Inspect the exact Mavuri tab directly.
