@@ -31,6 +31,14 @@ for(const key of keys) {
  const match=/\|\|\s*["']([^"']+)["']/.exec(row);
  if(!row||(match&&match[1]))throw Error("Falha na limpeza de "+key);
 }
+// Amazon is outside the user's 8/8/5 target and on the VM the local
+// collector may spawn another process and consume RAM. Disable by default
+// without changing Shopee/ML/Magalu discovery or coupon priority.
+const originalAmazon="  await ensureAmazonCollectorService()";
+if(text.includes(originalAmazon)) {
+  text=text.replace(originalAmazon,
+    '  if (process.env.MAVURI_CLOUD_AMAZON_COLLECTOR === "enabled") await ensureAmazonCollectorService()');
+}
 if(!text.includes("async function main()"))throw Error("Não parece ser o V85 auditado");
 writeFileSync(output,text,{encoding:"utf8",flag:"wx",mode:0o600});
 chmodSync(output,0o600);
