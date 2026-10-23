@@ -6,7 +6,7 @@ Write-Host "Mavuri - teste de autenticacao para GitHub Actions"
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   throw "Node.js nao encontrado. Use o Node instalado para o Runner V85."
 }
-if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) {
   throw "npm nao encontrado."
 }
 $workspace = Join-Path $env:USERPROFILE "MavuriAuthTeste"
@@ -19,7 +19,7 @@ if (-not (Test-Path $packageFile)) {
   Set-Content -Path $packageFile -Value '{"private":true,"type":"module"}' -Encoding ASCII
 }
 Write-Host "Instalando apenas o controlador Playwright, sem scripts de instalacao..."
-npm install --no-save --no-audit --no-fund --ignore-scripts playwright-core@1.55.0
+& npm.cmd install --no-save --no-audit --no-fund --ignore-scripts playwright-core@1.55.0
 if ($LASTEXITCODE -ne 0) { throw "Falha ao preparar o Playwright" }
 $chromeCandidates = @(
   (Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe"),
