@@ -19,6 +19,7 @@ jobs:
       - run: node scripts/test-cloud-runner-linux-kit.mjs
       - run: node scripts/test-ml-v86-pure.mjs
       - run: node scripts/test-ml-cloud-ownership.mjs
+      - run: node scripts/test-ml-only-v86.mjs
       - run: deno check supabase/functions/discovery-cloud-ml-origin-probe/index.ts
       - run: node scripts/test-shopee-single-pilot-gate.mjs
       - run: node scripts/test-ml-origin-readonly.mjs
