@@ -67,7 +67,7 @@ export function compareShopeeCandidates(a,b) {
 function priceCentsStrict(value) {
   if(value===null||value===undefined||value==="")return null;
   const raw=String(value).trim();
-  if(!/^\\d{1,14}(?:\\.\\d{1,2})?$/.test(raw))return null;
+  if(!/^\d{1,14}(?:\.\d{1,2})?$/.test(raw))return null;
   const [unit,fraction=""]=raw.split(".");
   const cents=BigInt(unit)*100n+BigInt((fraction+"00").slice(0,2));
   return cents>0n?cents:null;
