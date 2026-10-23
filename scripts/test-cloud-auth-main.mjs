@@ -85,6 +85,8 @@ assert.match(smoke,/data\?\.safety\?\.reads_only!==true/);
 assert.match(smoke,/data\?\.safety\?\.ready_to_publish!==false/);
 assert.ok(smoke.includes("data?.commercial_refresh?.ready_for_write!==false"));
 assert.ok(smoke.includes("data?.commercial_refresh?.ready_to_publish!==false"));
+assert.ok(smoke.includes("affiliate_account_bound:data.account_binding?.verified===true"));
+assert.ok(smoke.includes("affiliate_account_bound:false"));
 for(const field of ["commercial_refresh","refreshable","affiliate_link_rotated",
   "invalid_or_untrusted","missing_or_ambiguous"]){
  assert.ok(smoke.includes(field),"missing aggregate preview "+field);
