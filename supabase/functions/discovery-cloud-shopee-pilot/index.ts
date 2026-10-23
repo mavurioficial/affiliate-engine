@@ -23,13 +23,16 @@ Deno.serve(async req=>{
    return reply({...status,reason:"invalid_intent"},400);
   if(intent==="publish_single_general"&&payload?.confirm!==true)
    return reply({...status,reason:"explicit_confirmation_required"},400);
+  stage="auth";
   const ctx=await authorizeOwner(req);
   if(intent==="publish_single_general" &&
     Deno.env.get("MAVURI_SHOPEE_PILOT_PUBLISH_ENABLED")!=="enabled_after_guard_review")
    return reply({...status,reason:"live_pilot_paused"},423);
   const appid=String(Deno.env.get("SHOPEE_AFFILIATE_APP_ID")||"").trim();
   const secret=String(Deno.env.get("SHOPEE_AFFILIATE_SECRET")||"");
+  stage="account";
   const identity=await verifyAccount(ctx,appid);
+  stage="configuration";
   const [channels,rules,categories]=await Promise.all([
    readRows(ctx,"flow_channels",{select:"id,user_id,type,name,status,external_ref",
     user_id:"eq."+ctx.owner,type:"eq.telegram",limit:"20"}),
@@ -41,13 +44,16 @@ Deno.serve(async req=>{
    c.status==="connected"&&String(c.external_ref||"").trim()!=="");
   if(matching.length!==1)throw Error("general_channel_invalid");
   const general=matching[0];
+  stage="api";
   const offers=await fetchCommercialCandidates(appid,secret);
   if(!offers.length)return reply({...status,ok:true,reason:"api_no_offers"});
+  stage="offer_lookup";
   const stored=await readRows(ctx,"flow_offers",{
    select:"id,user_id,marketplace_id,affiliate_account_id,source_ref,title,price,affiliate_url,image_url,mavuri_category_id,mavuri_tags,metadata",
    marketplace_id:"eq."+identity.marketplaceId,
    source_ref:"in.("+offers.map(x=>x.id).join(",")+")",limit:"250"});
   if(stored.length>=250)throw Error("offers_ambiguous");
+  stage="select_offer";
   const chosen=chooseOne({candidates:offers,stored,categories,rules,general,
    owner:ctx.owner,marketplace:identity.marketplaceId,account:identity.accountId});
   if(!chosen)return reply({...status,ok:true,reason:"no_matching_current_offer"});
