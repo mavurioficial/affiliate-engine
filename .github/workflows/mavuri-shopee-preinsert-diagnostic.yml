@@ -1,0 +1,26 @@
+name: Mavuri Shopee Preinsert Diagnostic
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/mavuri-shopee-preinsert-diagnostic.yml]
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    environment: mavuri-auth-test
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-save --ignore-scripts playwright-core@1.55.0
+      - run: node scripts/cloud-runner/shopee-preinsert-diagnostic.mjs
+        env:
+          MAVURI_CLOUD_LIVE_ENABLED: 'NO'
+          MAVURI_AUTO_INGEST: 'false'
+          MAVURI_AUTH_BUNDLE: ${{ secrets.MAVURI_AUTH_BUNDLE }}
+          MAVURI_AUTH_KEY: ${{ secrets.MAVURI_AUTH_KEY }}
