@@ -3,7 +3,7 @@
 import {unpackageMavuriAuthState} from "./auth-state.mjs";
 const out={mode:"shopee_four_channel_cycle_preview",read_only:true,
  owner_auth:false,ok:false,ready:false,created:0,sent:0,
- scanned:null,selected_unique:null,projected_jobs:null,by_channel:null,counters:null,cloud_schedule:false,whatsapp:false,reason:null};
+ scanned:null,selected_unique:null,projected_jobs:null,by_channel:null,counters:null,refresh_projection:null,cloud_schedule:false,whatsapp:false,reason:null};
 let browser,ctx;
 try{
  if(process.env.MAVURI_CLOUD_LIVE_ENABLED!=="NO"||
@@ -37,6 +37,14 @@ try{
     by_channel:data?.by_channel||null,
     counters:data?.counters&&typeof data.counters==='object'?Object.fromEntries(
       Object.entries(data.counters).filter(([k,v])=>/^[A-Za-z]+$/.test(k)&&Number.isSafeInteger(v))):null,
+    refresh_projection:data?.refresh_projection?{
+      simulated_only:data.refresh_projection.simulated_only===true,
+      would_refresh:Number(data.refresh_projection.would_refresh||0),
+      price_movement_blocked:Number(data.refresh_projection.price_movement_blocked||0),
+      unmatched:Number(data.refresh_projection.unmatched||0),
+      projected_unique:Number(data.refresh_projection.projected_unique||0),
+      projected_jobs:Number(data.refresh_projection.projected_jobs||0)
+    }:null,
     created:data?.created,sent:data?.sent,cloud_schedule:data?.cloud_schedule,
     whatsapp:data?.whatsapp,reason:data?.reason||null};
   }catch{return {owner_auth:false,reason:"preview_error"}}
