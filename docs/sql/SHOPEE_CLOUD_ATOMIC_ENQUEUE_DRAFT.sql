@@ -27,6 +27,7 @@ DECLARE
   v_pending_or_recent boolean;
   v_unique_in_cycle integer;
   v_category_in_cycle integer;
+  v_offer_already_in_cycle boolean;
   v_cycle_keyprefix text;
 BEGIN
   -- Service-role authentication AND explicit expected account identity.
@@ -120,12 +121,21 @@ BEGIN
   -- Use the active run UUID in stable idempotency keys (NOT random UUIDs).
   -- These checks are still only preflight; final atomic INSERT is disabled.
   v_cycle_keyprefix := 'shopee-cloud:' || p_run_id::text || ':';
+  SELECT EXISTS (
+    SELECT 1 FROM public.flow_delivery_jobs j
+    WHERE j.user_id=p_user_id AND j.offer_id=p_offer_id
+      AND left(j.delivery_key,length(v_cycle_keyprefix))=v_cycle_keyprefix
+      AND j.status IN ('queued','processing','sent')
+  ) INTO v_offer_already_in_cycle;
+  -- Another channel for an already selected product does NOT consume a
+  -- second product slot. This also matters at the 8-product boundary.
   SELECT count(DISTINCT j.offer_id) INTO v_unique_in_cycle
   FROM public.flow_delivery_jobs j
   WHERE j.user_id=p_user_id
     AND left(j.delivery_key,length(v_cycle_keyprefix))=v_cycle_keyprefix
     AND j.status IN ('queued','processing','sent');
-  IF v_unique_in_cycle >= LEAST(8,v_cfg.max_shopee) THEN
+  IF NOT v_offer_already_in_cycle AND
+     v_unique_in_cycle >= LEAST(8,v_cfg.max_shopee) THEN
     RETURN jsonb_build_object('accepted',false,'reason','shopee_cycle_max_unique');
   END IF;
 
@@ -139,7 +149,7 @@ BEGIN
     AND left(j.delivery_key,length(v_cycle_keyprefix))=v_cycle_keyprefix
     AND j.status IN ('queued','processing','sent')
     AND mc.slug=v_category;
-  IF v_category_in_cycle >= 2 THEN
+  IF NOT v_offer_already_in_cycle AND v_category_in_cycle >= 2 THEN
     RETURN jsonb_build_object('accepted',false,'reason','shopee_cycle_category_cap');
   END IF;
 
