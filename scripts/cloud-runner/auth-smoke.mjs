@@ -22,7 +22,8 @@ const report={
    category_known:null,category_unknown:null,error_code:null},
  shopee_one_offer:{attempted:false,ok:false,read_only:true,
    selected_unique_offers:null,projected_jobs:null,
-   known_persisted_offers:null,eligibility:null,commercial_refresh:null,error_code:null},
+   known_persisted_offers:null,eligibility:null,commercial_refresh:null,
+   affiliate_account_bound:false,error_code:null},
  error:null
 };
 try{
@@ -150,7 +151,9 @@ try{
              selected_unique_offers:n(data.selected_unique_offers),
              projected_jobs:n(data.projected_jobs),
              known_persisted_offers:n(data.known_persisted_offers),
-             eligibility,commercial_refresh,error_code:null};
+             eligibility,commercial_refresh,
+             affiliate_account_bound:data.account_binding?.verified===true,
+             error_code:null};
          }catch{return {attempted:true,ok:false,read_only:true,
            selected_unique_offers:null,projected_jobs:null,
            error_code:"preflight_browser_error"}}
