@@ -23,6 +23,7 @@ const report={
  chromepath_found:Boolean(chrome),start:snapshot("before"),
  chrome_startup_ms:null,chrome_child_count:0,chrome_tree_rss_mb:null,
  playwright_cdp_ok:false,playwright_clean_session:true,
+ public_site_access:[],
  devtools_http_ok:false,chrome_version_present:false,
  end:null,passed:false,
  error:null
@@ -124,6 +125,29 @@ try {
        state.origins.length===0;
      report.playwright_cdp_ok=page.url()==="about:blank"&&
        report.playwright_clean_session;
+     if(process.env.MAVURI_PROBE_PUBLIC_SITES==="1"){
+       const checks=[
+         {key:"mavuri_login",url:"https://mavurioficial.github.io/affiliate-engine/entrar/",host:"mavurioficial.github.io"},
+         {key:"mercadolivre_hub",url:"https://www.mercadolivre.com.br/afiliados/hub?is_affiliate=true",host:"mercadolivre.com.br"}
+       ];
+       for(const check of checks){
+         const tab=await context.newPage();
+         let status=null,landed_host=null,error=null,elapsed_ms=null;
+         const begin=Date.now();
+         try{
+           const response=await tab.goto(check.url,{waitUntil:"domcontentloaded",timeout:17000});
+           status=response?.status()||null;
+           const host=new URL(tab.url()).hostname.toLowerCase();
+           // Never include query strings, cookies, HTML or token values in logs.
+           landed_host=host.endsWith("mercadolivre.com.br")?"mercadolivre.com.br":
+             host==="mavurioficial.github.io"?"mavurioficial.github.io":"other";
+         }catch(err){error=String(err?.name||"navigation_error").slice(0,55)}
+         elapsed_ms=Date.now()-begin;
+         report.public_site_access.push({site:check.key,status,
+           landed_host,error,elapsed_ms});
+         await tab.close();
+       }
+     }
    }finally{await browser.close()}
    if(!report.playwright_cdp_ok)throw Error("playwright_cdp_failed");
  }
