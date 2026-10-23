@@ -61,6 +61,7 @@ jobs:
       - run: deno check supabase/functions/discovery-cloud-shopee-refresh-one/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-pilot/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-diagnostic/index.ts
+      - run: deno check supabase/functions/discovery-cloud-shopee-diagnostic/commercial-refresh-plan.mjs
       - run: deno check --node-modules-dir=auto supabase/functions/discovery-cloud-shopee-executor/index.ts
       - run: deno check --node-modules-dir=auto supabase/functions/flow-worker/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-diagnostic/cycle-plan.mjs
