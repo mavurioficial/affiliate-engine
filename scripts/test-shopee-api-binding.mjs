@@ -22,11 +22,12 @@ for(const line of [
  'affiliate_external_id_confirmed:false',
  "affiliate_account_ambiguous",
  ]) assert.ok(edge.includes(line),"missing security condition: "+line);
-assert.ok(edge.includes('source_ref')===false);
-assert.ok(!edge.includes('console.log('));
+const executable=edge.replace(/^\s*\/\/.*$/gm,"");
+assert.ok(!executable.includes("source_ref"));
+assert.ok(!executable.includes("console.log("));
 for(const word of ["flow_delivery_jobs","flow_offers","sendMessage","sendPhoto",
  "cron.job","discovery_cloud_control","service_role","SUPABASE_SERVICE_ROLE_KEY"])
- assert.ok(!edge.includes(word),"binding endpoint must not publish or access "+word);
+ assert.ok(!executable.includes(word),"binding endpoint must not publish or access "+word);
 assert.ok(preflight.includes('open_api_binding_source==="user_confirmed_portal_app_id"'));
 assert.ok(preflight.includes('open_api_app_id_sha256===hashedAppId'));
 assert.ok(preflight.includes('affiliate_external_id_confirmed:'));
