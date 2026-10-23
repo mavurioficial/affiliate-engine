@@ -18,6 +18,7 @@ jobs:
       MAVURI_CLOUD_LIVE_ENABLED: "NO"
       MAVURI_AUTO_INGEST: "false"
       MAVURI_PROBE_PLAYWRIGHT: "1"
+      MAVURI_PROBE_PUBLIC_SITES: "1"
     steps:
       - uses: actions/checkout@v4
         with:
