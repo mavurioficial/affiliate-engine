@@ -2,7 +2,6 @@
 // Mavuri authenticated Chrome smoke. STRICTLY READ-ONLY.
 // Loads an ephemeral browser state from GitHub secrets, never writes DB,
 // never invokes ingest, affiliate-link creation, Telegram, WhatsApp or coupons.
-import {chromium} from "playwright-core";
 import {unpackageMavuriAuthState} from "./auth-state.mjs";
 const bundle=process.env.MAVURI_AUTH_BUNDLE||"";
 const key=process.env.MAVURI_AUTH_KEY||"";
@@ -20,6 +19,7 @@ const report={
 };
 try{
  const state=unpackageMavuriAuthState(bundle,key);
+ const {chromium}=await import("playwright-core");
  if(!state.cookies.some(c=>String(c.domain).includes("mercadolivre.com.br")) ||
     !state.origins.some(o=>o.origin==="https://mavurioficial.github.io"))
    throw Error("stored_auth_missing_ml_or_mavuri");
