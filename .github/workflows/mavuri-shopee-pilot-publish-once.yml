@@ -1,8 +1,11 @@
 name: Mavuri Shopee - Publicar Uma Oferta Real
 on:
-  push:
-    branches: [main]
-    paths: [.github/workflows/mavuri-shopee-pilot-publish-once.yml]
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Digite PUBLICAR_UMA para publicar uma oferta Shopee validada"
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -10,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   first_offer:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'PUBLICAR_UMA'
     runs-on: ubuntu-24.04
     environment: mavuri-auth-test
     timeout-minutes: 6
@@ -28,6 +31,11 @@ jobs:
           node-version: '24'
       - run: node --check scripts/cloud-runner/shopee-pilot-publish-once.mjs
       - run: npm install --no-save --no-audit --no-fund --ignore-scripts playwright-core@1.55.0
+      - name: "Verify owner, affiliate link, category, pending queue and 48h cooldown"
+        env:
+          MAVURI_AUTH_BUNDLE: ${{ secrets.MAVURI_AUTH_BUNDLE }}
+          MAVURI_AUTH_KEY: ${{ secrets.MAVURI_AUTH_KEY }}
+        run: node scripts/cloud-runner/shopee-preinsert-diagnostic.mjs
       - name: Publish one vetted Shopee offer to Mavuri Ofertas and verify outcome
         env:
           MAVURI_AUTH_BUNDLE: ${{ secrets.MAVURI_AUTH_BUNDLE }}
