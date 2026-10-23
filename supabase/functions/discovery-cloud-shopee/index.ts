@@ -6,6 +6,7 @@ import {compareShopeeRoutingShadow,validateShopeeRoutingRules} from "./shopee-ro
 import {compareShopeeDbCategoryParity} from "./shopee-db-category-parity.mjs";
 import {compareShopeeGeneralEffectiveCategoryImpact} from "./shopee-category-impact.mjs";
 import {firstShopeeControlledPreflight} from "./shopee-single-preflight.mjs";
+import {summarizeCommercialRefresh} from "./shopee-commercial-refresh-plan.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -278,12 +279,16 @@ async function liveSingleOfferPreflight(req: Request,userId: string) {
     itemid:String((unwrap(row) as Record<string,unknown>)?.source_ref||""),
     channel_id:row.channel_id,status:row.status
   }));
-  return firstShopeeControlledPreflight({
-    candidates,stored_offers:validStored,rules,channels,scope:{
-      user_id:userId,marketplace_id:marketplaceId,affiliate_account_id:accountId
-    },sent_history:sentHistory,pending_history:pendingHistory,
+  const scope={user_id:userId,marketplace_id:marketplaceId,affiliate_account_id:accountId};
+  const preflight=firstShopeeControlledPreflight({
+    candidates,stored_offers:validStored,rules,channels,scope,
+    sent_history:sentHistory,pending_history:pendingHistory,
     now_iso:new Date().toISOString()
   });
+  // Diagnostic only; these numbers never authorize a write.
+  return {...preflight,commercial_refresh:
+    summarizeCommercialRefresh({candidates,stored_offers:validStored,scope})};
+
 }
 
 Deno.serve(async(req: Request)=>{
