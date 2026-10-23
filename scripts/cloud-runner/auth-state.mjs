@@ -13,6 +13,42 @@ import {pathToFileURL} from "node:url";
 const ROOT="https://mavurioficial.github.io";
 const mlCookie=d=>/^(?:\.)?(?:[a-z0-9-]+\.)*mercadolivre\.com\.br$/i.test(String(d||""));
 const mavuriCookie=d=>/^(?:\.)?mavurioficial\.github\.io$/i.test(String(d||""));
+
+const EXPECTED_AUTH_KEY="sb-otikoxnfotyjgphrdudn-auth-token";
+async function readMavuriTabSession(context){
+  const pages=context.pages().filter(p=>{
+    try{
+      const u=new URL(p.url());
+      return u.origin===ROOT&&u.pathname.startsWith("/affiliate-engine/");
+    }catch{return false}
+  });
+  for(const page of pages){
+    try{
+      const result=await page.evaluate(key=>{
+        // Read exactly the Mavuri Supabase auth key, never enumerate arbitrary
+        // localStorage entries from unrelated GitHub Pages applications.
+        const value=window.localStorage.getItem(key);
+        return {present:typeof value==="string"&&value.length>0,
+          value:typeof value==="string"?value:null};
+      },EXPECTED_AUTH_KEY);
+      if(result?.present)
+        return {origin:ROOT,localStorage:[{name:EXPECTED_AUTH_KEY,value:result.value}]};
+    }catch{}
+  }
+  return null;
+}
+async function captureMavuriState(context){
+  const source=filterMavuriAuthState(await context.storageState());
+  // An existing Chrome tab opened before connectOverCDP can be absent from
+  // Playwright's origin snapshot. Inspect the exact Mavuri tab directly.
+  const fallback=await readMavuriTabSession(context);
+  const origins=fallback?[fallback]:source.origins.map(x=>({
+    origin:x.origin,
+    localStorage:x.localStorage.filter(item=>item.name===EXPECTED_AUTH_KEY)
+  })).filter(x=>x.localStorage.length>0);
+  return {cookies:source.cookies,origins};
+}
+
 export function filterMavuriAuthState(input){
   const cookies=(Array.isArray(input?.cookies)?input.cookies:[])
     .filter(c=>mlCookie(c?.domain)||mavuriCookie(c?.domain))
@@ -80,7 +116,7 @@ async function diagnose(){
     const results=[];
     for(let i=0;i<contexts.length;i++){
       const context=contexts[i];
-      const filtered=filterMavuriAuthState(await context.storageState());
+      const filtered=await captureMavuriState(context);
       const hosts=context.pages().map(page=>{
         try{return new URL(page.url()).hostname.toLowerCase()}
         catch{return ""}
@@ -113,7 +149,7 @@ async function capture(){
   try{
     const context=browser.contexts()[0];
     if(!context)throw Error("browser_context_not_found");
-    state=filterMavuriAuthState(await context.storageState());
+    state=await captureMavuriState(context);
   }finally{await browser.close()}
   const sealed=packageMavuriAuthState(state);
   if(sealed.stats.ml_cookie_count===0||!sealed.stats.mavuri_origin_present)
