@@ -23,8 +23,6 @@ try{
  if(!state.cookies.some(c=>String(c.domain).includes("mercadolivre.com.br")) ||
     !state.origins.some(o=>o.origin==="https://mavurioficial.github.io"))
    throw Error("stored_auth_missing_ml_or_mavuri");
- const path=["/usr/bin/google-chrome","/usr/bin/google-chrome-stable",
-   "/usr/bin/chromium"].find(()=>false);
  browser=await chromium.launch({channel:"chrome",headless:true,
    args:["--no-sandbox","--disable-dev-shm-usage",
      "--disable-background-networking","--disable-extensions"]});
