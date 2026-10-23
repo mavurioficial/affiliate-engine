@@ -8,7 +8,7 @@ import {
 assert.equal(mlCatalogKey({id:"MLB111",product_id:"MLB222"}),"MLB222");
 assert.equal(mlCatalogKey({id:"MLB111",url:"https://www.mercadolivre.com.br/p/MLB12345?src=x"}),"MLB12345");
 assert.equal(mlCatalogKey({id:"MLB111"}),null);
-assert.equal(mlCompactSearchTitle("Cadeira de Escritório Preta com Braços e Apoio"),"Cadeira Escritorio Bracos Apoio");
+assert.equal(mlCompactSearchTitle("Cadeira de Escritório Preta com Braços e Apoio"),"Cadeira Escritorio Preta Bracos Apoio");
 assert.deepEqual(rotateMlThemes(["casa","tecnologia","casa","moda"],1),["tecnologia","moda","casa"]);
 assert.equal(mlDiscoveryBuckets({queries:["a","b"],pages:3,queryPages:2,slot:0}).length,3);
 const a={id:"a",product_id:"MLB999",price:49,title:"Produto A",url:"https://mercadolivre.com.br/p/MLB999"};
