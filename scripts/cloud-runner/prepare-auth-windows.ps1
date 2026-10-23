@@ -32,13 +32,14 @@ $profile = Join-Path $env:LOCALAPPDATA "MavuriChromeProfile"
 Write-Host "Abrindo Chrome no perfil Mavuri, sem iniciar o V85..."
 $browserArgs = @(
   '--remote-debugging-port=9222',
+  '--remote-debugging-address=127.0.0.1',
   ('--user-data-dir="' + $profile + '"'),
   'https://www.mercadolivre.com.br/afiliados/hub?is_affiliate=true#menu-user',
-  'https://mavurioficial.github.io/affiliate-engine/entrar/'
+  'https://mavurioficial.github.io/affiliate-engine/'
 )
 Start-Process -FilePath $chrome -ArgumentList $browserArgs
 Write-Host ""
-Write-Host "Confirme que esta LOGADO no Hub Mercado Livre e no Mavuri nas duas abas."
+Write-Host "Confirme que esta LOGADO no Hub Mercado Livre e no PAINEL do Mavuri nas duas abas."
 Write-Host "Se o Chrome reutilizou uma janela sem CDP, feche o Chrome do perfil Mavuri e execute novamente."
 $confirm = Read-Host "Quando os dois logins estiverem prontos, digite EXPORTAR e pressione Enter"
 if ($confirm -cne "EXPORTAR") { throw "Cancelado. Nenhuma sessao foi exportada." }
