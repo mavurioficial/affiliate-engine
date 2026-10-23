@@ -3,6 +3,7 @@ on:
   schedule:
     # 30-minute inspection only; no publishing or queue mutation.
     # Diagnostic counters audit: aggregate candidate rejection reasons.
+    # Read-only commercial sync projection (no database writes).
     - cron: '7,37 * * * *'
   workflow_dispatch:
   push:
