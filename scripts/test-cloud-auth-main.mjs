@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {spawnSync} from "node:child_process";
-import {filterMavuriAuthState,packageMavuriAuthState,unpackageMavuriAuthState}
+import {captureMavuriState,filterMavuriAuthState,packageMavuriAuthState,unpackageMavuriAuthState}
   from "./cloud-runner/auth-state.mjs";
 
 const original={
@@ -20,6 +20,34 @@ const original={
 const filtered=filterMavuriAuthState(original);
 assert.equal(filtered.cookies.length,1);
 assert.equal(filtered.origins.length,1);
+// CDP may omit localStorage origins of Chrome tabs that were open before
+// Playwright connected; only recover Mavuri's exact Supabase auth key.
+const fakeContext={
+  storageState:async()=>({cookies:[original.cookies[0]],origins:[]}),
+  pages:()=>[{
+    url:()=>"https://mavurioficial.github.io/affiliate-engine/",
+    evaluate:async (_script,key)=>{
+      assert.equal(key,"sb-otikoxnfotyjgphrdudn-auth-token");
+      return {present:true,value:"TEST_ONLY_NONLIVE_SUPABASE_AUTH_TOKEN"};
+    }
+  },{
+    url:()=>"https://mavurioficial.github.io/other-app/",
+    evaluate:async()=>{throw Error("Must not read unrelated pages")}
+  }]
+};
+const recovered=await captureMavuriState(fakeContext);
+assert.equal(recovered.cookies.length,1);
+assert.equal(recovered.origins.length,1);
+assert.equal(recovered.origins[0].localStorage.length,1);
+assert.equal(recovered.origins[0].localStorage[0].name,
+ "sb-otikoxnfotyjgphrdudn-auth-token");
+assert.equal(packageMavuriAuthState(recovered).stats.mavuri_origin_present,true);
+const noSession=await captureMavuriState({
+  storageState:fakeContext.storageState,
+  pages:()=>[{url:fakeContext.pages()[0].url,
+    evaluate:async()=>({present:false,value:null})}]
+});
+assert.equal(noSession.origins.length,0);
 const packed=packageMavuriAuthState(original);
 assert.equal(packed.stats.ml_cookie_count,1);
 assert.ok(packed.bundle.length<48*1024);
