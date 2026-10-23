@@ -45,6 +45,7 @@ jobs:
       - run: node scripts/test-shopee-cloud-run-start-window.mjs
       - run: node scripts/test-shopee-cloud-routing-matcher.mjs
       - run: node scripts/test-shopee-legacy-writer-fence.mjs
+      - run: node scripts/test-shopee-cloud-atomic-enqueue.mjs
       - run: node scripts/test-discovery-cloud-shopee-atomic-draft.mjs
       - run: node scripts/test-discovery-cloud-shopee-sql-matcher.mjs
       - uses: denoland/setup-deno@v2
