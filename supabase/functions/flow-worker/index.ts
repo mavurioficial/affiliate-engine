@@ -367,7 +367,7 @@ function retryableError(message: string) {
 
 function makeClient(authorization: string | null, serviceToService: boolean) {
   if (serviceToService) {
-    const secretKey = Object.values(secretKeys).find((key) => key)
+    const secretKey = Object.values(secretKeys).find((key): key is string => typeof key === "string" && key.length > 0)
     if (!secretKey) throw new Error("Nenhuma secret key do Supabase está disponível no worker.")
     return createClient(supabaseUrl, secretKey)
   }
@@ -444,7 +444,7 @@ Deno.serve(async (req) => {
       )
 
       if (feminineChannel) {
-        const secretKey = Object.values(secretKeys).find((key) => key)
+        const secretKey = Object.values(secretKeys).find((key): key is string => typeof key === "string" && key.length > 0)
         if (secretKey) {
           const adminClient = createClient(supabaseUrl, secretKey)
           const { error: linkError } = await adminClient
