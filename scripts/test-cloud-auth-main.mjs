@@ -84,6 +84,14 @@ assert.match(smoke,/body:\{mode:"single_offer_preflight"\}/);
 assert.match(smoke,/data\?\.safety\?\.reads_only!==true/);
 assert.match(smoke,/data\?\.safety\?\.ready_to_publish!==false/);
 assert.match(smoke,/shopee_one_offer:/);
+for (const diagnostic of ["known_persisted_offers","missing_persisted",
+  "final_category_unavailable","invalid_affiliate_or_price",
+  "blocked_recent_48h","rules_not_matched",
+  "blocked_pending","blocked_category_diversity"]) {
+  assert.ok(smoke.includes(diagnostic),"missing bounded diagnostic "+diagnostic);
+}
+assert.match(smoke,/const eligibility=Object\.fromEntries/);
+assert.match(smoke,/Number\.isSafeInteger/);
 assert.match(smoke,/body:\{mode:"general_audit"\}/);
 for(const banned of [".insert(",".update(",".upsert(",".delete(",
  "flow_delivery_jobs","flow_delivery_logs","sendMessage","sendPhoto",
