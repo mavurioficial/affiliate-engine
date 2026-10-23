@@ -14,7 +14,7 @@ let browser,context;
 const report={
  ok:false,safe_mode:"read_only",no_publication:true,private_state_not_logged:true,
  meli_hub_status:null,meli_host:null,meli_login_redirection:false,
- meli_home_status:null,meli_403_scope:"not_checked",
+ meli_home_status:null,meli_403_scope:"not_checked",meli_ok:false,
  mavuri_login_status:null,mavuri_supabase_user_confirmed:false,
  shopee_preview_requested:process.env.MAVURI_SHOPEE_PREVIEW==="1",
  shopee_preview:{attempted:false,ok:false,read_only:true,
@@ -130,6 +130,9 @@ try{
            const n=(x)=>Number.isSafeInteger(x)&&x>=0?x:null;
            const keys=["input_candidates","missing_persisted","ambiguous_persisted",
              "final_category_unavailable","invalid_affiliate_or_price",
+             "invalid_candidate_price","invalid_stored_price",
+             "bad_persisted_affiliate_url","bad_persisted_image_url",
+             "affiliate_url_changed","price_changed",
              "blocked_under_10_percent","rules_not_matched",
              "blocked_recent_48h","blocked_pending","blocked_category_diversity"];
            const eligibility=Object.fromEntries(keys.map(k=>[
@@ -148,8 +151,12 @@ try{
    }
  }catch(e){report.error=report.error||"mavuri_navigation_"+String(e?.name||"failure").slice(0,30)}
  await page.close();
- report.ok=report.meli_hub_status===200&&
-   !report.meli_login_redirection&&report.mavuri_supabase_user_confirmed&&
+ report.meli_ok=report.meli_hub_status===200&&
+   !report.meli_login_redirection;
+ // Mercado Livre is now a separate diagnostic. It must not fail
+ // the independent Shopee cloud discovery verification.
+ // A red failure still means authentication/Shopee validation failed.
+ report.ok=report.mavuri_supabase_user_confirmed&&
    (!report.shopee_preview_requested||
      (report.shopee_preview.ok&&report.shopee_one_offer.ok));
  if(!report.ok)process.exitCode=1;
