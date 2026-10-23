@@ -22,7 +22,7 @@ const report={
    category_known:null,category_unknown:null,error_code:null},
  shopee_one_offer:{attempted:false,ok:false,read_only:true,
    selected_unique_offers:null,projected_jobs:null,
-   known_persisted_offers:null,eligibility:null,error_code:null},
+   known_persisted_offers:null,eligibility:null,commercial_refresh:null,error_code:null},
  error:null
 };
 try{
@@ -122,7 +122,9 @@ try{
            if(error||!data?.ok||data?.dry_run!==true||
               data?.cloud_publishing!==false||data?.cloud_schedule!==false||
               data?.safety?.ready_to_publish!==false||
-              data?.safety?.reads_only!==true){
+              data?.safety?.reads_only!==true||
+              data?.commercial_refresh?.ready_for_write!==false||
+              data?.commercial_refresh?.ready_to_publish!==false){
              return {attempted:true,ok:false,read_only:true,
                selected_unique_offers:null,projected_jobs:null,
                error_code:error?"preflight_invocation_failed":"unexpected_preflight_response"};
@@ -138,11 +140,17 @@ try{
            const eligibility=Object.fromEntries(keys.map(k=>[
              k,n(data.eligibility?.[k])
            ]));
+           const refreshKeys=["candidates","persisted","refreshable",
+             "affiliate_link_rotated","price_changed",
+             "invalid_or_untrusted","missing_or_ambiguous"];
+           const commercial_refresh=Object.fromEntries(refreshKeys.map(k=>[
+             k,n(data.commercial_refresh?.[k])
+           ]));
            return {attempted:true,ok:true,read_only:true,
              selected_unique_offers:n(data.selected_unique_offers),
              projected_jobs:n(data.projected_jobs),
              known_persisted_offers:n(data.known_persisted_offers),
-             eligibility,error_code:null};
+             eligibility,commercial_refresh,error_code:null};
          }catch{return {attempted:true,ok:false,read_only:true,
            selected_unique_offers:null,projected_jobs:null,
            error_code:"preflight_browser_error"}}
