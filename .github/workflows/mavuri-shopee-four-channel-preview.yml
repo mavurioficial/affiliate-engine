@@ -1,12 +1,20 @@
 name: Mavuri Shopee Four Channel Preview
 on:
+  schedule:
+    # 30-minute inspection only; no publishing or queue mutation.
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
   push:
     branches: [main]
     paths: [.github/workflows/mavuri-shopee-four-channel-preview.yml]
 permissions:
   contents: read
+concurrency:
+  group: mavuri-shopee-four-channel-readonly-preview
+  cancel-in-progress: false
 jobs:
   preview:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment: mavuri-auth-test
     timeout-minutes: 6
