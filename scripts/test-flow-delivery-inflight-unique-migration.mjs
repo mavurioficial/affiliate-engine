@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+const sql=readFileSync("supabase/migrations/20261023180900_flow_delivery_inflight_unique_guard.sql","utf8");
+assert.match(sql,/CREATE UNIQUE INDEX IF NOT EXISTS flow_delivery_jobs_inflight_product_channel_uidx/);
+assert.match(sql,/\(user_id,offer_id,channel_id\)/);
+assert.match(sql,/status IN \('queued','processing'\)/);
+assert.match(sql,/offer_id IS NOT NULL/);
+assert.match(sql,/channel_id IS NOT NULL/);
+assert.ok(!/\bDROP\b|\bTRUNCATE\b|\bDELETE\b|\bUPDATE\b/i.test(sql),"unsafe guard migration");
+console.log("Mavuri in-flight unique guard migration contract passed.");
