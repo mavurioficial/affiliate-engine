@@ -6,6 +6,18 @@ import {planShopeeAfterPersistence} from "./shopee-postpersist-plan.mjs";
 // This does NOT grant authorization to enqueue/send. Database rules, reliable
 // snapshot comparison and a distributed lease must be verified transactionally
 // at the eventual actual enqueue.
+/**
+ * @param {{
+ *   candidates?: Array<Record<string,unknown>>,
+ *   stored_offers?: Array<Record<string,unknown>>,
+ *   rules?: Array<Record<string,unknown>>,
+ *   channels?: Array<Record<string,unknown>>,
+ *   scope?: Record<string,string>,
+ *   sent_history?: Array<Record<string,unknown>>,
+ *   pending_history?: Array<Record<string,unknown>>,
+ *   now_iso?: string
+ * }} [input]
+ */
 export function firstShopeeControlledPreflight({
   candidates,stored_offers,rules,channels,scope,sent_history=[],pending_history=[],
   now_iso
