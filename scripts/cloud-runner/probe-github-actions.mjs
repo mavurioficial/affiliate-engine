@@ -51,38 +51,46 @@ function chromeTreeRam(root) {
  return {count,rssMb:Math.round(rssKb/1024)};
 }
 const dir=mkdtempSync(join(tmpdir(),"mavuri-cloud-probe-"));
+const fixedPort=19222;
+let browserStderr="";
 let child;
 try {
  if(!chrome)throw Error("chrome_not_preinstalled");
  const args=["--headless=new","--no-sandbox","--disable-gpu",
   "--disable-dev-shm-usage","--disable-background-networking",
   "--disable-extensions","--no-first-run","--no-default-browser-check",
-  "--remote-debugging-address=127.0.0.1","--remote-debugging-port=0",
+  "--remote-debugging-address=127.0.0.1","--remote-debugging-port="+fixedPort,
   "--user-data-dir="+dir,"about:blank"];
  const started=Date.now();
- child=spawn(chrome,args,{stdio:"ignore",detached:false,env:{...process.env,
+ child=spawn(chrome,args,{stdio:["ignore","ignore","pipe"],detached:false,env:{...process.env,
   // Avoid Chrome running with debugging flags accidentally inherited from host.
   CHROME_USER_DATA_DIR:dir}});
- const devtools=join(dir,"DevToolsActivePort");
- let port=null;
+ child.stderr?.on("data",chunk=>{
+  browserStderr=(browserStderr+String(chunk)).slice(-1500);
+ });
+ child.on("error",err=>{
+  browserStderr=(browserStderr+" [spawn-error:"+String(err?.code||"unknown")+"]").slice(-1500);
+ });
+ let port=fixedPort;
+ let response=null;
  for(let i=0;i<100;i++){
-  if(child.exitCode!==null)throw Error("chrome_exited_before_devtools");
-  if(existsSync(devtools)){
-    const lines=readFileSync(devtools,"utf8").split(/\r?\n/);
-    port=Number(lines[0]);
-    if(Number.isInteger(port)&&port>=1024&&port<=65535)break;
-  }
+  if(child.exitCode!==null)throw Error("chrome_exit_"+child.exitCode);
+  try{
+    const trial=await fetch("http://127.0.0.1:"+port+"/json/version",
+      {signal:AbortSignal.timeout(500)});
+    if(trial.ok){response=trial;break}
+  }catch{}
   await new Promise(resolve=>setTimeout(resolve,100));
  }
- if(!port)throw Error("chrome_devtools_timeout");
+ if(!response)throw Error("chrome_cdp_port_timeout");
  const controller=new AbortController();
  const timer=setTimeout(()=>controller.abort(),4000);
  try {
-  const response=await fetch("http://127.0.0.1:"+port+"/json/version",{
+  const responseAgain=await fetch("http://127.0.0.1:"+port+"/json/version",{
     signal:controller.signal
   });
-  report.devtools_http_ok=response.ok;
-  const meta=response.ok?await response.json():{};
+  report.devtools_http_ok=responseAgain.ok;
+  const meta=responseAgain.ok?await responseAgain.json():{};
   report.chrome_version_present=Boolean(meta?.Browser);
  } finally {clearTimeout(timer)}
  report.chrome_startup_ms=Date.now()-started;
@@ -94,6 +102,7 @@ try {
  if(!report.passed)throw Error("browser_cdp_not_available");
 } catch(error){
  report.error=String(error?.message||"probe_error").slice(0,90);
+ report.chrome_diagnostic=browserStderr.slice(-350).replace(/\\s+/g," ");
  process.exitCode=1;
 } finally {
  if(child?.pid) {
