@@ -16,6 +16,7 @@ jobs:
           node-version: 20
       - run: npm run check
       - run: npm test
+      - run: node scripts/test-cloud-runner-linux-kit.mjs
       - run: node scripts/test-discovery-cloud-shopee.mjs
       - run: node scripts/test-discovery-cloud-shopee-policy.mjs
       - run: node scripts/test-discovery-cloud-shopee-history.mjs
