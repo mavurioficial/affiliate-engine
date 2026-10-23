@@ -96,6 +96,7 @@ Deno.serve(async req=>{
    status:"in.(queued,processing)",limit:"3"});
   if(inflight.length!==1||inflight[0].id!==jobId)
    throw Error("fanout_or_concurrency_detected");
+  stage="worker";
   const worker=await fetch(ctx.base+"/functions/v1/flow-worker",{
    method:"POST",headers:{...ctx.headers,
     "content-type":"application/json"},
