@@ -1,29 +1,29 @@
-# Mavuri Shopee Cloud — Critérios de liberação
+# Mavuri Shopee Cloud — operação de produção
 
-Situação em 23/10/2026: **não liberar publicações automáticas** antes da conclusão dos itens pendentes.
+**Atualização: 23/10/2026.** O executor Shopee Cloud foi habilitado para ciclos a cada 30 minutos no Supabase. A primeira execução supervisionada integral terminou `succeeded` com uma oferta enviada e confirmada no Telegram.
 
-## Validado em produção
-- [x] API Shopee e identidade afiliada autenticadas.
-- [x] Primeiro envio real ao Mavuri Ofertas, com job `sent` e identificador Telegram.
-- [x] Prévia da distribuição aos quatro canais usando categoria persistida.
-- [x] Limite de 8 produtos únicos e 2 por categoria verificado na lógica offline.
-- [x] Índice único parcial para jobs `queued/processing` por usuário/oferta/canal.
-- [x] `shopee-cloud:` exige conta, controle cloud e lease válido.
-- [x] Início de ciclos dentro de 08:00–22:00, timezone America/Sao_Paulo; encerramento após as 22:00 permitido dentro do lease (máximo 30 min).
-- [x] O worker consulta autorização antes de pegar o job e antes de chamar o Telegram.
-- [x] O fanout legado ignora jobs `shopee-cloud:`.
-- [x] O coletor legado `shopee:` fica bloqueado caso a nuvem se torne executor ativo.
-- [x] Testes GitHub da proteção legada aprovados: run 40014203257.
+## Implantado e comprovado
+- [x] Autenticação do agendador com o segredo já mantido no Vault do Supabase. Sonda HTTP 200 retornou `cloud_disabled` sem produzir jobs antes do corte.
+- [x] `public.mavuri_shopee_cloud_enqueue`: RPC atômica restrita a `service_role`; verifica categoria final, preço, link de afiliado, regras de canais, cooldown, família e limites (8 produtos distintos; 2 por categoria).
+- [x] Índice parcial único na fila (usuário, produto, canal; queued/processing).
+- [x] `mavuri_shopee_legacy_writer_fence`: proíbe `shopee:` legado quando `active_executor=cloud`. Teste SQL com tentativa de INSERT invalidada por erro esperado `42501`.
+- [x] Executor `discovery-cloud-shopee-executor`: usa API oficial assinada, configuração persistida, planejador dos quatro canais e RPC transacional; não envia Telegram diretamente.
+- [x] Worker existente entrega pelo Telegram. Registro real `sent` e log com identificador de mensagem confirmados.
+- [x] Duas chamadas concorrentes ao executor: uma foi autorizada, outra retornou `already_running`; somente um job foi criado.
+- [x] Reconciliador marca ciclo como `succeeded` somente após verificar a fila concluída; ciclo supervisionado terminou com `delivered=1`, `errors=0`.
+- [x] Supabase pg_cron: `mavuri-shopee-cloud-discovery` `*/30 * * * *`, `mavuri-shopee-cloud-reconcile` a cada minuto; testou-se execução do cron reconciliador.
+- [x] Janela de início `08:00 <= Brasília < 22:00`; um ciclo autorizado pode finalizar depois das 22h, com lease de no máximo 30 minutos. O controle de intervalo tolera 30 segundos de variação no agendamento.
+- [x] `discovery_cloud_control.enabled=true`, `active_executor=cloud`, `max_shopee=8`, `interval_minutes=30`; cron de descoberta está ativo.
+- [x] Runner Windows antigo não precisa permanecer ativo e, se tentar postar Shopee, terá a escrita `shopee:` recusada.
+- [x] GitHub Actions compilou o executor e validou regressões da infraestrutura cloud.
 
-## Bloqueadores de habilitação
-- [ ] RPC de inserção transacional validada em produção que reavalie preço/link, categoria final, 4 regras Shopee, cooldown por produto/canal e família, seleção de até 8 produtos/ciclo, fanout e idempotência. **Não substituir por INSERT client-side.**
-- [ ] Ensaio de concorrência (duas execuções no mesmo ciclo; provar um único job por produto/canal).
-- [ ] Observar uma execução real do GitHub com `event=schedule`. Até a última consulta, havia apenas eventos `push`, apesar do cron `7,37 * * * *` estar em `main`.
-- [ ] Confirmar que o runner local está encerrado e provar bloqueio de sua escrita no corte cloud.
-- [ ] Execução supervisionada com múltiplas ofertas e validação de logs `sent`, IDs de mensagem e canais corretos.
-- [ ] Somente então alternar `discovery_cloud_control.enabled=true` e `active_executor=cloud` e instalar/habilitar agendamento de publicação de 30 min na janela.
+## Acompanhamento pós-ativação
+- [ ] Verificar no histórico do pg_cron a primeira execução de descoberta disparada pelo horário regular (o teste supervisionado foi manual).
+- [ ] Observar um ciclo com múltiplos produtos e publicação em mais de um canal. Limite de 8 é máximo, não mínimo obrigatório; o catálogo deve satisfazer todos os filtros.
+- [ ] Conferir taxa de rejeição de candidatos com preço ou URL desatualizados e planejar sincronização contínua do catálogo.
+- [ ] Confirmar estabilidade por vários ciclos, antes de declarar operação plenamente estabilizada.
 
-## Plano de reversão
-Se houver duplicidade, desvio de canal, preço incorreto ou falha de lease: desligar somente a publicação cloud (`enabled=false`), manter o worker de entregas históricas preservado, revisar jobs criados e não reativar o coletor local automaticamente.
+## Reversão imediata
+Se surgirem duplicidades, preço incorreto, mensagens em destinos errados ou falhas repetidas, executar `UPDATE mavuri_internal.discovery_cloud_control SET enabled=false WHERE id=true`. Não reativar o runner Windows automaticamente. O cron e o worker permanecem instalados, mas a função de disparo não gera novas publicações enquanto `enabled=false`.
 
-A execução de auditoria das ofertas é somente leitura e independente desta chave de publicação.
+**Observação:** Mercado Livre e Magalu continuam fora deste corte de publicação automática.
