@@ -120,6 +120,13 @@ assert.ok(portalPage.includes('https://affiliate.shopee.com.br/open_api'));
 assert.ok(portalPage.includes('import {supabase} from "../src/app/auth.js"'));
 assert.ok(portalPage.includes('mode:"verify_portal_app_id"'));
 assert.ok(portalPage.includes('app_id_matches_configured_api'));
+assert.ok(portalPage.includes('id="bind" type="button" hidden'));
+assert.ok(portalPage.includes('intent:"bind_shopee_open_api"'));
+assert.ok(portalPage.includes('confirm:true'));
+assert.ok(portalPage.includes('publication_enabled!==false'));
+assert.ok(portalPage.includes('schedule_enabled!==false'));
+assert.ok(portalPage.includes('VÍNCULO DA API CONFIRMADO'));
+
 assert.ok(portalPage.includes('account_binding_complete!==false'));
 assert.ok(portalPage.includes('no_publication!==true'));
 assert.ok(portalPage.includes('supabase.auth.getUser()'));
