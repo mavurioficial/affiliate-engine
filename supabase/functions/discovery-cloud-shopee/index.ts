@@ -5,6 +5,7 @@ import {simulateShopeeGeneralAudit,validateShopeeGeneralRule} from "./shopee-gen
 import {compareShopeeRoutingShadow,validateShopeeRoutingRules} from "./shopee-routing-shadow.mjs";
 import {compareShopeeDbCategoryParity} from "./shopee-db-category-parity.mjs";
 import {compareShopeeGeneralEffectiveCategoryImpact} from "./shopee-category-impact.mjs";
+import {firstShopeeControlledPreflight} from "./shopee-single-preflight.mjs";
 
 /**
  * Cloud Discovery V85 phase A — READ ONLY.
@@ -214,6 +215,77 @@ async function liveGeneralAudit(req: Request) {
     ...report,routing_shadow:routingShadow,db_category_parity:dbParity,db_category_impact:categoryImpact};
 }
 
+// One-off eligibility after real database classification, guarded by owner RLS.
+// Intentionally no INSERT/UPDATE/RPC, no Telegram, no fan-out, no lease mutation.
+async function liveSingleOfferPreflight(req: Request,userId: string) {
+  const [marketplaces,accounts,rules,channels,categories]=await Promise.all([
+    ownerRlsGet(req,"flow_marketplaces",{select:"id",slug:"eq.shopee",limit:"1"}),
+    ownerRlsGet(req,"flow_affiliate_accounts",{
+      select:"id,marketplace_id,status",status:"eq.connected",limit:"100"}),
+    ownerRlsGet(req,"flow_rules",{select:"name,enabled,conditions,actions",enabled:"eq.true"}),
+    ownerRlsGet(req,"flow_channels",{
+      select:"id,type,status,external_ref",type:"eq.telegram"}),
+    ownerRlsGet(req,"mavuri_categories",{select:"id,slug",active:"eq.true",limit:"200"})
+  ]);
+  const marketplaceId=String(marketplaces[0]?.id||"");
+  if(!marketplaceId)throw Error("single_preflight_marketplace_missing");
+  const accountMatches=accounts.filter((a: Record<string,unknown>)=>
+    a.marketplace_id===marketplaceId && a.status==="connected");
+  if(accountMatches.length!==1)throw Error("single_preflight_account_not_unique");
+  validateShopeeGeneralRule(rules,channels);
+  validateShopeeRoutingRules(rules,channels);
+  const accountId=String(accountMatches[0].id||"");
+  if(!accountId)throw Error("single_preflight_account_missing");
+
+  const pool=await livePreview(true);
+  const candidates=pool.internal_offers||[];
+  const ids=[...new Set(candidates.map((x: Record<string,unknown>)=>String(x.itemid||"").trim()))]
+    .filter(x=>/^[0-9]{1,24}$/.test(x)).slice(0,80);
+  const [stored,sentRows,pendingRows]=await Promise.all([
+    ids.length?ownerRlsGet(req,"flow_offers",{
+      select:"user_id,marketplace_id,affiliate_account_id,source_ref,title,price,affiliate_url,image_url,mavuri_category_id,mavuri_tags,metadata",
+      marketplace_id:"eq."+marketplaceId,
+      source_ref:"in.("+ids.join(",")+")",limit:"300"}):Promise.resolve([]),
+    readPagedForShopee(req,"flow_delivery_logs",{
+      select:"created_at,channel_id,status,metadata,flow_offers!inner(source_ref,marketplace_id)",
+      status:"eq.sent",
+      created_at:"gte."+new Date(Date.now()-48*3600000).toISOString(),
+      "flow_offers.marketplace_id":"eq."+marketplaceId
+    }),
+    readPagedForShopee(req,"flow_delivery_jobs",{
+      select:"channel_id,status,flow_offers!inner(source_ref,marketplace_id)",
+      status:"in.(queued,processing)",
+      "flow_offers.marketplace_id":"eq."+marketplaceId
+    })
+  ]);
+  if(stored.length===300)throw Error("single_preflight_ambiguous_row_limit");
+  const categoryMap=new Map(categories.map((c: Record<string,unknown>)=>
+    [String(c.id||""),String(c.slug||"")]));
+  const validStored=stored.filter((row: Record<string,unknown>)=>
+    row.user_id===userId && row.affiliate_account_id===accountId &&
+    Boolean(row.mavuri_category_id) &&
+    categoryMap.get(String(row.mavuri_category_id))===
+      (row.metadata as Record<string,unknown>)?.mavuri?.category_slug);
+  const unwrap=(row: Record<string,unknown>)=>{
+    const v=row.flow_offers;
+    return Array.isArray(v)?v[0]:v;
+  };
+  const sentHistory=sentRows.map((row: Record<string,unknown>)=>({
+    itemid:String((unwrap(row) as Record<string,unknown>)?.source_ref||""),
+    channel_id:row.channel_id,status:"sent",sent_at:row.created_at
+  }));
+  const pendingHistory=pendingRows.map((row: Record<string,unknown>)=>({
+    itemid:String((unwrap(row) as Record<string,unknown>)?.source_ref||""),
+    channel_id:row.channel_id,status:row.status
+  }));
+  return firstShopeeControlledPreflight({
+    candidates,stored_offers:validStored,rules,channels,scope:{
+      user_id:userId,marketplace_id:marketplaceId,affiliate_account_id:accountId
+    },sent_history:sentHistory,pending_history:pendingHistory,
+    now_iso:new Date().toISOString()
+  });
+}
+
 Deno.serve(async(req: Request)=>{
   if(req.method === "OPTIONS") return new Response(null,{status:204,headers:JSON_HEADERS});
   if(req.method !== "POST") return respond({error:"post_only"},405);
@@ -246,6 +318,13 @@ Deno.serve(async(req: Request)=>{
         {itemId:"2",productName:"Notebook SSD",priceMin:2000,priceDiscountRate:0.08,offerLink:"https://s.shopee.com.br/b",imageUrl:"https://example.com/b.jpg"}
       ];
       return respond({ok:true,mode:"fixture",dry_run:true,cloud_publishing:false,summary:previewSummary(collectUniqueOffers(fixtures))});
+    }
+    if(mode==="single_offer_preflight") {
+      const owner=String(Deno.env.get("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID")||"");
+      if(!owner||userId!==owner)return respond({error:"owner_only"},403);
+      if(!flag(Deno.env.get("MAVURI_SHOPEE_CLOUD_PREVIEW_ENABLED")))
+        return respond({error:"preview_disabled"},403);
+      return respond(await liveSingleOfferPreflight(req,userId));
     }
     if(mode==="general_audit") {
       // Explicit user session, owner verification and live-preview flag required.
