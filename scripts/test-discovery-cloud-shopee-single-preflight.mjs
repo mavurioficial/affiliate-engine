@@ -53,6 +53,25 @@ const blocked=firstShopeeControlledPreflight({
 });
 assert.equal(blocked.selected_unique_offers,0);
 assert.equal(blocked.eligibility.blocked_recent_48h,2);
+// A rotated affiliate link and a changed price must each be diagnosed,
+// never treated as publishable based on the old persisted offer.
+const staleAffiliate=stored(candidates[0]);
+staleAffiliate.affiliate_url="https://s.shopee.com.br/old-link";
+const stalePrice=stored(candidates[1]);
+stalePrice.price=99;
+const stale=firstShopeeControlledPreflight({
+ candidates,stored_offers:[staleAffiliate,stalePrice],rules,channels,scope,
+ now_iso:"2026-10-23T12:30:00Z"
+});
+assert.equal(stale.selected_unique_offers,0);
+assert.equal(stale.eligibility.invalid_affiliate_or_price,2);
+assert.equal(stale.eligibility.affiliate_url_changed,1);
+assert.equal(stale.eligibility.price_changed,1);
+assert.equal(stale.eligibility.bad_persisted_affiliate_url,0);
+assert.equal(stale.eligibility.bad_persisted_image_url,0);
+assert.equal(stale.safety.ready_to_publish,false);
+assert.ok(!JSON.stringify(stale).includes("old-link"));
+
 assert.throws(()=>firstShopeeControlledPreflight({
  candidates,stored_offers:offers,rules:rules.slice(1),channels,scope,
  now_iso:"2026-10-23T12:30:00Z"
