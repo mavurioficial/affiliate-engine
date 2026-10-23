@@ -21,7 +21,8 @@ const report={
    candidate_count:null,projected_unique_offers:null,
    category_known:null,category_unknown:null,error_code:null},
  shopee_one_offer:{attempted:false,ok:false,read_only:true,
-   selected_unique_offers:null,projected_jobs:null,error_code:null},
+   selected_unique_offers:null,projected_jobs:null,
+   known_persisted_offers:null,eligibility:null,error_code:null},
  error:null
 };
 try{
@@ -127,9 +128,18 @@ try{
                error_code:error?"preflight_invocation_failed":"unexpected_preflight_response"};
            }
            const n=(x)=>Number.isSafeInteger(x)&&x>=0?x:null;
+           const keys=["input_candidates","missing_persisted","ambiguous_persisted",
+             "final_category_unavailable","invalid_affiliate_or_price",
+             "blocked_under_10_percent","rules_not_matched",
+             "blocked_recent_48h","blocked_pending","blocked_category_diversity"];
+           const eligibility=Object.fromEntries(keys.map(k=>[
+             k,n(data.eligibility?.[k])
+           ]));
            return {attempted:true,ok:true,read_only:true,
              selected_unique_offers:n(data.selected_unique_offers),
-             projected_jobs:n(data.projected_jobs),error_code:null};
+             projected_jobs:n(data.projected_jobs),
+             known_persisted_offers:n(data.known_persisted_offers),
+             eligibility,error_code:null};
          }catch{return {attempted:true,ok:false,read_only:true,
            selected_unique_offers:null,projected_jobs:null,
            error_code:"preflight_browser_error"}}
