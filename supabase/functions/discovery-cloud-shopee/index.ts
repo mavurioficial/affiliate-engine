@@ -222,7 +222,7 @@ async function liveSingleOfferPreflight(req: Request,userId: string) {
   const [marketplaces,accounts,rules,channels,categories]=await Promise.all([
     ownerRlsGet(req,"flow_marketplaces",{select:"id",slug:"eq.shopee",limit:"1"}),
     ownerRlsGet(req,"flow_affiliate_accounts",{
-      select:"id,marketplace_id,status",status:"eq.connected",limit:"100"}),
+      select:"id,marketplace_id,status,external_account_id,settings",status:"eq.connected",limit:"100"}),
     ownerRlsGet(req,"flow_rules",{select:"name,enabled,conditions,actions",enabled:"eq.true"}),
     ownerRlsGet(req,"flow_channels",{
       select:"id,type,status,external_ref",type:"eq.telegram"}),
@@ -237,6 +237,24 @@ async function liveSingleOfferPreflight(req: Request,userId: string) {
   validateShopeeRoutingRules(rules,channels);
   const accountId=String(accountMatches[0].id||"");
   if(!accountId)throw Error("single_preflight_account_missing");
+  // A DB row marked "connected" can still be an old feed-only connection.
+  // Binding a Shopee API credential to that account requires independent,
+  // operator-confirmed AppID fingerprint AND a verified external identity.
+  // Never infer affiliate ownership from a product's short URL alone.
+  const account=accountMatches[0] as {
+    external_account_id?:string|null;
+    settings?:{open_api_status?:string;open_api_app_id_sha256?:string}|null
+  };
+  const apiAppId=String(Deno.env.get("SHOPEE_AFFILIATE_APP_ID")||"");
+  const hashedAppId=apiAppId?
+    Array.from(new Uint8Array(await crypto.subtle.digest(
+      "SHA-256",new TextEncoder().encode(apiAppId))))
+      .map(v=>v.toString(16).padStart(2,"0")).join(""):"";
+  const accountBindingVerified=Boolean(hashedAppId &&
+    account.external_account_id?.trim() &&
+    account.settings?.open_api_status==="active" &&
+    /^[0-9a-f]{64}$/.test(account.settings?.open_api_app_id_sha256||"") &&
+    account.settings?.open_api_app_id_sha256===hashedAppId);
 
   const pool=await livePreview(true);
   const candidates=pool.internal_offers||[];
@@ -286,8 +304,12 @@ async function liveSingleOfferPreflight(req: Request,userId: string) {
     now_iso:new Date().toISOString()
   });
   // Diagnostic only; these numbers never authorize a write.
-  return {...preflight,commercial_refresh:
-    summarizeCommercialRefresh({candidates,stored_offers:validStored,scope})};
+  return {...preflight,
+    account_binding:{verified:accountBindingVerified,
+      ready_for_write:false,reason:accountBindingVerified?
+        "read_only_preflight":"open_api_account_binding_unverified"},
+    commercial_refresh:
+      summarizeCommercialRefresh({candidates,stored_offers:validStored,scope})};
 
 }
 
