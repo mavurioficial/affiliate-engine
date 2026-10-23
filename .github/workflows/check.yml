@@ -17,6 +17,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: node scripts/test-cloud-runner-linux-kit.mjs
+      - run: node scripts/test-ml-origin-readonly.mjs
       - run: node scripts/test-cloud-auth-state.mjs
       - run: node scripts/test-discovery-cloud-shopee.mjs
       - run: node scripts/test-discovery-cloud-shopee-policy.mjs
