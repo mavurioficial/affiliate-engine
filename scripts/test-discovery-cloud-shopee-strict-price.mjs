@@ -14,7 +14,7 @@ yes(10,9); no(10,9.01);yes(0.10,0.09);no(0.10,0.091);
 no(100,null);no(100,"");no(100,-1);no(0,0);no(100,100);
 no(100,99.995);no("100.001",90);no(100,NaN);
 const candidate=(price)=>({
- itemid:"111",title:"Produto de cozinha",
+ itemid:"111",title:"Produto de cozinha",channel_ids:["general"],
  sale_price:price,discount_percentage:35,
  affiliate_url:"https://s.shopee.com.br/affiliate-link",
  image_link:"https://example.com/pic.jpg",global_category1:"Home & Living"
