@@ -36,4 +36,4 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check supabase/functions/discovery-cloud-shopee/index.ts
-      - run: deno check supabase/functions/flow-worker-v38-snapshot-candidate/index.ts
+      - run: deno check --config supabase/functions/flow-worker-v38-snapshot-candidate/deno.json supabase/functions/flow-worker-v38-snapshot-candidate/index.ts
