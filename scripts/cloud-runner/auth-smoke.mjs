@@ -47,7 +47,7 @@ try{
  const page=await context.newPage();
  try{
    const response=await page.goto(
-     "https://mavurioficial.github.io/affiliate-engine/entrar/",
+     "https://mavurioficial.github.io/affiliate-engine/",
      {waitUntil:"domcontentloaded",timeout:14000});
    report.mavuri_login_status=response?.status()??null;
    if(report.mavuri_login_status===200){
