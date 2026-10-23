@@ -23,6 +23,9 @@ Deno.serve(async req=>{
   if(intent==="publish_single_general"&&payload?.confirm!==true)
    return reply({...status,reason:"explicit_confirmation_required"},400);
   const ctx=await authorizeOwner(req);
+  if(intent==="publish_single_general" &&
+    Deno.env.get("MAVURI_SHOPEE_PILOT_PUBLISH_ENABLED")!=="enabled_after_guard_review")
+   return reply({...status,reason:"live_pilot_paused"},423);
   const appid=String(Deno.env.get("SHOPEE_AFFILIATE_APP_ID")||"").trim();
   const secret=String(Deno.env.get("SHOPEE_AFFILIATE_SECRET")||"");
   const identity=await verifyAccount(ctx,appid);
