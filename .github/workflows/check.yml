@@ -42,6 +42,7 @@ jobs:
       - run: node scripts/test-shopee-cloud-trigger-compatibility.mjs
       - run: node scripts/test-shopee-publish-window.mjs
       - run: node scripts/test-shopee-cloud-worker-window.mjs
+      - run: node scripts/test-shopee-cloud-run-start-window.mjs
       - run: node scripts/test-discovery-cloud-shopee-atomic-draft.mjs
       - run: node scripts/test-discovery-cloud-shopee-sql-matcher.mjs
       - uses: denoland/setup-deno@v2
