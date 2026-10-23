@@ -83,6 +83,12 @@ assert.deepEqual(calls,["discovery-cloud-shopee","discovery-cloud-shopee-preflig
 assert.match(smoke,/body:\{mode:"single_offer_preflight"\}/);
 assert.match(smoke,/data\?\.safety\?\.reads_only!==true/);
 assert.match(smoke,/data\?\.safety\?\.ready_to_publish!==false/);
+assert.ok(smoke.includes("data?.commercial_refresh?.ready_for_write!==false"));
+assert.ok(smoke.includes("data?.commercial_refresh?.ready_to_publish!==false"));
+for(const field of ["commercial_refresh","refreshable","affiliate_link_rotated",
+  "invalid_or_untrusted","missing_or_ambiguous"]){
+ assert.ok(smoke.includes(field),"missing aggregate preview "+field);
+}
 assert.match(smoke,/shopee_one_offer:/);
 for (const diagnostic of ["known_persisted_offers","missing_persisted",
   "final_category_unavailable","invalid_affiliate_or_price",
