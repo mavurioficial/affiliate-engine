@@ -113,6 +113,21 @@ for(const banned of [".insert(",".update(",".upsert(",".delete(",
  "service_role","createLink"]){
  assert.ok(!smoke.includes(banned),"unsafe browser action "+banned);
 }
+const portalPage=readFileSync("verificar-shopee/index.html","utf8");
+const staticBuild=readFileSync("scripts/build.mjs","utf8");
+assert.ok(staticBuild.includes("cpSync('verificar-shopee', 'dist/verificar-shopee'"));
+assert.ok(portalPage.includes('https://affiliate.shopee.com.br/open_api'));
+assert.ok(portalPage.includes('import {supabase} from "../src/app/auth.js"'));
+assert.ok(portalPage.includes('mode:"verify_portal_app_id"'));
+assert.ok(portalPage.includes('app_id_matches_configured_api'));
+assert.ok(portalPage.includes('account_binding_complete!==false'));
+assert.ok(portalPage.includes('no_publication!==true'));
+assert.ok(portalPage.includes('supabase.auth.getUser()'));
+assert.ok(portalPage.includes('inputmode="numeric"'));
+for(const banned of ["service_role","SHOPEE_AFFILIATE_SECRET","localStorage.getItem",
+ "supabase.from(","fetch(\"https://api.telegram.org","console.log("]){
+ assert.ok(!portalPage.includes(banned),"unsafe portal page "+banned);
+}
 const workflow=readFileSync(".github/workflows/mavuri-auth-smoke.yml","utf8");
 assert.match(workflow,/workflow_dispatch/);
 assert.match(workflow,/refs\/heads\/main/);
