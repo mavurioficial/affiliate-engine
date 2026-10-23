@@ -8,38 +8,38 @@ const cents=x=>Number.isFinite(Number(x))?Math.round(Number(x)*100):NaN;
 export function planFourChannelCycle({
  candidates=[],stored=[],categories=[],channels=[],rules=[],
  history=[],pending=[],owner,marketplace,account,now=Date.now(),maxUnique=8
-}:Record<string,any>){
- const accepted=channels.filter((c:any)=>c.user_id===owner&&c.type==="telegram"&&
+}){
+ const accepted=channels.filter((c)=>c.user_id===owner&&c.type==="telegram"&&
   c.status==="connected"&&NAMES.has(c.name)&&String(c.external_ref||"").trim());
- const channelsById=new Map(accepted.map((c:any)=>[String(c.id),c]));
+ const channelsById=new Map(accepted.map((c)=>[String(c.id),c]));
  if(accepted.length!==4||channelsById.size!==4||
-   new Set(accepted.map((c:any)=>c.name)).size!==4)
+   new Set(accepted.map((c)=>c.name)).size!==4)
   return {ready:false,reason:"four_destinations_not_connected",
    selected:[],jobs:[],counts:{selected:0,jobs:0,eligibleCandidates:0}};
- const applicable=rules.filter((r:any)=>r.enabled===true &&
+ const applicable=rules.filter((r)=>r.enabled===true &&
    String(r.conditions?.marketplace||"").toLowerCase()==="shopee");
  if(applicable.length<4)return {ready:false,reason:"rules_incomplete",
    selected:[],jobs:[],counts:{selected:0,jobs:0,eligibleCandidates:0}};
- const categorySlugs=new Map(categories.filter((c:any)=>c.active===true)
-  .map((c:any)=>[String(c.id),String(c.slug)]));
- const byRef=new Map<string,any[]>();
+ const categorySlugs=new Map(categories.filter((c)=>c.active===true)
+  .map((c)=>[String(c.id),String(c.slug)]));
+ const byRef=new Map();
  for(const r of stored){
   const ref=String(r.source_ref||"");
   if(!byRef.has(ref))byRef.set(ref,[]);
   byRef.get(ref).push(r);
  }
  const nowMs=Number.isFinite(Number(now))?Number(now):Date.now();
- const recent=(h:any,ms:number)=> {
+ const recent=(h,ms)=> {
   const sent=Date.parse(String(h.sent_at||""));
   return Number.isFinite(sent)&&sent<=nowMs&&sent>=nowMs-ms;
  };
  const sorted=[...candidates].sort((a,b)=>b.discount-a.discount || a.price-b.price);
  const max=Math.min(8,Math.max(0,Math.trunc(Number(maxUnique)||0)));
- const selected:any[]=[],jobs:any[]=[];
+ const selected=[],jobs=[];
  const counts={selected:0,jobs:0,eligibleCandidates:0,
   missingOrAmbiguous:0,staleCommercial:0,invalidCategory:0,ruleRejected:0,
   recentOrPending:0,diversityBlocked:0};
- const categoryCounts=new Map<string,number>(),familyCounts=new Set<string>(),seen=new Set<string>();
+ const categoryCounts=new Map(),familyCounts=new Set(),seen=new Set();
  for(const candidate of sorted){
   if(selected.length>=max)break;
   const ref=String(candidate.id||"");if(!ref||seen.has(ref))continue;seen.add(ref);
@@ -57,7 +57,7 @@ export function planFourChannelCycle({
    Number(candidate.discount)<10){counts.staleCommercial++;continue;}
   const offer={title:String(r.title||""),price,discount:Number(candidate.discount),
    mavuriCategory:category,mavuriTags:r.mavuri_tags};
-  const targets=new Set<string>();
+  const targets=new Set();
   for(const rule of applicable){
    if(!matchesRule(rule,offer))continue;
    for(const channelId of channelIdsForRule(rule)){
@@ -66,11 +66,11 @@ export function planFourChannelCycle({
   }
   if(!targets.size){counts.ruleRejected++;continue;}
   counts.eligibleCandidates++;
-  const allowed:string[]=[];
+  const allowed=[];
   for(const channel of targets){
-   const inFlight=pending.some((h:any)=>String(h.offer_id)===String(r.id)&&
+   const inFlight=pending.some((h)=>String(h.offer_id)===String(r.id)&&
      String(h.channel_id)===channel&&["queued","processing"].includes(h.status));
-   const recentlySent=history.some((h:any)=>String(h.offer_id)===String(r.id)&&
+   const recentlySent=history.some((h)=>String(h.offer_id)===String(r.id)&&
      String(h.channel_id)===channel&&h.status==="sent"&&recent(h,48*3600000));
    if(inFlight||recentlySent){counts.recentOrPending++;continue;}
    allowed.push(channel);
