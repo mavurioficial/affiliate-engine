@@ -15,7 +15,7 @@ Este teste confere o acesso ao **Mercado Livre Hub** e a validade da sessão do 
 
 1. Feche o Runner V85. Não é necessário iniciá-lo; ele poderia publicar.
 2. Baixe e examine `scripts/cloud-runner/prepare-auth-windows.ps1` na branch principal.
-3. Execute esse script em PowerShell **sem privilégios de administrador**. Ele usa Node/npm existentes, instala `playwright-core` somente numa pasta local, abre Chrome com perfil `%LOCALAPPDATA%\MavuriChromeProfile`, porta CDP **somente local** 9222 e abre duas abas: Hub ML e login Mavuri. Não faz ingestão nem publicação.
+3. Execute esse script em PowerShell **sem privilégios de administrador**. Ele usa Node/npm existentes, instala `playwright-core` somente numa pasta local, abre Chrome com perfil `%LOCALAPPDATA%\MavuriChromeProfile`, porta CDP **somente local** 9222 e abre duas abas: Hub ML e painel Mavuri. Não faz ingestão nem publicação.
 4. **Entre nas duas contas** nas abas abertas; quando estiver pronto, responda `EXPORTAR` na janela PowerShell.
 5. O programa vai verificar os cookies ML e armazenamento local do Mavuri, filtrar outras origens e criptografar esse estado usando **AES-256-GCM**. Ele gera **dois arquivos privados** na pasta `%USERPROFILE%\MavuriCloudAuth`:
    - `MAVURI_AUTH_BUNDLE.txt`: estado criptografado, base64.
