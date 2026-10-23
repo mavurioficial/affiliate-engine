@@ -3,7 +3,7 @@
 import {unpackageMavuriAuthState} from "./auth-state.mjs";
 const out={mode:"shopee_four_channel_cycle_preview",read_only:true,
  owner_auth:false,ok:false,ready:false,created:0,sent:0,
- scanned:null,selected_unique:null,projected_jobs:null,by_channel:null,cloud_schedule:false,whatsapp:false,reason:null};
+ scanned:null,selected_unique:null,projected_jobs:null,by_channel:null,counters:null,cloud_schedule:false,whatsapp:false,reason:null};
 let browser,ctx;
 try{
  if(process.env.MAVURI_CLOUD_LIVE_ENABLED!=="NO"||
@@ -35,6 +35,8 @@ try{
     selected_unique:Number.isSafeInteger(data?.selected_unique)?data.selected_unique:null,
     projected_jobs:Number.isSafeInteger(data?.projected_jobs)?data.projected_jobs:null,
     by_channel:data?.by_channel||null,
+    counters:data?.counters&&typeof data.counters==='object'?Object.fromEntries(
+      Object.entries(data.counters).filter(([k,v])=>/^[A-Za-z]+$/.test(k)&&Number.isSafeInteger(v))):null,
     created:data?.created,sent:data?.sent,cloud_schedule:data?.cloud_schedule,
     whatsapp:data?.whatsapp,reason:data?.reason||null};
   }catch{return {owner_auth:false,reason:"preview_error"}}
