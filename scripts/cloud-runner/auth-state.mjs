@@ -66,6 +66,41 @@ export function unpackageMavuriAuthState(bundle,key){
     throw Error("auth_state_has_unexpected_domains");
   return state;
 }
+// Diagnostic contains only booleans and aggregate counts.
+// Never reports cookie names/values, localStorage keys, URLs or account IDs.
+async function diagnose(){
+  const port=Number(process.env.MAVURI_CHROME_PORT||9222);
+  if(!Number.isSafeInteger(port)||port<1024||port>65535)
+    throw Error("invalid_local_chrome_port");
+  const {chromium}=await import("playwright-core");
+  const browser=await chromium.connectOverCDP("http://127.0.0.1:"+port,
+    {timeout:10000});
+  try {
+    const contexts=browser.contexts();
+    const results=[];
+    for(let i=0;i<contexts.length;i++){
+      const context=contexts[i];
+      const filtered=filterMavuriAuthState(await context.storageState());
+      const hosts=context.pages().map(page=>{
+        try{return new URL(page.url()).hostname.toLowerCase()}
+        catch{return ""}
+      });
+      results.push({
+        context_index:i,
+        ml_cookie_count:filtered.cookies.filter(x=>mlCookie(x.domain)).length,
+        mavuri_origin_present:filtered.origins.length>0,
+        mavuri_storage_entries:filtered.origins.reduce((n,x)=>n+x.localStorage.length,0),
+        ml_tab_open:hosts.some(h=>h==="mercadolivre.com.br"||
+          h.endsWith(".mercadolivre.com.br")),
+        mavuri_tab_open:hosts.includes("mavurioficial.github.io"),
+        ready_for_export:filtered.cookies.some(x=>mlCookie(x.domain))&&
+          filtered.origins.some(x=>x.localStorage.length>0)
+      });
+    }
+    console.log(JSON.stringify({mode:"diagnose",read_only:true,
+      secret_values_not_logged:true,context_count:contexts.length,contexts:results},null,2));
+  }finally {await browser.close()}
+}
 async function capture(){
   const port=Number(process.env.MAVURI_CHROME_PORT||9222);
   if(!Number.isSafeInteger(port)||port<1024||port>65535)
@@ -99,11 +134,14 @@ async function capture(){
     warning:"Both output files are SECRET. Copy contents only to protected GitHub Actions Secrets, never into chat, commit or logs."},null,2));
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
-  if(process.argv[2]!=="capture"){
-    console.error("Uso: node scripts/cloud-runner/auth-state.mjs capture");
+  if(!["capture","diagnose"].includes(process.argv[2])){
+    console.error("Uso: node scripts/cloud-runner/auth-state.mjs diagnose | capture");
     process.exitCode=2;
-  }else capture().catch(e=>{
-    console.error("Export bloqueado: "+String(e?.message||"unknown").slice(0,110));
-    process.exitCode=1;
-  });
+  }else {
+    const task=process.argv[2]==="diagnose"?diagnose:capture;
+    task().catch(e=>{
+      console.error("Operação bloqueada: "+String(e?.message||"unknown").slice(0,110));
+      process.exitCode=1;
+    });
+  }
 }
