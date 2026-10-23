@@ -378,11 +378,13 @@ function makeClient(authorization: string | null, serviceToService: boolean) {
   })
 }
 
-// Cloud-only fail-closed delivery-hour gate. Calls a service-only DB RPC.
+// Cloud-only fail-closed run-authorization gate. A run may finish after 22h.
 // Existing local/ML/Magalu/WhatsApp/manual jobs do not use this path.
-async function shopeeCloudWindowOpen(db: any): Promise<boolean> {
+async function shopeeCloudAuthorizedRun(db: any, deliveryKey: string): Promise<boolean> {
   try {
-    const {data,error}=await db.rpc("mavuri_shopee_cloud_delivery_allowed");
+    const {data,error}=await db.rpc("mavuri_shopee_cloud_run_delivery_allowed", {
+      p_delivery_key: deliveryKey
+    });
     return !error && data===true;
   } catch { return false; }
 }
@@ -513,7 +515,7 @@ Deno.serve(async (req) => {
       }
     }
     if (String(job.delivery_key || "").startsWith("shopee-cloud:") &&
-        !(await shopeeCloudWindowOpen(supabase))) continue;
+        !(await shopeeCloudAuthorizedRun(supabase, String(job.delivery_key || "")))) continue;
     const nextAttempt = Number(job.attempts || 0) + 1
     const { data: claimed, error: claimError } = await supabase
       .from("flow_delivery_jobs")
@@ -718,11 +720,11 @@ Deno.serve(async (req) => {
         let response: Response
         try {
           if (String(job.delivery_key || "").startsWith("shopee-cloud:") &&
-              !(await shopeeCloudWindowOpen(supabase))) {
+              !(await shopeeCloudAuthorizedRun(supabase, String(job.delivery_key || "")))) {
             const postponed=await supabase.from("flow_delivery_jobs")
               .update({status:"queued",
                 scheduled_for:new Date(Date.now()+15*60*1000).toISOString(),
-                error_message:"Aguardando janela Shopee Cloud 08:00-22:00 BRT"})
+                error_message:"Execução Shopee Cloud sem lease válido ou fora do prazo de conclusão"})
               .eq("id",job.id).eq("status","processing").select("id").maybeSingle()
             if(postponed.error || !postponed.data)
               throw new Error("Falha ao adiar publicação Shopee Cloud fora da janela.")
