@@ -49,7 +49,11 @@ export function planShopeeAfterPersistence({
   const counters={
     received:0,selected_unique:0,projected_jobs:0,
     missing_persisted:0,ambiguous_persisted:0,final_category_unavailable:0,
-    invalid_affiliate_or_price:0,below_discount:0,no_rule_match:0,
+    invalid_affiliate_or_price:0,
+    invalid_candidate_price:0,invalid_stored_price:0,
+    bad_persisted_affiliate_url:0,bad_persisted_image_url:0,
+    affiliate_url_changed:0,price_changed:0,
+    below_discount:0,no_rule_match:0,
     already_pending:0,same_item_48h:0,price_drop_override:0,
     different_seller_same_verified_family_24h:0,
     unverified_cross_seller_identity:0,
@@ -72,12 +76,23 @@ export function planShopeeAfterPersistence({
     if(!cls){counters.final_category_unavailable++;continue;}
     const price=Number(candidate?.sale_price??candidate?.price);
     const link=String(row?.affiliate_url||"").trim();
-    const urlOk=/^https:\/\//i.test(link)&&/^https:\/\//i.test(String(row?.image_url||""));
-    // The candidate and persisted affiliate URLs must match. If another
-    // authenticated process has modified the offer, the plan is stale.
-    if(!Number.isFinite(price)||price<=0||!urlOk||
-       String(candidate?.affiliate_url||"")!==link||
-       Number(row?.price)!==price){
+    // Count each staleness reason independently, but never expose
+    // any private price, URL, identifier or auth data to consumers.
+    // A newer price/link MUST be persisted and rechecked under a write lease;
+    // diagnostic counters must NEVER relax this rejection.
+    const badCandidatePrice=!Number.isFinite(price)||price<=0;
+    const badStoredPrice=!Number.isFinite(Number(row?.price))||Number(row?.price)<=0;
+    const badLink=!/^https:\/\//i.test(link);
+    const badImage=!/^https:\/\//i.test(String(row?.image_url||""));
+    const linkChanged=String(candidate?.affiliate_url||"")!==link;
+    const priceChanged=Number(row?.price)!==price;
+    if(badCandidatePrice)counters.invalid_candidate_price++;
+    if(badStoredPrice)counters.invalid_stored_price++;
+    if(badLink)counters.bad_persisted_affiliate_url++;
+    if(badImage)counters.bad_persisted_image_url++;
+    if(linkChanged)counters.affiliate_url_changed++;
+    if(priceChanged)counters.price_changed++;
+    if(badCandidatePrice||badStoredPrice||badLink||badImage||linkChanged||priceChanged){
       counters.invalid_affiliate_or_price++;continue;
     }
     const discount=Number(candidate?.discount_percentage);
