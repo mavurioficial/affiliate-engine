@@ -5,6 +5,7 @@ import {authorizeOwner,readRows,verifyAccount} from "./db.ts";
 import {fetchCommercialCandidates} from "./source.ts";
 import {chooseOne} from "./policy.ts";
 import {planFourChannelCycle} from "./cycle-plan.mjs";
+import {simulateExistingShopeeRefresh} from "./commercial-refresh-plan.mjs";
 const hdr={"content-type":"application/json; charset=utf-8","cache-control":"no-store",
  "access-control-allow-origin":"https://mavurioficial.github.io",
  "access-control-allow-methods":"POST,OPTIONS",
@@ -71,6 +72,15 @@ Deno.serve(async req=>{
       channels,rules,history:recent,pending:inflight,owner:ctx.owner,
       marketplace:identity.marketplaceId,account:identity.accountId,
       now:Date.now(),maxUnique:8});
+    const projection=simulateExistingShopeeRefresh({
+      candidates:offers,stored,pending:inflight,
+      owner:ctx.owner,marketplace:identity.marketplaceId,
+      account:identity.accountId});
+    const afterProjection=planFourChannelCycle({candidates:offers,
+      stored:projection.rows,categories,channels,rules,
+      history:recent,pending:inflight,owner:ctx.owner,
+      marketplace:identity.marketplaceId,account:identity.accountId,
+      now:Date.now(),maxUnique:8});
     const perChannel=Object.fromEntries(channels.filter((c:any)=>
       ["Mavuri Ofertas","Mavuri Mulher","Mavuri Casa & Cozinha","Mavuri Tecnologia"]
         .includes(c.name)).map((c:any)=>[c.name,
@@ -79,7 +89,14 @@ Deno.serve(async req=>{
       dry_run:true,publication_available:false,schedule_enabled:false,
       scanned:offers.length,selected_unique:cycle.counts.selected,
       projected_jobs:cycle.counts.jobs,by_channel:perChannel,
-      blocked:cycle.reason,counters:cycle.counts});
+      blocked:cycle.reason,counters:cycle.counts,
+      refresh_projection:{simulated_only:true,
+        would_refresh:projection.stats.wouldRefresh,
+        price_movement_blocked:projection.stats.priceMovementBlocked,
+        unmatched:projection.stats.unknownProduct,
+        projected_unique:afterProjection.counts.selected,
+        projected_jobs:afterProjection.counts.jobs,
+        projected_counters:afterProjection.counts}});
   }
   stage="select_offer";
   const chosen=chooseOne({candidates:offers,stored,categories,rules,general,
