@@ -265,7 +265,7 @@ async function liveSingleOfferPreflight(req: Request,userId: string) {
     row.user_id===userId && row.affiliate_account_id===accountId &&
     Boolean(row.mavuri_category_id) &&
     categoryMap.get(String(row.mavuri_category_id))===
-      (row.metadata as Record<string,unknown>)?.mavuri?.category_slug);
+      (row.metadata as {mavuri?:{category_slug?:string}}|null)?.mavuri?.category_slug);
   const unwrap=(row: Record<string,unknown>)=>{
     const v=row.flow_offers;
     return Array.isArray(v)?v[0]:v;
