@@ -45,5 +45,6 @@ jobs:
       - run: deno check supabase/functions/discovery-cloud-shopee/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-binding/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-refresh-one/index.ts
+      - run: deno check supabase/functions/discovery-cloud-shopee-pilot/index.ts
       # Deployed worker v38 contains two pre-existing TypeScript issues at secret key selection.
       # Keep snapshot static regression until the live source can be type-narrowed safely.
