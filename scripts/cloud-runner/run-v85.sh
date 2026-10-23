@@ -6,7 +6,7 @@ set -euo pipefail
 umask 077
 DIR="/var/lib/mavuri"
 NODE_BIN="${MAVURI_NODE_BIN:-/usr/bin/node}"
-V85="${MAVURI_DISCOVERY_SCRIPT:-$DIR/private/browser-discovery-v85.cloud.mjs}"
+V85="${MAVURI_DISCOVERY_SCRIPT:-/opt/mavuri/affiliate-engine/private/browser-discovery-v85.cloud.mjs}"
 PREFLIGHT="${MAVURI_PREFLIGHT_SCRIPT:-/opt/mavuri/affiliate-engine/scripts/cloud-runner/validate-v85.mjs}"
 LOCK="${MAVURI_CLOUD_LOCK_FILE:-$DIR/discovery-v85.lock}"
 if [[ "${MAVURI_CLOUD_LIVE_ENABLED:-}" != "YES_EXCLUSIVE_CLOUD_EXECUTOR" ]]; then
