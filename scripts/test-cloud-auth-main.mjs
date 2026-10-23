@@ -79,7 +79,11 @@ for(const expected of ["meli_home_status","meli_403_scope",
 }
 const calls=[...smoke.matchAll(/supabase\.functions\.invoke\(\s*["']([^"']+)["']/g)]
  .map(match=>match[1]);
-assert.deepEqual(calls,["discovery-cloud-shopee"]);
+assert.deepEqual(calls,["discovery-cloud-shopee","discovery-cloud-shopee-preflight"]);
+assert.match(smoke,/body:\{mode:"single_offer_preflight"\}/);
+assert.match(smoke,/data\?\.safety\?\.reads_only!==true/);
+assert.match(smoke,/data\?\.safety\?\.ready_to_publish!==false/);
+assert.match(smoke,/shopee_one_offer:/);
 assert.match(smoke,/body:\{mode:"general_audit"\}/);
 for(const banned of [".insert(",".update(",".upsert(",".delete(",
  "flow_delivery_jobs","flow_delivery_logs","sendMessage","sendPhoto",
