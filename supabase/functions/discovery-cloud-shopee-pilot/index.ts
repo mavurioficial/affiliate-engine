@@ -19,7 +19,7 @@ Deno.serve(async req=>{
  try{
   const payload=await req.json().catch(()=>({}));
   const intent=String(payload?.intent||"preview");
-  if(!["preview","publish_single_general"].includes(intent))
+  if(!["preview","diagnose_preinsert","publish_single_general"].includes(intent))
    return reply({...status,reason:"invalid_intent"},400);
   if(intent==="publish_single_general"&&payload?.confirm!==true)
    return reply({...status,reason:"explicit_confirmation_required"},400);
@@ -57,21 +57,26 @@ Deno.serve(async req=>{
   const chosen=chooseOne({candidates:offers,stored,categories,rules,general,
    owner:ctx.owner,marketplace:identity.marketplaceId,account:identity.accountId});
   if(!chosen)return reply({...status,ok:true,reason:"no_matching_current_offer"});
-  stage="pending";
-  const active=await readRows(ctx,"flow_delivery_jobs",{
-   select:"id",user_id:"eq."+ctx.owner,
-   status:"in.(queued,processing)",limit:"2"});
+  // Independent read-only checks run together; don't add an extra serial
+  // database round trip after the global pending check.
+  stage="pending_and_history";
+  const [active,priorRows]=await Promise.all([
+   readRows(ctx,"flow_delivery_jobs",{
+    select:"id",user_id:"eq."+ctx.owner,
+    status:"in.(queued,processing)",limit:"2"}),
+   readRows(ctx,"flow_delivery_jobs",{
+    select:"id,sent_at",user_id:"eq."+ctx.owner,
+    offer_id:"eq."+chosen.offerId,channel_id:"eq."+chosen.channelId,
+    status:"eq.sent",order:"sent_at.desc",limit:"10"})
+  ]);
   if(active.length)return reply({...status,ok:true,reason:"other_jobs_pending"});
-  const since=new Date(Date.now()-48*60*60*1000).toISOString();
-  stage="history";
-  const previous=await readRows(ctx,"flow_delivery_jobs",{
-   select:"id",user_id:"eq."+ctx.owner,
-   offer_id:"eq."+chosen.offerId,channel_id:"eq."+chosen.channelId,
-   status:"eq.sent",sent_at:"gte."+since,limit:"1"});
-  if(previous.length)return reply({...status,ok:true,reason:"cooldown_48h"});
+  const cutoff=Date.now()-48*60*60*1000;
+  if(priorRows.some(r=>Number.isFinite(Date.parse(String(r.sent_at||""))) &&
+     Date.parse(String(r.sent_at))>=cutoff))
+    return reply({...status,ok:true,reason:"cooldown_48h"});
   // One-shot route doesn't enable cloud Discovery. It uses existing worker.
-  if(intent==="preview")return reply({...status,ok:true,ready:true,
-   candidate_count:offers.length,validated_destination:1,mode:"preview"});
+  if(intent==="preview"||intent==="diagnose_preinsert")return reply({...status,ok:true,ready:true,
+   candidate_count:offers.length,validated_destination:1,mode:intent});
   const jobKey="shopee-manual-test:cloud-pilot:20261023:"+
     chosen.itemId+":"+chosen.channelId;
   const u=new URL(ctx.base+"/rest/v1/flow_delivery_jobs");
