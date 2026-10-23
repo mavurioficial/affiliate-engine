@@ -96,7 +96,14 @@ Deno.serve(async req=>{
     mode:"publish_single_general",reason:status.sent===1?"sent":"not_confirmed"});
  }catch(e){
   // Do not expose account, product, channel IDs, prices, links or tokens.
-  console.error("[shopee-single-pilot] blocked");
-  return reply({...status,reason:"operation_failed"},500);
+  const reason=e instanceof Error?e.message:"unexpected";
+  const allowed=new Set(["read_error","invalid_db_data","ambiguous_marketplace",
+    "ambiguous_account","affiliate_unverified","affiliate_api_missing",
+    "affiliate_api_http","affiliate_api_data","general_channel_invalid",
+    "offers_ambiguous","queue_rejected","queue_not_confirmed","queue_no_id",
+    "fanout_or_concurrency_detected","worker_failed"]);
+  const safeReason=allowed.has(reason)?reason:"operation_failed";
+  console.error("[shopee-single-pilot] "+safeReason);
+  return reply({...status,reason:safeReason},500);
  }
 });
