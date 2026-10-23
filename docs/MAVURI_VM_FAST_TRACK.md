@@ -38,6 +38,25 @@ Oracle Always Free AMD `VM.Standard.E2.1.Micro` tem **1 GB RAM**, inadequado com
 7. Somente depois criar marcador e mudar as 3 flags de aprovação no arquivo secreto; começar com uma rodada observada, sem Cron, e conferir Telegram/DB. Habilitar `mavuri-discovery.timer` **apenas após** os testes. Nunca ligar runner local e cloud ao mesmo tempo.
 8. Se falhar, desabilitar timer e zerar a flag; reavaliar antes de religar V85 local. Não reiniciar o cloud sozinho após um erro de autenticação.
 
+## Avanço de 23/10/2026 — prova de acesso antes da instalação
+
+O kit ganhou duas proteções adicionais **sem alterar o runner Windows**:
+
+- O arquivo privado gerado por \`sanitize-v85.mjs\` agora tem um *kill switch próprio*, que exige Linux, \`MAVURI_CLOUD_LIVE_ENABLED=YES_EXCLUSIVE_CLOUD_EXECUTOR\`, \`MAVURI_CLOUD_WINDOWS_STOPPED=CONFIRMED\`, \`MAVURI_AUTO_INGEST=true\` **e o marcador local de revisão** antes mesmo de buscar cupons, consultar marketplace ou publicar. Executar a cópia diretamente com \`node\` não contorna essas proteções.
+- Se o Chrome/CDP já gerenciado na VM não estiver pronto, a cópia privada **não** inicia um Chrome avulso no Linux. A unidade \`mavuri-chrome.service\` é a única responsável pelo navegador; sua porta CDP deve continuar limitada a localhost.
+
+Foi criado \`scripts/cloud-runner/ml-origin-readonly.mjs\`, um teste de **somente leitura** para uma VM futura, executado manualmente somente *após* o serviço privado de Chrome e login autorizado. Exemplo no host:
+
+\`\`\`bash
+cd /opt/mavuri/affiliate-engine
+node scripts/cloud-runner/ml-origin-readonly.mjs
+\`\`\`
+
+Saída: somente \`chrome_cdp\`, \`hub_http\`, \`home_http\`, \`login_redirect\`, \`hub_authenticated\`, \`both_403\` e \`status\`. Não exporta cookies, conteúdo da página, links, tokens ou IDs. Abre o Hub uma vez e, **somente se o Hub der 403**, compara uma requisição à página inicial. Não tenta reautenticar, mudar user-agent, contornar proteção ou publicar. Resultado \`authorized_hub\` é condição **necessária, não suficiente**, para seguir com a migração completa; \`denied_both\` bloqueia a rota daquele host até que o acesso seja regularizado.
+
+**Limites práticos**: o teste depende de uma VM legítima com navegador e sessão previamente autenticada; não testa cookies do Windows, não funciona em Supabase Edge e não substitui avaliação dos termos do Mercado Livre. O servidor Oracle AMD de ~1 GB com WAHA continua fora da seleção.
+
+
 ## Critérios de conclusão
 
 Com o Windows desligado e um servidor Node/Chrome em funcionamento, confirmar sucessivas rodadas de 30 minutos, logs por marketplace, metas até 8/8/5 produtos únicos, cupons separados, 4 canais corretos, links de afiliado e preços corretos, sem jobs duplicados. **Sem isso não chamar de “Mavuri 24h pronto”.**
