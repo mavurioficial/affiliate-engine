@@ -68,7 +68,10 @@ const diagnostic=spawnSync(process.execPath,
   ["scripts/cloud-runner/auth-state.mjs","bad-mode"],{encoding:"utf8",timeout:5000});
 assert.equal(diagnostic.status,2);
 const smoke=readFileSync("scripts/cloud-runner/auth-smoke.mjs","utf8");
-for(const expected of ["safe_mode:\"read_only\"",
+for(const expected of ["meli_home_status","meli_403_scope",
+ "both_requests_403","hub_only_403","undetermined",
+ "https://www.mercadolivre.com.br/",
+ "safe_mode:\"read_only\"",
  "mavuri_supabase_user_confirmed","meli_hub_status",
  "report.shopee_preview","data?.dry_run!==true",
  "data?.cloud_publishing!==false","data?.cloud_schedule!==false"]){
