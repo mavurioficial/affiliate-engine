@@ -1,5 +1,5 @@
 import {matchesRule} from "./shopee-production-rules.mjs";
-import {isAffiliateLink} from "../discovery-cloud-shopee-refresh-one/source.ts";
+import {isAffiliateLink} from "./source.ts";
 export function chooseOne({
  candidates,stored,categories,rules,general,owner,marketplace,account
 }:Record<string,any>){
