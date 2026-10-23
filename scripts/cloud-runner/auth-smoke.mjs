@@ -14,6 +14,7 @@ let browser,context;
 const report={
  ok:false,safe_mode:"read_only",no_publication:true,private_state_not_logged:true,
  meli_hub_status:null,meli_host:null,meli_login_redirection:false,
+ meli_home_status:null,meli_403_scope:"not_checked",
  mavuri_login_status:null,mavuri_supabase_user_confirmed:false,
  shopee_preview_requested:process.env.MAVURI_SHOPEE_PREVIEW==="1",
  shopee_preview:{attempted:false,ok:false,read_only:true,
@@ -43,6 +44,21 @@ try{
    report.meli_login_redirection=/login|signin|entrar|account/i.test(
      current.pathname);
  }catch(e){report.error="ml_navigation_"+String(e?.name||"failure").slice(0,30)}
+ // A 403 at the Hub may mean denied IP, invalid session, missing
+ // authorization or an anti-abuse challenge. Never try to bypass it.
+ // Compare against the ordinary storefront with the SAME restored context
+ // and expose only coarse response status (no body, cookies or redirects).
+ if(report.meli_hub_status===403){
+   const home=await context.newPage();
+   try{
+     const res=await home.goto("https://www.mercadolivre.com.br/",{
+       waitUntil:"domcontentloaded",timeout:14000});
+     report.meli_home_status=res?.status()??null;
+   }catch{report.meli_home_status=null}
+   finally{await home.close()}
+   report.meli_403_scope=report.meli_home_status===403?"both_requests_403":
+     report.meli_home_status===200?"hub_only_403":"undetermined";
+ }else report.meli_403_scope="no_hub_403";
  await hub.close();
  const page=await context.newPage();
  try{
