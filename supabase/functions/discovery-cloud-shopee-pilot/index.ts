@@ -90,6 +90,7 @@ Deno.serve(async req=>{
   const jobId=String(jobs[0].id||"");
   if(!jobId)throw Error("queue_no_id");
   // Verify DB trigger did not fan out into additional destinations.
+  stage="fanout_check";
   const inflight=await readRows(ctx,"flow_delivery_jobs",{
    select:"id",user_id:"eq."+ctx.owner,
    status:"in.(queued,processing)",limit:"3"});
