@@ -1,0 +1,28 @@
+name: Mavuri free runner - Chrome feasibility (no credentials)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mavuri-free-host-probe.yml'
+      - 'scripts/cloud-runner/probe-github-actions.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: "Public Linux runner - Chrome CDP and memory"
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      MAVURI_CLOUD_LIVE_ENABLED: "NO"
+      MAVURI_AUTO_INGEST: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: "Probe no-secret Chromium, no sites, no API calls"
+        run: node scripts/cloud-runner/probe-github-actions.mjs
