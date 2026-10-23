@@ -86,6 +86,9 @@ assert.match(smoke,/data\?\.safety\?\.ready_to_publish!==false/);
 assert.match(smoke,/shopee_one_offer:/);
 for (const diagnostic of ["known_persisted_offers","missing_persisted",
   "final_category_unavailable","invalid_affiliate_or_price",
+  "invalid_candidate_price","invalid_stored_price",
+  "bad_persisted_affiliate_url","bad_persisted_image_url",
+  "affiliate_url_changed","price_changed",
   "blocked_recent_48h","rules_not_matched",
   "blocked_pending","blocked_category_diversity"]) {
   assert.ok(smoke.includes(diagnostic),"missing bounded diagnostic "+diagnostic);
@@ -93,6 +96,10 @@ for (const diagnostic of ["known_persisted_offers","missing_persisted",
 assert.match(smoke,/const eligibility=Object\.fromEntries/);
 assert.match(smoke,/Number\.isSafeInteger/);
 assert.match(smoke,/body:\{mode:"general_audit"\}/);
+assert.ok(smoke.includes("report.meli_ok=report.meli_hub_status===200"));
+assert.ok(smoke.includes("report.ok=report.mavuri_supabase_user_confirmed"));
+assert.ok(!smoke.includes("report.ok=report.meli_hub_status===200"));
+
 for(const banned of [".insert(",".update(",".upsert(",".delete(",
  "flow_delivery_jobs","flow_delivery_logs","sendMessage","sendPhoto",
  "service_role","createLink"]){
