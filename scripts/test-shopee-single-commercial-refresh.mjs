@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {prepareCommercialRefresh} from
+import {prepareCommercialRefresh,summarizeCommercialRefresh} from
  "../supabase/functions/discovery-cloud-shopee/shopee-commercial-refresh-plan.mjs";
 const scope={user_id:"u",marketplace_id:"m",affiliate_account_id:"a"};
 const row={
@@ -35,6 +35,23 @@ const invalid=[
 for(const [c,r,scopeArg,reason] of invalid){
  assert.equal(prepareCommercialRefresh({candidate:c,row:r,scope:scopeArg}).reason,reason);
 }
+const aggregate=summarizeCommercialRefresh({
+  candidates:[candidate,{...candidate,itemid:"98765"}, {...candidate,itemid:"123456"}],
+  stored_offers:[row],scope
+});
+assert.equal(aggregate.candidates,3);
+assert.equal(aggregate.persisted,1);
+assert.equal(aggregate.missing_or_ambiguous,1);
+assert.equal(aggregate.refreshable,1);
+assert.equal(aggregate.affiliate_link_rotated,1);
+assert.equal(aggregate.price_changed,1);
+assert.equal(aggregate.ready_for_write,false);
+assert.equal(aggregate.ready_to_publish,false);
+assert.ok(!JSON.stringify(aggregate).includes("newtoken"));
+assert.ok(!JSON.stringify(aggregate).includes("123456"));
+const edge=readFileSync("supabase/functions/discovery-cloud-shopee/index.ts","utf8");
+assert.match(edge,/summarizeCommercialRefresh\(\{candidates,stored_offers:validStored,scope\}\)/);
+assert.doesNotMatch(edge,/\.insert\(|\.update\(|\.upsert\(|\.delete\(/);
 const sql=readFileSync("docs/sql/SHOPEE_SINGLE_COMMERCIAL_REFRESH_DRAFT.sql","utf8");
 assert.match(sql,/SECURITY INVOKER/);
 assert.match(sql,/WHERE o\.id=v_old\.id AND o\.user_id=v_user_id/);
