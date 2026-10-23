@@ -42,3 +42,40 @@ export function prepareCommercialRefresh({candidate,row,scope}={}) {
     requires_atomic_write:true
   };
 }
+
+/**
+ * Read-only aggregate over API candidates and already stored rows.
+ * Never return IDs, links, prices or metadata in diagnostic output.
+ */
+export function summarizeCommercialRefresh({candidates=[],stored_offers=[],scope}={}) {
+  const storedById=new Map();
+  const duplicated=new Set();
+  for(const row of stored_offers){
+    const id=String(row?.source_ref||"");
+    if(!id)continue;
+    if(storedById.has(id))duplicated.add(id);
+    else storedById.set(id,row);
+  }
+  const summary={
+    candidates:0,persisted:0,refreshable:0,
+    affiliate_link_rotated:0,price_changed:0,
+    invalid_or_untrusted:0,missing_or_ambiguous:0,
+    ready_for_write:false,ready_to_publish:false
+  };
+  const seen=new Set();
+  for(const candidate of candidates){
+    summary.candidates++;
+    const id=String(candidate?.itemid||"");
+    if(!id||seen.has(id))continue;
+    seen.add(id);
+    const row=storedById.get(id);
+    if(!row||duplicated.has(id)){summary.missing_or_ambiguous++;continue}
+    summary.persisted++;
+    const plan=prepareCommercialRefresh({candidate,row,scope});
+    if(!plan.eligible){summary.invalid_or_untrusted++;continue}
+    summary.refreshable++;
+    if(plan.changed.link)summary.affiliate_link_rotated++;
+    if(plan.changed.price)summary.price_changed++;
+  }
+  return summary;
+}
