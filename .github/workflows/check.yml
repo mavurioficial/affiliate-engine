@@ -41,6 +41,7 @@ jobs:
       - run: node scripts/test-shopee-cloud-queue-fence.mjs
       - run: node scripts/test-shopee-cloud-trigger-compatibility.mjs
       - run: node scripts/test-shopee-publish-window.mjs
+      - run: node scripts/test-shopee-cloud-worker-window.mjs
       - run: node scripts/test-discovery-cloud-shopee-atomic-draft.mjs
       - run: node scripts/test-discovery-cloud-shopee-sql-matcher.mjs
       - uses: denoland/setup-deno@v2
@@ -51,6 +52,7 @@ jobs:
       - run: deno check supabase/functions/discovery-cloud-shopee-refresh-one/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-pilot/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-diagnostic/index.ts
+      - run: deno check supabase/functions/flow-worker/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-diagnostic/cycle-plan.mjs
       - run: deno run scripts/test-shopee-four-channel-cycle.mjs
       # Deployed worker v38 contains two pre-existing TypeScript issues at secret key selection.
