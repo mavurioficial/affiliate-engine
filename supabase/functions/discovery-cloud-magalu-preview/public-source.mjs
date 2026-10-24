@@ -50,11 +50,11 @@ export function productData(html, code, url) {
   const matches=products.filter(p=>String(p.sku||p.productID||'').toLowerCase()===code.toLowerCase()||String(p.url||'').toLowerCase().includes(`/p/${code.toLowerCase()}/`));
   // A single Product on an exact product URL is identifiable; do not pick
   // an arbitrary recommendation from an ItemList or a search result.
-  const p=matches.length===1?matches[0]:products.length===1&&url.toLowerCase().includes(`/p/${code.toLowerCase()}/`)?products[0]:null;
+  const p=matches.length===1?matches[0]:products.length===1&&!products[0].sku&&!products[0].productID&&url.toLowerCase().includes(`/p/${code.toLowerCase()}/`)?products[0]:null;
   if(!p)return {product_identified:false,jsonld_products:products.length};
   const offers=[p.offers].flat().filter(Boolean);
   const priced=offers.filter(o=>o.priceCurrency==='BRL'&&Number(o.price)>0);
   const price=priced.length===1?Number(priced[0].price):null;
   const image=[p.image].flat().map(i=>typeof i==='string'?i:i?.url).find(i=>{try{return new URL(i).protocol==='https:';}catch{return false;}})||null;
-  return {product_identified:true,jsonld_products:products.length,title_present:typeof p.name==='string'&&p.name.length>=8,price,image_present:!!image,availability:priced.length===1?String(priced[0].availability||'').split('/').pop():null};
+  return {product_identified:true,jsonld_products:products.length,title:String(p.name||'').slice(0,260),title_present:typeof p.name==='string'&&p.name.length>=8,price,image,image_present:!!image,availability:priced.length===1?String(priced[0].availability||'').split('/').pop():null};
 }

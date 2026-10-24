@@ -1,33 +1,41 @@
-# Magalu cloud migration — measured progress
+# Magalu cloud — production enabled, 24 October 2026
 
-Status: source preview deployed; production cutover NOT complete.
+## Result
+Magalu now discovers offers without Windows, Chrome or a Telegram user session. It reads the public official Telegram page, paginates the last 24 hours (bounded to 250 messages/13 pages), resolves the exact code at the connected magazinemavuri store, and checks product JSON-LD identity, BRL price, image and InStock availability. Divergent announced prices/coupon conditions are excluded conservatively. Unknown previous prices remain null.
 
-## Existing production audited
+Supabase Cron mavuri-magalu-cloud-discovery runs every 30 minutes. Source requests and new runs are restricted to 08:00–22:00 Brasilia. The first transition cycle ran at 10:53 BRT, so the 11:00 tick is intentionally suppressed by the minimum interval; the next eligible aligned run is 11:30. Subsequent aligned cycles are 30 minutes apart.
 
-Runner V85 supplied 22 October: runMagaluTargetCycle reads Telegram using MTProto, handles coupons first, enriches store pages using Chrome, feeds flow-magalu-ingest, and counts changed offers toward target 5. Supabase flow-magalu-ingest v11 already stores offers and queues Flow deliveries. It uses authenticated-user access, not scheduler access. It has its own 5%/discount/coupon republish conditions and is not sufficient as the cloud release gate.
+## Architecture
+- discovery-cloud-magalu-preview: authenticated counters only, no business writes/publication.
+- discovery-cloud-magalu-executor: exclusive service execution; coupons before product enrichment, target 5 distinct eligible offers, not a guaranteed fill.
+- flow-magalu-cloud-ingest: service/run authorization, fresh commercial data, existing category overrides/manual decisions, existing Flow worker for deliveries.
+- magalu-cloud-coupon-publish: existing fixed official art and bundle format; explicit campaign restrictions link to the exact official source post.
+- Legacy flow-magalu-ingest and magalu-coupon-publish now return cloud_owned while Magalu cloud is enabled. User authentication remains required on those legacy endpoints. They resume their original flow if Magalu cloud is disabled.
+- Private magalu_cloud_control and service-only RPC prevent overlapping runs. A Magalu-only queue trigger fences automatic local writers, pending duplicates, 48h same product and 24h family, permitting a real >=10% price drop only with a sent price snapshot and comparable size/capacity. Per-cycle caps: 5 products, 2/category. Manual UUID keys remain outside the automatic fence.
+- Existing generic family similarity and category fanout guards remain in place.
 
-Connected store configuration read from the existing account: magazinemavuri.
+No Shopee code/cron, ML executor, Amazon flow or WhatsApp channel configuration changed. No VM, payment plan or card added.
 
-## Implemented
+## Measured evidence
+- Expanded preview: 27 messages, 21 source candidates, 4 coupons, 20 product checks, 9 commercially verified; 19.0 seconds.
+- Integrated audit request46768: 29 messages/2 pages, complete24h, 17 candidates, 8 valid products, 6 coupon render validations, no publications; 15.4 seconds.
+- Real execution request46782: HTTP200, 25.949 seconds, 5 selected unique offers, 5 explicit queued jobs. Existing fanout added 2 Casa & Cozinha deliveries. Database subsequently confirmed ALL7 offer deliveries sent (5 Geral,2 Casa).
+- Six coupons were bundled and confirmed sent in Geral. One Casa coupon destination was recovered separately. The obsolete duplicate pending job was cancelled only after a confirmed same-coupon/channel delivery. No additional Geral resend was made.
+- A second immediate cloud_cycle request46789 returned claimed=false/reason=interval, without source requests or posts.
+- Scheduler and Shopee cron both active; Magalu uses separate ownership and lease state.
 
-Isolated Supabase discovery-cloud-magalu-preview v2. POST authentication uses the existing scheduler secret digest (never the secret itself in source). Only fixed public Telegram/store GETs. No browser, MTProto session, ingestion, offer writes, Telegram sends, run claims or recurring schedule. Results contain counters only. HTTP redirects are not followed; response size and fetch duration bounded. Exact product links must match the configured store path and requested code. Tests cover parser amounts, missing baseline, campaign exclusion, installment rejection, public message parsing, store host/path/code checks and Product JSON-LD identity/currency.
+## Verification
+Node source tests cover BRL amounts, no invented discount, campaign exclusion, installment rejection, HTML messages, exact affiliate store/host/code matching, JSON-LD identity/currency/stock, price mismatch exclusion, coupon product restrictions and pagination.
 
-Source parser extracted from the real V85, with local pure helpers only; no runner credentials copied. Unknown original price stays null. Preview reads only one public page, NOT the full 250-message runner window. Link-only/coupon parity and pagination are not implemented yet.
+A temporary service-only database fixture test passed disabled claim, local handoff fence, null lease, valid cloud insert, pending duplicate, 5% rejection,10% exception,48h expiry and24h family cases. All fixture writes rolled back; zero fixture offers persisted. The temporary RPC execution privilege was revoked and its executor test branch removed.
 
-## Actual cloud tests
+Real dry-run ingress and real deliveries verified deployed runtime behavior. Local Deno checking could not resolve external JSR/npm dependencies in the workspace; it is not claimed as passed. Pure Node tests are included in GitHub CI.
 
-pg_net request 46128: HTTP200, 20 recent public messages, 17 structured unique offers, 2 store searches HTTP200 and exact product links found, elapsed3565ms.
+## Operations and limits
+Use the existing scheduler secret from Vault; never copy it to the repository, extension or logs. New scheduler-authenticated Edge Functions need verify_jwt=false because they validate the scheduler credential themselves; legacy user endpoints keep verify_jwt=true. Only deploy named Magalu functions when using the CLI.
 
-Request46130: HTTP200, same20/17. Both direct product pages HTTP200; both identified one Product JSON-LD with title, BRL price, image and InStock. One price matched the Telegram announcement and one differed. Elapsed2167ms including source, searches and direct product reads. This is a 2-product probe, NOT the full cycle duration or proof of ongoing availability.
+Control and scheduler SQL are recorded in Supabase migration history and saved under the returned versions. Both are safe to reapply. Control defaults disabled on a new database; production activation is a separate operational action.
 
-No offers or delivery jobs were written by either test. pg_net request/response transport records are infrastructure diagnostics.
+Coupon same-benefit sends have a24h/channel check; confirmed sends reconcile obsolete automatic queued rows. Failed/queued automatic coupon jobs can be resumed, while sent/processing/cancelled jobs are not resent. A network timeout after Telegram accepts a request can still leave an ambiguous delivery; this is not a claim of transport-level exactly-once delivery.
 
-## Remaining before activation
-
-1. Expand public-source pagination with bounded 24-hour coverage and report gaps explicitly; preserve coupon priority and link-only handling.
-2. Extract full candidate product data with exact identity and fresh price/availability checks; handle Pix/installment/coupon conditions explicitly. The price mismatch must not be ignored or silently described as a discount.
-3. Integrate category overrides, 48h same-product /24h equivalent-family per-channel policy, 10% real price-drop exception using published snapshots, pending-delivery checks, and target5 unique eligible offers (blocked offers do not consume target).
-4. Isolated Magalu owner/executor control and atomic run/job fencing. Do not reuse or alter Shopee run ownership or schedule. Existing local V86 is not yet fenced for Magalu.
-5. Compare production history in read-only mode, verify affiliate attribution and images, then controlled publication and local/cloud handoff. No automatic publication before those gates.
-
-Shopee and Amazon untouched. Mercado Livre unchanged. No paid infrastructure provisioned.
+Initial end-to-end operation is confirmed.24h+ autonomous stability has not yet been observed. Public Telegram/store HTML may change; failures stop that cycle rather than bypass verification. Link-only posts lacking a recoverable product code are skipped. Shared Shopee behavior remains unchanged.

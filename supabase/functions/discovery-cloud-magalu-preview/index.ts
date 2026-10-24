@@ -1,5 +1,4 @@
-import {parseMagaluOfferMessage} from './parser.mjs';
-import {publicMessages,storeLinks,boundedGet,productData} from './public-source.mjs';
+import {collectPublicHistory,candidatesFromRows,enrichCandidates} from './collector.mjs';
 const expected='3efb0f37ba962d865839b2beeffd672787e652b4059e4de53940403421cfd423';
 const reply=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{'content-type':'application/json','cache-control':'no-store'}});
 Deno.serve(async(req:Request)=>{
@@ -10,27 +9,10 @@ Deno.serve(async(req:Request)=>{
  const start=Date.now();
  const flags={publishing:false,scheduled_runs:false,database_writes:0,browser_used:false,telegram_session_used:false};
  try {
-  const tg=await boundedGet('https://t.me/s/parceiromagaludivulgador');
-  const rows=publicMessages(tg.html);
-  const recent=rows.filter(r=>{const age=Date.now()-Date.parse(r.date);return age>=0&&age<=24*3600000;});
-  const parsed=recent.map(parseMagaluOfferMessage).filter(Boolean);
-  const structured=parsed.filter(o=>o.code&&o.title&&o.price>0);
-  const unique=[...new Map(structured.map(o=>[o.code,o])).values()];
-  const checks=[];
-  for(const o of unique.slice(0,2)) {
-   try {
-    const page=await boundedGet(`https://www.magazinevoce.com.br/magazinemavuri/busca/${encodeURIComponent(o.code)}/`);
-    const links=storeLinks(page.html,o.code);
-    let product=null;
-    if(links.length===1){
-      const direct=await boundedGet(links[0]);
-      const data=productData(direct.html,o.code,links[0]);
-      const {price,...safe}=data;
-      product={http_status:direct.status,...safe,price_present:price>0,source_price_matches:price>0&&Math.abs(price-o.price)<0.011};
-    }
-    checks.push({http_status:page.status,bytes:page.bytes||0,redirect:!!page.redirect,exact_product_links:links.length,has_jsonld:/application\/ld\+json/i.test(page.html),product});
-   }catch{checks.push({error:'store_fetch_failed'});}
-  }
-  return reply({ok:tg.status===200&&unique.length>0,mode:'magalu_public_preview',...flags,telegram_http_status:tg.status,messages:rows.length,recent_messages:recent.length,structured_offers:structured.length,unique_offers:unique.length,link_only:parsed.length-structured.length,store_checks:checks,coverage:'single_public_page_not_full_runner_history',ready_for_publication:false,elapsed_ms:Date.now()-start});
- }catch{return reply({ok:false,mode:'magalu_public_preview',...flags,reason:'source_probe_failed',elapsed_ms:Date.now()-start},502);}
+  const history=await collectPublicHistory();
+  const parsed=candidatesFromRows(history.rows);
+  const enriched=await enrichCandidates(parsed.offers);
+  const coupons=parsed.coupons.filter(c=>!c.valid_until||Date.parse(c.valid_until)>Date.now());
+  return reply({ok:true,mode:'magalu_public_preview',revision:3,...flags,pages:history.pages,messages:history.rows.length,history_24h_complete:history.complete,source_offers:parsed.offers.length,link_only:parsed.linkOnly,campaigns:parsed.campaigns,coupons:coupons.length,coupons_with_product_restrictions:coupons.filter(c=>/C[oó]digos\s*:/i.test(c.terms)).length,products_checked:enriched.checked,verified_products:enriched.offers.length,rejected:enriched.rejected,remaining:enriched.remaining,ready_for_publication:false,elapsed_ms:Date.now()-start});
+ }catch(e){return reply({ok:false,mode:'magalu_public_preview',...flags,reason:String(e instanceof Error?e.message:'source_probe_failed').slice(0,100),elapsed_ms:Date.now()-start},502);}
 });

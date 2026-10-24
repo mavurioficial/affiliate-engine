@@ -1,6 +1,6 @@
 const MAGALU_SOURCE_HANDLE = "@parceiromagaludivulgador";
-const normalizeTelegramTitle = v => String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-const magaluMoney = raw => raw == null ? null : Number(String(raw).replace(/R\$/gi,"").replace(/\s/g,"").replace(/\./g,"").replace(",", "."));
+export const normalizeTelegramTitle = v => String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+export const magaluMoney = raw => raw == null ? null : Number(String(raw).replace(/R\$/gi,"").replace(/\s/g,"").replace(/\./g,"").replace(",", "."));
 const magaluExtractUrls = text => [...String(text||"").matchAll(/https?:\/\/[^\s<>)]+/gi)].map(m=>m[0]);
 function magaluTitleFromText(text) {
   const lines = String(text || "").split(/\r?\n/).map(x => x.replace(/^\s*[🔥🚨⚡💥🛍️📦👉✅⭐🎁💙]+\s*/u, "").trim()).filter(Boolean)

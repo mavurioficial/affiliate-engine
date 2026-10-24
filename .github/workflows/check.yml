@@ -16,6 +16,7 @@ jobs:
           node-version: 20
       - run: npm run check
       - run: npm test
+      - run: node supabase/functions/discovery-cloud-magalu-executor/test.mjs
       - run: node scripts/test-cloud-runner-linux-kit.mjs
       - run: node scripts/test-ml-v86-pure.mjs
       - run: node --test cloud/mercadolivre-cloudflare-free/test/policy.test.mjs
