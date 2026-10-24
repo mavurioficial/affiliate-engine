@@ -19,6 +19,7 @@ jobs:
       - run: node scripts/test-cloud-runner-linux-kit.mjs
       - run: node scripts/test-ml-v86-pure.mjs
       - run: node scripts/test-ml-cloud-ownership.mjs
+      - run: cd cloud/mercadolivre-cloudrun && npm install --ignore-scripts --no-audit --no-fund && npm test && node --check src/public-origin-probe.mjs
       - run: node scripts/test-ml-only-v86.mjs
       - run: node scripts/test-shopee-single-pilot-gate.mjs
       - run: node scripts/test-ml-origin-readonly.mjs
