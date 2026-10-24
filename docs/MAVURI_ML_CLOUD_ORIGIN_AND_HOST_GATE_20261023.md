@@ -10,6 +10,18 @@
 4. The real private V86 of 22/10/2026 was inspected offline. It uses persistent authenticated Chrome/CDP, diverse pool discovery, ML Best Price, conditional coupon pricing, Flow preselection and owner-generated `meli.la` links.
 5. Database inventory: **798 ML offers**, **566** with `https://meli.la/` URLs, **0** refreshed within 24h of audit. These are historic affiliate-link records, NOT verified current-price offers. Do not auto-post stale prices.
 
+
+## Cloudflare Browser Run Free — measured pilot, 23/10/2026 BRT
+
+- Worker `mavuri-ml-public-browser-probe` deployed successfully; Browser Run binding and owner-only PROBE_TOKEN authentication verified. No ML credentials or session were uploaded.
+- First guest probe: homepage HTTP 403 and guest Affiliate Hub HTTP 403. App elapsed estimate 5,172 ms including startup/close; Cloudflare Runs displayed a 3-second browser session with Normal Closure. The Overview dashboard initially displayed zero and is not evidence of zero quota use.
+- Diagnostic revision 2: both guest pages again HTTP 403; `server: awselb/2.0`, `content-type: text/html`, empty document titles, Mercado Livre branding detected. No CAPTCHA/challenge, login or geographic wording detected by the bounded heuristic. No Cloudflare guardrail/challenge response headers were present in the selected headers.
+- Second probe elapsed estimate 4,315 ms. Do not treat these short denied requests as full Discovery cycle duration or capacity. `target_access_ok=false`; Discovery capacity remains unvalidated.
+- Same-owner local Chrome Incognito comparison: public homepage visually loaded; guest Affiliate Hub reached the normal sign-in form. These screenshots establish visual behavior, not measured local HTTP status codes.
+- Conclusion: the tested remote guest access differs from the working local guest flow. The exact blocking rule (IP, geography, automated-client identification, or another condition) is NOT established by these results. The AWS server header is a clue about the response path, not proof of the rule or responsible component.
+- Cloudflare is NOT validated for the ML executor. No paid upgrade, cookie transfer, legitimate account login, affiliate-link generation, publication or schedule was performed. Do not repeat unchanged probes or assume paying will resolve denial. Next host/access investigation must first establish legitimate public/sign-in reachability before migrating any session.
+- The earlier Supabase Edge public 200/302 finding remains useful but does not demonstrate it can run persistent Chrome or the authenticated V86 workflow. Shopee operation was not changed.
+
 ## Work prepared, without exposing user browser credentials
 
 - `supabase/functions/discovery-cloud-ml-origin-probe/index.ts`: owner-authenticated, public-read-only egress test, deployed in Supabase with JWT verification.
