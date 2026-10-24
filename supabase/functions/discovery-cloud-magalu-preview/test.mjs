@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {parseMagaluOfferMessage} from './parser.mjs';
+import {publicMessages,storeLinks,productData} from './public-source.mjs';
+const text='💙 Pote de Vidro Hermético Kit 5 Potes\nPor apenas R$ 69,43 no pix\nCódigo: cdcf3adb65';
+const offer=parseMagaluOfferMessage({id:'1',date:'2026-10-24T10:00:00Z',text});
+assert.equal(offer.price,69.43);assert.equal(offer.code,'cdcf3adb65');assert.equal(offer.previous_price,null);assert.equal(offer.discount,null);
+assert.equal(parseMagaluOfferMessage({text:'Cupom: CUPOM30\nCódigos: cdcf3adb65 jg44k0gg0k'}),null);
+assert.equal(parseMagaluOfferMessage({text:'💙 Produto para cozinha\nou 3x de R$ 10,00 sem juros\nCódigo: cdcf3adb65'}),null);
+const html='<div data-post="parceiromagaludivulgador/123"><div class="tgme_widget_message_text js-message_text">'+text.replaceAll('\n','<br/>')+'</div><time datetime="2026-10-24T10:00:00Z"></time></div>';
+assert.equal(publicMessages(html)[0].text,text);assert.equal(publicMessages(html)[0].id,'123');
+const paths=['https://evil.example/magazinemavuri/item/p/cdcf3adb65/a/','https://www.magazinevoce.com.br/other/item/p/cdcf3adb65/a/','https://www.magazinevoce.com.br/magazinemavuri/item/p/wrongcode/a/','https://www.magazinevoce.com.br/magazinemavuri/item/p/cdcf3adb65/a/'];
+assert.deepEqual(storeLinks(paths.map(p=>`<a href="${p}">`).join(''),'cdcf3adb65'),[paths[3]]);
+console.log('Magalu preview: parser, price, campaigns, installments, HTML and affiliate-store checks passed.');
+const ld=p=>`<script type="application/ld+json">${JSON.stringify(p)}</script>`;
+const p={'@type':'Product',sku:'cdcf3adb65',name:'Potes herméticos',image:'https://img.example/p.jpg',offers:{price:'69.43',priceCurrency:'BRL',availability:'https://schema.org/InStock'}};
+assert.equal(productData(ld(p),'cdcf3adb65',paths[3]).price,69.43);
+assert.equal(productData(ld([p,{...p,sku:'other'}]),'missing',paths[3]).product_identified,false);
+assert.equal(productData(ld({...p,offers:{price:'1',priceCurrency:'USD'}}),'cdcf3adb65',paths[3]).price,null);
