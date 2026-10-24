@@ -5,7 +5,7 @@ export const TARGETS=Object.freeze([
 ]);
 export function summarize(key,status,finalUrl){
  let redirectedToLogin=false;
- try{redirectedToLogin=/\\b(login|entrar|identification|auth|signin)\\b/i.test(new URL(finalUrl).pathname)}catch{}
+ try{redirectedToLogin=/\b(login|entrar|identification|auth|signin)\b/i.test(new URL(finalUrl).pathname)}catch{}
  return {target:key,status:typeof status==="number"?status:null,
    redirected_to_login:redirectedToLogin};
 }
