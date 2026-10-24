@@ -158,6 +158,7 @@ export function classifyShopee(offer) {
 export function diversityFamily(title) {
   const t = normalizeText(title)
   const families = [
+    ["toalha-banho", /\btoalhas?\b.*\b(banho|banhao)\b|\b(banho|banhao)\b.*\btoalhas?\b/],
     ["cueca-boxer", /\b(cueca|cuecas|boxer|box adulto)\b/],
     ["legging", /\b(legging|leggings)\b/],
     ["camiseta-camisa", /\b(camiseta|camisetas|camisa|camisas)\b/],
@@ -212,4 +213,5 @@ export function matchesRule(rule, offer) {
 export function channelIdsForRule(rule) {
   return asStringArray(rule.actions?.channel_ids ?? rule.actions?.channelIds)
 }
+
 

@@ -3,6 +3,7 @@
 // Does not bypass SQL dedup, final category, rule checks, lease or age window.
 import {createClient} from "npm:@supabase/supabase-js@2";
 import {fetchCommercialCandidates} from "./source.ts";
+import {enqueueAvailableCandidates} from "./enqueue-cycle.mjs";
 import {planFourChannelCycle} from "./cycle-plan.mjs";
 import {simulateExistingShopeeRefresh} from "./commercial-refresh-plan.mjs";
 const schedulerHash="3efb0f37ba962d865839b2beeffd672787e652b4059e4de53940403421cfd423";
@@ -18,6 +19,8 @@ Deno.serve(async req=>{
    const digest=await hash(authorization.slice(7));
    return digest===schedulerHash;
  })()))return json({ok:false,reason:"scheduler_unauthorized"},401);
+ const body=await req.json().catch(()=>({}));
+ const diagnostic=body?.mode==="diagnostic";
  const url=String(Deno.env.get("SUPABASE_URL")||"");
  const keys=JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")||"{}");
  const secret=String(keys.default||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"");
@@ -25,13 +28,15 @@ Deno.serve(async req=>{
  const admin=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
  let runId:string|null=null,jobs=0,offersQueued=0;
  try{
-  const {data:claim,error:claimError}=await admin.rpc("mavuri_discovery_claim_run",
+  const {data:claim,error:claimError}=diagnostic?{data:{claimed:true,limits:{shopee:8}},error:null}:await admin.rpc("mavuri_discovery_claim_run",
     {p_lease_seconds:900});
   if(claimError)throw Error("run_claim_failed");
   if(claim?.claimed!==true)return json({ok:true,claimed:false,reason:String(claim?.reason||"not_claimed"),
     scheduled_delivery:false,offers:0,jobs:0});
-  runId=String(claim.run_id||"");
-  if(!/^[0-9a-f-]{36}$/i.test(runId))throw Error("run_id_invalid");
+  if(!diagnostic){
+   runId=String(claim.run_id||"");
+   if(!/^[0-9a-f-]{36}$/i.test(runId))throw Error("run_id_invalid");
+  }
   const owner=String(Deno.env.get("MAVURI_SHOPEE_CLOUD_OWNER_USER_ID")||"");
   const appid=String(Deno.env.get("SHOPEE_AFFILIATE_APP_ID")||"");
   const affiliateSecret=String(Deno.env.get("SHOPEE_AFFILIATE_SECRET")||"");
@@ -85,6 +90,10 @@ Deno.serve(async req=>{
   // The service-only SQL RPC rejects changes to approved classifications.
   const forecast=simulateExistingShopeeRefresh({candidates,
     stored,pending,owner,marketplace:market[0].id,account:account.id});
+  if(diagnostic){
+    const plan=planFourChannelCycle({candidates,stored:forecast.rows,categories:cat.data,channels:ch.data,rules:ru.data,history,pending,owner,marketplace:market[0].id,account:account.id,now:Date.now(),maxUnique:8});
+    return json({ok:plan.ready,mode:"diagnostic",publishing:false,database_writes:0,candidates:candidates.length,refresh:forecast.stats,plan:plan.counts});
+  }
   const currentByRef=new Map(candidates.map(x=>[String(x.id),x]));
   const previousById=new Map(stored.map(x=>[String(x.id),x]));
   let refreshed=0,refreshRejected=0;
@@ -117,27 +126,23 @@ Deno.serve(async req=>{
   console.log("[shopee-executor] catalog_refresh_checked="+forecast.stats.wouldRefresh+
     " updated="+refreshed+" rejected="+refreshRejected+
     " missing="+forecast.stats.unknownProduct);
-  const plan=planFourChannelCycle({candidates,stored:effectiveStored,categories:cat.data,
+  const byId=new Map(effectiveStored.map(x=>[String(x.id),x]));
+  const cycle=await enqueueAvailableCandidates({candidates,stored:effectiveStored,categories:cat.data,
    channels:ch.data,rules:ru.data,history,pending,owner,
    marketplace:market[0].id,account:account.id,
-   now:Date.now(),maxUnique:Math.min(8,safeInt(claim?.limits?.shopee))});
-  if(!plan.ready)throw Error("cycle_plan_not_ready");
-  const byId=new Map(effectiveStored.map(x=>[String(x.id),x]));
-  for(const item of plan.selected){
+   now:Date.now(),maxUnique:Math.min(8,safeInt(claim?.limits?.shopee))},async item=>{
     const record=byId.get(item.offer_id);
     if(!record)throw Error("selected_record_missing");
     const {data:enqueued,error:queueError}=await admin.rpc("mavuri_shopee_cloud_enqueue",{
       p_run_id:runId,p_user_id:owner,p_offer_id:item.offer_id,
-      p_channel_ids:item.channels,
-      p_expected_price:record.price,
-      p_expected_affiliate_url:record.affiliate_url,
-      p_expected_category_slug:item.category
+      p_channel_ids:item.channels,p_expected_price:record.price,
+      p_expected_affiliate_url:record.affiliate_url,p_expected_category_slug:item.category
     });
     if(queueError)throw Error("atomic_queue_failed");
-    if(enqueued?.accepted===true){
-      jobs+=safeInt(enqueued.jobs_created);offersQueued++;
-    }
-  }
+    if(enqueued?.accepted===true){jobs+=safeInt(enqueued.jobs_created);offersQueued++;}
+    return enqueued;
+  });
+  console.log("[shopee-executor] cycle_summary "+JSON.stringify({candidates:candidates.length,attempted:cycle.attempted,offers:cycle.offers,jobs:cycle.jobs,blocked:cycle.blocked}));
   const {data:submitted,error:submitError}=await admin.rpc("mavuri_shopee_cloud_mark_submitted",{
     p_run_id:runId,p_jobs:jobs,p_offers:offersQueued
   });
@@ -162,3 +167,4 @@ Deno.serve(async req=>{
   return json({ok:false,reason:failure,claimed:Boolean(runId),offers:offersQueued,jobs},503);
  }
 });
+

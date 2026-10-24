@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const s=readFileSync("supabase/functions/discovery-cloud-shopee-executor/index.ts","utf8");
 const rpc=s.indexOf('admin.rpc("mavuri_shopee_cloud_refresh_existing"');
-const plan=s.indexOf("const plan=planFourChannelCycle");
+const plan=s.indexOf("const cycle=await enqueueAvailableCandidates");
 const enqueue=s.indexOf('admin.rpc("mavuri_shopee_cloud_enqueue"');
 assert.ok(rpc>0&&plan>rpc&&enqueue>plan,"refresh must complete before route planning and queueing");
 assert.match(s,/simulateExistingShopeeRefresh/);

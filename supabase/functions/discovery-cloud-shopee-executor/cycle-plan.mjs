@@ -8,7 +8,7 @@ const cents=x=>Number.isFinite(Number(x))?Math.round(Number(x)*100):NaN;
 /** @param {Record<string, any>} input */
 export function planFourChannelCycle({
  candidates=[],stored=[],categories=[],channels=[],rules=[],
- history=[],pending=[],owner,marketplace,account,now=Date.now(),maxUnique=8
+ history=[],pending=[],owner,marketplace,account,now=Date.now(),maxUnique=8,alreadySelected=[]
 }){
  const accepted=channels.filter((c)=>c.user_id===owner&&c.type==="telegram"&&
   c.status==="connected"&&NAMES.has(c.name)&&String(c.external_ref||"").trim());
@@ -41,6 +41,15 @@ export function planFourChannelCycle({
   missingOrAmbiguous:0,staleCommercial:0,invalidCategory:0,ruleRejected:0,
   recentOrPending:0,diversityBlocked:0};
  const categoryCounts=new Map(),familyCounts=new Set(),seen=new Set();
+ for(const previous of alreadySelected){
+  const r=stored.find(r=>String(r.id)===String(previous.offer_id));
+  if(!r)continue;
+  const category=categorySlugs.get(String(r.mavuri_category_id));
+  categoryCounts.set(category,(categoryCounts.get(category)||0)+1);
+  const family=diversityFamily(String(r.title||''));
+  if(family)familyCounts.add(family);
+  seen.add(String(r.source_ref||''));
+ }
  for(const candidate of sorted){
   if(selected.length>=max)break;
   const ref=String(candidate.id||"");if(!ref||seen.has(ref))continue;seen.add(ref);
@@ -89,3 +98,4 @@ export function planFourChannelCycle({
  counts.selected=selected.length;counts.jobs=jobs.length;
  return {ready:true,reason:null,selected,jobs,counts};
 }
+

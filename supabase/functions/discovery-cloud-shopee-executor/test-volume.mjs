@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {planFourChannelCycle} from './cycle-plan.mjs';
+import {diversityFamily} from './shopee-production-rules.mjs';
+import {enqueueAvailableCandidates} from './enqueue-cycle.mjs';
+const names=['Mavuri Ofertas','Mavuri Mulher','Mavuri Casa & Cozinha','Mavuri Tecnologia'];
+const channels=names.map((name,i)=>({id:'ch'+i,name,user_id:'u',type:'telegram',status:'connected',external_ref:'test'}));
+const categories=['casa','cozinha','informatica','beleza','outros','eletronicos'].map(slug=>({id:slug,slug,active:true}));
+const rules=channels.map(c=>({enabled:true,conditions:{marketplace:'shopee'},actions:{channel_ids:[c.id]}}));
+const towels=['Kit 3 Toalhas de Banho Jacquard Grande 75x150cm Macia Absorvente Alta Qualidade Grossa Coração','Toalha Jacquard Coração Banhão 75x1,50m 311g/m² Maciez Alta Absorção 100% Algodão Premium'];
+assert.equal(diversityFamily(towels[0]),'toalha-banho');assert.equal(diversityFamily(towels[1]),'toalha-banho');
+assert.notEqual(diversityFamily('Toalha de mesa xadrez'), 'toalha-banho');
+const rows=[...towels.map(title=>({title,category:'casa'})),...Array.from({length:12},(_,i)=>({title:'Produto independente '+i,category:categories[Math.floor(i/2)%6].slug}))].map((x,i)=>({id:'o'+i,source_ref:String(i+1),user_id:'u',marketplace_id:'m',affiliate_account_id:'a',title:x.title,price:100+i,affiliate_url:'https://s.shopee.com.br/'+i,image_url:'https://img.example/test',mavuri_category_id:x.category,mavuri_tags:[],metadata:{mavuri:{category_slug:x.category}}}));
+const input={stored:rows,candidates:rows.map((r,i)=>({id:r.source_ref,price:r.price,url:r.affiliate_url,discount:90-i})),categories,channels,rules,owner:'u',marketplace:'m',account:'a',now:Date.now(),maxUnique:8};
+let p=planFourChannelCycle(input);assert.equal(p.selected.filter(x=>['1','2'].includes(x.ref)).length,1);
+const attempted=[];const accepted=[];
+const result=await enqueueAvailableCandidates(input,async item=>{
+ attempted.push(item.ref);if(['1','3','5'].includes(item.ref))return {accepted:false,reason:'delivery_policy_blocked'};
+ accepted.push(item);return {accepted:true,jobs_created:item.channels.length};
+});
+assert.equal(result.offers,8);assert.equal(new Set(attempted).size,attempted.length);assert.ok(result.rounds>1);
+assert.equal(accepted.filter(x=>['1','2'].includes(x.ref)).length,1);
+for(const cat of categories)assert.ok(accepted.filter(x=>x.category===cat.slug).length<=2);
+await assert.rejects(()=>enqueueAvailableCandidates(input,async()=>{throw Error('unexpected database failure')}),/unexpected database failure/);
+console.log('Shopee volume: actual towel pair, blocked-product backfill, diversity reservations and fatal DB errors passed.');
