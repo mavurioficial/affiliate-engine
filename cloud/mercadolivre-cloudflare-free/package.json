@@ -1,0 +1,15 @@
+{
+  "name": "mavuri-ml-cloudflare-free-probe",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "wrangler deploy --dry-run --outdir /tmp/mavuri-ml-cf-dry-run"
+  },
+  "dependencies": {
+    "@cloudflare/puppeteer": "1.1.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.45.0"
+  }
+}
