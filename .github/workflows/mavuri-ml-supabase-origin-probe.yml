@@ -2,7 +2,9 @@ name: Mavuri Mercado Livre Supabase Origin Probe
 on:
   push:
     branches: [main]
-    paths: [.github/workflows/mavuri-ml-supabase-origin-probe.yml]
+    paths:
+      - .github/workflows/mavuri-ml-supabase-origin-probe.yml
+      - scripts/cloud-runner/ml-supabase-origin-probe.mjs
   workflow_dispatch:
 
 permissions:
