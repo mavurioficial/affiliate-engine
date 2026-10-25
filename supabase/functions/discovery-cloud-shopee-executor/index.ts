@@ -74,7 +74,7 @@ Deno.serve(async req=>{
   if(storedError||!stored||stored.length>=1000)throw Error("persisted_offer_lookup_failed");
   const refs=new Set(stored.map(x=>String(x.source_ref)));
   const missing=candidates.filter(c=>!refs.has(c.id));
-  const newRows=missing.map(c=>newCatalogRow(c,{owner,marketplace:market[0].id,account:account.id,categories:cat.data})).filter(Boolean).slice(0,100);
+  const newRows=missing.map(c=>newCatalogRow(c,{owner,marketplace:market[0].id,account:account.id,categories:cat.data})).filter((row):row is NonNullable<typeof row>=>row!==null).slice(0,100);
   let catalogAdded=0;
   if(!diagnostic&&newRows.length){
    const {data:added,error:addError}=await admin.from("flow_offers").insert(newRows).select("id,user_id,marketplace_id,affiliate_account_id,source_ref,title,price,affiliate_url,image_url,mavuri_category_id,mavuri_tags,metadata");

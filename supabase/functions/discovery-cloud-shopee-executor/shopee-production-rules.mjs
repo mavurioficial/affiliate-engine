@@ -189,7 +189,7 @@ export function diversityFamily(title) {
     ["skincare", /\b(protetor solar|hidratante|serum|sérum|creme facial|antirrugas)\b/],
     ["cabelo", /\b(shampoo|condicionador|mascara capilar|máscara capilar|secador|chapinha|escova secadora)\b/]
   ]
-  for (const [key,re] of families) if (re.test(t)) return key
+  for (const [key,re] of families) if (re.test(t)) return String(key)
   return null
 }
 

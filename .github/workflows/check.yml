@@ -71,6 +71,8 @@ jobs:
       - run: deno check --node-modules-dir=auto supabase/functions/discovery-cloud-shopee-executor/index.ts
       - run: deno check --node-modules-dir=auto supabase/functions/flow-worker/index.ts
       - run: deno check supabase/functions/discovery-cloud-shopee-diagnostic/cycle-plan.mjs
+      - run: deno check supabase/functions/discovery-cloud-magalu-executor/index.ts
+      - run: deno run scripts/test-cloud-volume-expansion.mjs
       - run: deno run scripts/test-shopee-four-channel-cycle.mjs
       - run: deno run supabase/functions/discovery-cloud-shopee-executor/test-volume.mjs
       # Deployed worker v38 contains two pre-existing TypeScript issues at secret key selection.

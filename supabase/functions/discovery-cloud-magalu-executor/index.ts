@@ -35,14 +35,14 @@ Deno.serve(async(req:Request)=>{
   if(live&&coupons.length){const cp=await invoke('magalu-cloud-coupon-publish',{coupons},run!);if(cp.failed||cp.errors?.length)throw Error('coupon_cycle_failed');couponSent=Number(cp.sent||0);}
   let couponDryRunValidated=0;
   if(!live&&coupons.length){const cp=await invoke('magalu-cloud-coupon-publish',{coupons,dry_run:true},'');if(!cp.ok)throw Error('coupon_dry_run_failed');couponDryRunValidated=cp.validated;}
-  const enriched={offers:[],checked:0,rejected:{},remaining:parsed.offers.length};
-  let selected=0,jobs=0;const selectedFamilies=new Set();const rejected={};
+  const enriched:{offers:any[];checked:number;remaining:number}={offers:[],checked:0,remaining:parsed.offers.length};
+  let selected=0,jobs=0;const selectedFamilies=new Set<string>();const rejected:Record<string,number>={};
   const checkLimit=live?90:60;
   for(let offset=0;offset<parsed.offers.length&&enriched.checked<checkLimit;offset+=18){
    if(Date.now()-start>85000){rejected.time_budget_reached=1;break;}
    const batch=await enrichCandidates(parsed.offers.slice(offset,offset+18),{limit:Math.min(18,checkLimit-enriched.checked)});
    enriched.checked+=batch.checked;enriched.offers.push(...batch.offers);
-   for(const [reason,n] of Object.entries(batch.rejected))rejected[reason]=(rejected[reason]||0)+n;
+   for(const [reason,n] of Object.entries(batch.rejected))rejected[reason]=(rejected[reason]||0)+Number(n);
    if(live){for(const offer of batch.offers){
     if(selected>=8)break;
     const family=diversityFamily(offer.title);
