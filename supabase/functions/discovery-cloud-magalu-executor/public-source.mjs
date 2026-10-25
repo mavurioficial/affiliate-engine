@@ -58,3 +58,4 @@ export function productData(html, code, url) {
   const image=[p.image].flat().map(i=>typeof i==='string'?i:i?.url).find(i=>{try{return new URL(i).protocol==='https:';}catch{return false;}})||null;
   return {product_identified:true,jsonld_products:products.length,title:String(p.name||'').slice(0,260),title_present:typeof p.name==='string'&&p.name.length>=8,price,image,image_present:!!image,availability:priced.length===1?String(priced[0].availability||'').split('/').pop():null};
 }
+

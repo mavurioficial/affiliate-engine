@@ -20,12 +20,24 @@ export async function collectPublicHistory({now=Date.now(),get=boundedGet,maxPag
  return {rows:recent,pages,complete,oldest:recent.at(-1)?.date||null};
 }
 export function candidatesFromRows(rows){
- const offers=new Map(),coupons=new Map();let linkOnly=0,campaigns=0;
+ const offers=new Map(),coupons=new Map();let linkOnly=0,campaigns=0;const campaignPools=[];
  for(const row of rows){
   const o=parseMagaluOfferMessage(row);
   if(/\bC[oó]digos\s*:/i.test(row.text))campaigns++;
   if(o){if(!o.code){linkOnly++;const match=String(o.product_url||'').match(/\/p\/([A-Za-z0-9]{8,14})(?:\/|$)/i);if(match)o.code=match[1];}
    if(o.code&&!offers.has(o.code.toLowerCase()))offers.set(o.code.toLowerCase(),o);
+  }
+  // Campaign lists are discovery seeds, never a shared price or coupon.
+  // Every code must resolve to its own live product in the owner's store.
+  const listMatch=row.text.match(/\b(?:C[oó]digos|mais vendidos|top itens)\s*:\s*([\s\S]*)/i);
+  if(listMatch){
+   const pool=[];
+   const section=listMatch[1].split(/\n\s*(?:cupom|use o cupom|v[aá]lid|regras|https?:)/i)[0];
+   for(const m of section.matchAll(/\b[A-Za-z0-9]{8,14}\b/g)){
+    const code=m[0];if(!/\d/.test(code)||offers.has(code.toLowerCase()))continue;
+    pool.push({code,title:null,price:null,previous_price:null,discount:null,coupon:null,shipping_text:null,installments:null,source_message_id:row.id,source_message_date:row.date,source_text:row.text,score:25,metadata:{campaign_seed:true}});
+   }
+   campaignPools.push(pool);
   }
   for(const c of parseMagaluCouponsFromMessage(row))if(!coupons.has(c.code)){
     const list=row.text.match(/\bC[oó]digos\s*:\s*([\s\S]*)/i)?.[1]||'';
@@ -36,7 +48,11 @@ export function candidatesFromRows(rows){
     coupons.set(c.code,c);
   }
  }
- return {offers:[...offers.values()].sort((a,b)=>b.score-a.score||Date.parse(b.source_message_date)-Date.parse(a.source_message_date)),coupons:[...coupons.values()],linkOnly,campaigns};
+ const rotation=Math.floor(Date.now()/1800000)*5;
+ for(let i=0;i<Math.max(0,...campaignPools.map(p=>p.length));i++){
+  for(const pool of campaignPools){if(i>=pool.length)continue;const o=pool[(i+rotation)%pool.length];if(!offers.has(o.code.toLowerCase()))offers.set(o.code.toLowerCase(),o);}
+ }
+ return {offers:[...offers.values()].sort((a,b)=>b.score-a.score),coupons:[...coupons.values()],linkOnly,campaigns};
 }
 export function commercialCandidate(o,data,url,now=Date.now()){
  if(!data.product_identified||!data.title_present||!(data.price>0)||!data.image||data.availability!=='InStock')return {reason:'product_data_incomplete'};
@@ -48,7 +64,7 @@ export function commercialCandidate(o,data,url,now=Date.now()){
  const previous=matched&&Number(o.previous_price)>data.price?Number(o.previous_price):null;
  return {offer:{...o,title:data.title,price:data.price,previous_price:previous,discount:previous?Math.round((1-data.price/previous)*100):null,coupon:matched?o.coupon:null,shipping_text:null,installments:null,product_url:url,affiliate_url:url,image_url:data.image,metadata:{...o.metadata,cloud_verified:true,price_source:'product_jsonld',price_checked_at:new Date(now).toISOString(),source_price_matched:matched}}};
 }
-export async function enrichCandidates(offers,{get=boundedGet,limit=20,store='magazinemavuri'}={}){
+export async function enrichCandidates(offers,{get=boundedGet,limit=60,store='magazinemavuri'}={}){
  const valid=[],rejected={};let checked=0;
  // Batches of three bound network concurrency and CPU within Edge limits.
  const batch=offers.slice(0,limit);
@@ -66,3 +82,4 @@ export async function enrichCandidates(offers,{get=boundedGet,limit=20,store='ma
  }
  return {offers:valid,checked,rejected,remaining:Math.max(0,offers.length-checked)};
 }
+

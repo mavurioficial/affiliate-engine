@@ -1,3 +1,4 @@
+import {diversityFamily} from './diversity.mjs';
 import {collectPublicHistory,candidatesFromRows,enrichCandidates} from './collector.mjs';
 const digest=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))).map(v=>v.toString(16).padStart(2,'0')).join('');
 const expected='3efb0f37ba962d865839b2beeffd672787e652b4059e4de53940403421cfd423';
@@ -34,12 +35,29 @@ Deno.serve(async(req:Request)=>{
   if(live&&coupons.length){const cp=await invoke('magalu-cloud-coupon-publish',{coupons},run!);if(cp.failed||cp.errors?.length)throw Error('coupon_cycle_failed');couponSent=Number(cp.sent||0);}
   let couponDryRunValidated=0;
   if(!live&&coupons.length){const cp=await invoke('magalu-cloud-coupon-publish',{coupons,dry_run:true},'');if(!cp.ok)throw Error('coupon_dry_run_failed');couponDryRunValidated=cp.validated;}
-  const enriched=await enrichCandidates(parsed.offers);
-  let selected=0,jobs=0;const rejected={...enriched.rejected};
-  if(live){for(const offer of enriched.offers){if(selected>=5)break;const r=await invoke('flow-magalu-cloud-ingest',{offers:[offer],create_jobs:true},run!);if(r.errors?.length)throw Error('offer_ingest_failed');if(r.jobs_created>0){selected++;jobs+=r.jobs_created;}}}
+  const enriched={offers:[],checked:0,rejected:{},remaining:parsed.offers.length};
+  let selected=0,jobs=0;const selectedFamilies=new Set();const rejected={};
+  const checkLimit=live?90:60;
+  for(let offset=0;offset<parsed.offers.length&&enriched.checked<checkLimit;offset+=18){
+   if(Date.now()-start>85000){rejected.time_budget_reached=1;break;}
+   const batch=await enrichCandidates(parsed.offers.slice(offset,offset+18),{limit:Math.min(18,checkLimit-enriched.checked)});
+   enriched.checked+=batch.checked;enriched.offers.push(...batch.offers);
+   for(const [reason,n] of Object.entries(batch.rejected))rejected[reason]=(rejected[reason]||0)+n;
+   if(live){for(const offer of batch.offers){
+    if(selected>=8)break;
+    const family=diversityFamily(offer.title);
+    if(family&&selectedFamilies.has(family)){rejected.similar_in_cycle=(rejected.similar_in_cycle||0)+1;continue;}
+    const r=await invoke('flow-magalu-cloud-ingest',{offers:[offer],create_jobs:true},run!);
+    if(r.errors?.length)throw Error('offer_ingest_failed');
+    if(r.jobs_created>0){selected++;jobs+=r.jobs_created;if(family)selectedFamilies.add(family);}
+    else rejected.delivery_policy_blocked=(rejected.delivery_policy_blocked||0)+1;
+   }}
+   if(live&&selected>=8)break;
+  }
+  enriched.remaining=Math.max(0,parsed.offers.length-enriched.checked);
   let dryRunValidated=0;
   if(!live&&enriched.offers.length){const r=await invoke('flow-magalu-cloud-ingest',{offers:enriched.offers,dry_run:true,create_jobs:false},'');if(r.errors?.length)throw Error('dry_run_validation_failed');dryRunValidated=r.saved?.length||0;}
-  const result={ok:true,mode:input.mode,claimed:live,publishing:live,cloud_enabled:!!cfg.enabled,source_messages:history.rows.length,pages:history.pages,history_24h_complete:history.complete,source_offers:parsed.offers.length,coupons:coupons.length,coupon_sent:couponSent,products_checked:enriched.checked,verified_products:enriched.offers.length,rejected,selected_offers:selected,jobs_created:jobs,dry_run_validated:dryRunValidated,coupon_dry_run_validated:couponDryRunValidated,elapsed_ms:Date.now()-start};
+  const result={ok:true,mode:input.mode,claimed:live,publishing:live,cloud_enabled:!!cfg.enabled,source_messages:history.rows.length,pages:history.pages,history_24h_complete:history.complete,source_offers:parsed.offers.length,coupons:coupons.length,coupon_sent:couponSent,products_checked:enriched.checked,campaigns:parsed.campaigns,source_remaining:enriched.remaining,target_offers:8,shortfall:Math.max(0,8-selected),verified_products:enriched.offers.length,rejected,selected_offers:selected,jobs_created:jobs,dry_run_validated:dryRunValidated,coupon_dry_run_validated:couponDryRunValidated,elapsed_ms:Date.now()-start,...(!live?{verified_preview:enriched.offers}:{})};
   if(run)await rpc('finish',run,result);
   return reply(result);
  }catch(e){const result={ok:false,reason:String(e instanceof Error?e.message:'cycle_failed').slice(0,160),elapsed_ms:Date.now()-start};if(run)await rpc('finish',run,result).catch(()=>{});return reply(result,502);}

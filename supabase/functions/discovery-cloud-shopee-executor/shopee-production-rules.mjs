@@ -158,6 +158,23 @@ export function classifyShopee(offer) {
 export function diversityFamily(title) {
   const t = normalizeText(title)
   const families = [
+    ["bicicleta", /\b(bicicleta|bicicletas|bike|ergometrica)\b/],
+    ["bola-esportiva", /\b(bola de futebol|bola futebol|bola campo|bola society|bola de volei|bola de basquete|bola futsal)\b/],
+    ["detergente", /\b(detergente|detergentes)\b/],
+    ["amaciante", /\b(amaciante|amaciantes)\b/],
+    ["sabao-lavanderia", /\b(sabao em po|sabao liquido|lava roupas|lava roupa)\b/],
+    ["suplemento-proteina", /\b(whey|proteina|protein)\b/],
+    ["creatina", /\b(creatina|creatine)\b/],
+    ["cama-enxoval", /\b(lencol|lencois|jogo de cama|cobre leito|colcha|edredom|fronha|cobertor|manta)\b/],
+    ["travesseiro", /\b(travesseiro|travesseiros)\b/],
+    ["geladeira", /\b(geladeira|refrigerador|refrigeradores)\b/],
+    ["lavadora", /\b(lavadora|maquina de lavar|lava e seca|tanquinho)\b/],
+    ["airfryer", /\b(air fryer|airfryer|fritadeira)\b/],
+    ["liquidificador", /\b(liquidificador|liquidificadores)\b/],
+    ["cafeteira", /\b(cafeteira|cafeteiras)\b/],
+    ["ventilador", /\b(ventilador|ventiladores)\b/],
+    ["televisor", /\b(tv|televisao|televisor)\b/],
+
     ["toalha-banho", /\btoalhas?\b.*\b(banho|banhao)\b|\b(banho|banhao)\b.*\btoalhas?\b/],
     ["cueca-boxer", /\b(cueca|cuecas|boxer|box adulto)\b/],
     ["legging", /\b(legging|leggings)\b/],
@@ -213,5 +230,6 @@ export function matchesRule(rule, offer) {
 export function channelIdsForRule(rule) {
   return asStringArray(rule.actions?.channel_ids ?? rule.actions?.channelIds)
 }
+
 
 

@@ -2,6 +2,7 @@
 // Inactive by default: claim_run checks cloud_control before any source request.
 // Does not bypass SQL dedup, final category, rule checks, lease or age window.
 import {createClient} from "npm:@supabase/supabase-js@2";
+import {newCatalogRow} from "./catalog.mjs";
 import {fetchCommercialCandidates} from "./source.ts";
 import {enqueueAvailableCandidates} from "./enqueue-cycle.mjs";
 import {planFourChannelCycle} from "./cycle-plan.mjs";
@@ -21,6 +22,7 @@ Deno.serve(async req=>{
  })()))return json({ok:false,reason:"scheduler_unauthorized"},401);
  const body=await req.json().catch(()=>({}));
  const diagnostic=body?.mode==="diagnostic";
+ const prepare=body?.mode==="catalog_prepare";
  const url=String(Deno.env.get("SUPABASE_URL")||"");
  const keys=JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")||"{}");
  const secret=String(keys.default||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"");
@@ -28,12 +30,12 @@ Deno.serve(async req=>{
  const admin=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
  let runId:string|null=null,jobs=0,offersQueued=0;
  try{
-  const {data:claim,error:claimError}=diagnostic?{data:{claimed:true,limits:{shopee:8}},error:null}:await admin.rpc("mavuri_discovery_claim_run",
+  const {data:claim,error:claimError}=(diagnostic||prepare)?{data:{claimed:true,limits:{shopee:8}},error:null}:await admin.rpc("mavuri_discovery_claim_run",
     {p_lease_seconds:900});
   if(claimError)throw Error("run_claim_failed");
   if(claim?.claimed!==true)return json({ok:true,claimed:false,reason:String(claim?.reason||"not_claimed"),
     scheduled_delivery:false,offers:0,jobs:0});
-  if(!diagnostic){
+  if(!diagnostic&&!prepare){
    runId=String(claim.run_id||"");
    if(!/^[0-9a-f-]{36}$/i.test(runId))throw Error("run_id_invalid");
   }
@@ -65,11 +67,21 @@ Deno.serve(async req=>{
   const candidates=await fetchCommercialCandidates(appid,affiliateSecret);
   if(candidates.length===0)throw Error("no_official_candidates");
   const ids=candidates.map(x=>x.id);
-  const {data:stored,error:storedError}=await admin.from("flow_offers")
+  let {data:stored,error:storedError}=await admin.from("flow_offers")
     .select("id,user_id,marketplace_id,affiliate_account_id,source_ref,title,price,affiliate_url,image_url,mavuri_category_id,mavuri_tags,metadata")
     .eq("user_id",owner).eq("marketplace_id",market[0].id)
-    .in("source_ref",ids).limit(250);
-  if(storedError||!stored||stored.length>=250)throw Error("persisted_offer_lookup_failed");
+    .in("source_ref",ids).limit(1000);
+  if(storedError||!stored||stored.length>=1000)throw Error("persisted_offer_lookup_failed");
+  const refs=new Set(stored.map(x=>String(x.source_ref)));
+  const missing=candidates.filter(c=>!refs.has(c.id));
+  const newRows=missing.map(c=>newCatalogRow(c,{owner,marketplace:market[0].id,account:account.id,categories:cat.data})).filter(Boolean).slice(0,100);
+  let catalogAdded=0;
+  if(!diagnostic&&newRows.length){
+   const {data:added,error:addError}=await admin.from("flow_offers").insert(newRows).select("id,user_id,marketplace_id,affiliate_account_id,source_ref,title,price,affiliate_url,image_url,mavuri_category_id,mavuri_tags,metadata");
+   if(addError)throw Error("catalog_insert_failed");
+   stored.push(...(added||[]));catalogAdded=added?.length||0;
+  }
+  if(prepare)return json({ok:true,mode:"catalog_prepare",publishing:false,candidates:candidates.length,missing:missing.length,catalog_added:catalogAdded});
   const offerIds=[...new Set(stored.map(x=>x.id))];
   let history:any[]=[],pending:any[]=[];
   if(offerIds.length){
@@ -77,11 +89,11 @@ Deno.serve(async req=>{
    const [h,p]=await Promise.all([
     admin.from("flow_delivery_jobs").select("offer_id,channel_id,status,sent_at")
       .eq("user_id",owner).in("offer_id",offerIds).eq("status","sent")
-      .gte("sent_at",cutoff).limit(900),
+      .gte("sent_at",cutoff).limit(4000),
     admin.from("flow_delivery_jobs").select("offer_id,channel_id,status")
-      .eq("user_id",owner).in("offer_id",offerIds).in("status",["queued","processing"]).limit(900)
+      .eq("user_id",owner).in("offer_id",offerIds).in("status",["queued","processing"]).limit(4000)
    ]);
-   if(h.error||p.error||!h.data||!p.data||h.data.length>=900||p.data.length>=900)
+   if(h.error||p.error||!h.data||!p.data||h.data.length>=4000||p.data.length>=4000)
      throw Error("delivery_history_incomplete");
    history=h.data;pending=p.data;
   }
@@ -92,7 +104,7 @@ Deno.serve(async req=>{
     stored,pending,owner,marketplace:market[0].id,account:account.id});
   if(diagnostic){
     const plan=planFourChannelCycle({candidates,stored:forecast.rows,categories:cat.data,channels:ch.data,rules:ru.data,history,pending,owner,marketplace:market[0].id,account:account.id,now:Date.now(),maxUnique:8});
-    return json({ok:plan.ready,mode:"diagnostic",publishing:false,database_writes:0,candidates:candidates.length,refresh:forecast.stats,plan:plan.counts});
+    return json({ok:plan.ready,mode:"diagnostic",publishing:false,database_writes:0,candidates:candidates.length,new_classifiable:newRows.length,refresh:forecast.stats,plan:plan.counts});
   }
   const currentByRef=new Map(candidates.map(x=>[String(x.id),x]));
   const previousById=new Map(stored.map(x=>[String(x.id),x]));
@@ -127,6 +139,7 @@ Deno.serve(async req=>{
     " updated="+refreshed+" rejected="+refreshRejected+
     " missing="+forecast.stats.unknownProduct);
   const byId=new Map(effectiveStored.map(x=>[String(x.id),x]));
+  const selectionCounts=planFourChannelCycle({candidates,stored:effectiveStored,categories:cat.data,channels:ch.data,rules:ru.data,history,pending,owner,marketplace:market[0].id,account:account.id,now:Date.now(),maxUnique:8}).counts;
   const cycle=await enqueueAvailableCandidates({candidates,stored:effectiveStored,categories:cat.data,
    channels:ch.data,rules:ru.data,history,pending,owner,
    marketplace:market[0].id,account:account.id,
@@ -142,7 +155,7 @@ Deno.serve(async req=>{
     if(enqueued?.accepted===true){jobs+=safeInt(enqueued.jobs_created);offersQueued++;}
     return enqueued;
   });
-  console.log("[shopee-executor] cycle_summary "+JSON.stringify({candidates:candidates.length,attempted:cycle.attempted,offers:cycle.offers,jobs:cycle.jobs,blocked:cycle.blocked}));
+  console.log("[shopee-executor] cycle_summary "+JSON.stringify({candidates:candidates.length,catalog_added:catalogAdded,shortfall:Math.max(0,8-cycle.offers),selection:selectionCounts,attempted:cycle.attempted,offers:cycle.offers,jobs:cycle.jobs,blocked:cycle.blocked}));
   const {data:submitted,error:submitError}=await admin.rpc("mavuri_shopee_cloud_mark_submitted",{
     p_run_id:runId,p_jobs:jobs,p_offers:offersQueued
   });
@@ -152,7 +165,7 @@ Deno.serve(async req=>{
  }catch(e){
   // Never leak API credentials, account ids, product ids or links into logs.
   const reason=e instanceof Error?e.message:"unexpected_error";
-  const safe=new Set(["run_claim_failed","run_id_invalid","affiliate_env_missing",
+  const safe=new Set(["catalog_insert_failed","run_claim_failed","run_id_invalid","affiliate_env_missing",
     "marketplace_unverified","affiliate_identity_unverified","routing_configuration_failed",
     "no_official_candidates","persisted_offer_lookup_failed","delivery_history_incomplete",
     "cycle_plan_not_ready","selected_record_missing","atomic_queue_failed","run_submit_failed"]);
@@ -167,4 +180,5 @@ Deno.serve(async req=>{
   return json({ok:false,reason:failure,claimed:Boolean(runId),offers:offersQueued,jobs},503);
  }
 });
+
 
