@@ -2,7 +2,7 @@
 // Authenticated, public read-only ML origin test FROM Supabase Edge. No ML session or links.
 import {unpackageMavuriAuthState} from "./auth-state.mjs";
 const out={mode:"ml_supabase_public_origin_probe",read_only:true,
- owner_auth:false,ok:false,sites_api:null,currency_api:null,public_home:null,hub_guest:null,
+ owner_auth:false,ok:false,sites_api:null,currency_api:null,public_home:null,hub_guest:null,affiliate_links_route:null,
  generated_links:0,posts:0,reason:null};
 let browser,ctx;
 try{
@@ -37,6 +37,7 @@ try{
    return {owner_auth:true,ok:data?.ok===true,read_only:data?.read_only===true,
     sites_api:status("public_sites_api"),currency_api:status("public_currency_api"),
     public_home:status("public_home"),hub_guest:status("affiliate_hub_guest"),
+    affiliate_links_route:status("affiliate_links_route_get"),
     generated_links:data?.generated_links,posts:data?.posts,
     database_writes:data?.database_writes,reason:data?.reason||null};
   }catch{return {owner_auth:false,reason:"preview_error"}}
