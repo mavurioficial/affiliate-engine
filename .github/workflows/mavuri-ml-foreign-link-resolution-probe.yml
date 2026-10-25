@@ -1,0 +1,41 @@
+name: Mavuri ML Link Source Resolution Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/cloud-runner/ml-foreign-link-resolution-probe.mjs
+      - .github/workflows/mavuri-ml-foreign-link-resolution-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mavuri-ml-link-resolution-readonly
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: mavuri-auth-test
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-save --no-audit --ignore-scripts playwright-core@1.55.0
+      - name: Validate URL classifiers locally
+        run: node scripts/cloud-runner/ml-foreign-link-resolution-probe.mjs --self-test
+      - name: Compare foreign and owned link destinations using Mavuri resolver
+        run: node scripts/cloud-runner/ml-foreign-link-resolution-probe.mjs
+        env:
+          MAVURI_AUTH_BUNDLE: ${{ secrets.MAVURI_AUTH_BUNDLE }}
+          MAVURI_AUTH_KEY: ${{ secrets.MAVURI_AUTH_KEY }}
+          MAVURI_AUTO_INGEST: 'false'
+          MAVURI_CLOUD_LIVE_ENABLED: 'NO'
