@@ -25,7 +25,7 @@ assert.equal(commercialCandidate({...offer,coupon:'CUPOM',price:50},live,paths[3
 assert.equal(commercialCandidate(offer,{...live,availability:'OutOfStock'},paths[3]).reason,'product_data_incomplete');
 assert.equal(commercialCandidate({...offer,price:null,title:null},live,paths[3]).offer.price,69.43);
 const campaigns=candidatesFromRows([{id:'999',date:'2026-10-24T10:00:00Z',text:'R$ 30 OFF em itens de Brinquedos e Bebês!\nCupom: CUPOMBR30\nCódigos: cdcf3adb65 jg44k0gg0k'}]);
-assert.equal(campaigns.offers.length,0);assert.equal(campaigns.coupons.length,1);assert.deepEqual(campaigns.coupons[0].eligibility.product_codes,['cdcf3adb65','jg44k0gg0k']);
+assert.equal(campaigns.offers.length,2);assert.ok(campaigns.offers.every(o=>o.metadata.campaign_seed && o.price===null && o.coupon===null));assert.equal(campaigns.coupons.length,1);assert.deepEqual(campaigns.coupons[0].eligibility.product_codes,['cdcf3adb65','jg44k0gg0k']);
 const page=(id,date,body=text)=>`<div data-post="parceiromagaludivulgador/${id}"><div class="tgme_widget_message_text js-message_text">${body.replaceAll('\n','<br/>')}</div><time datetime="${date}"></time></div>`;
 const urls=[];
 const paged=await collectPublicHistory({now:Date.parse('2026-10-24T12:00:00Z'),get:async url=>{urls.push(url);return {status:200,html:urls.length===1?page(12,'2026-10-24T11:00:00Z'):page(11,'2026-10-23T10:00:00Z')};}});
