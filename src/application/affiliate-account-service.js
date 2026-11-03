@@ -1,4 +1,5 @@
 import { supabase } from '../app/auth.js'
+import { selectUsableAffiliateAccount } from '../domain/affiliate-account-selection.js'
 
 async function resolveMarketplaceId(slug) {
   const { data, error } = await supabase
@@ -32,5 +33,5 @@ export async function listAffiliateAccounts(marketplace = null) {
 
 export async function getActiveAffiliateAccount(marketplace) {
   const accounts = await listAffiliateAccounts(marketplace)
-  return accounts.find(account => account.status === 'active') || null
+  return selectUsableAffiliateAccount(accounts)
 }
