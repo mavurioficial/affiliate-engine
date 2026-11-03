@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import { buildUnverifiedCandidate, examineOfficialSocialLink } from './ml-direct-link-candidate.mjs';
+
+const base = 'https://www.mercadolivre.com.br/p/MLB63335606';
+const cfg = { mattWord: 'example-tag', mattTool: '12345678' };
+const out = buildUnverifiedCandidate(base + '?matt_event_ts=123&matt_d2id=abc#tracking', cfg);
+const url = new URL(out.candidate_url);
+assert.equal(url.pathname, '/p/MLB63335606');
+assert.equal(url.searchParams.get('matt_word'), 'example-tag');
+assert.equal(url.searchParams.get('matt_tool'), '12345678');
+assert.equal(url.searchParams.size, 2);
+assert.equal(url.hash, '');
+assert.equal(out.commission_attribution_verified, false);
+assert.equal(out.no_network_requests, true);
+assert.equal(out.no_publication, true);
+assert.equal(out.no_db_writes, true);
+assert.equal(buildUnverifiedCandidate('https://www.mercadolivre.com.br/p/MLB75723827', cfg).product_id, 'MLB75723827');
+assert.throws(() => buildUnverifiedCandidate('https://www.mercadolivre.com.br/', cfg), /not_a_supported_product_page/);
+assert.throws(() => buildUnverifiedCandidate('https://www.mercadolivre.com.br/social/example', cfg), /not_a_supported_product_page/);
+assert.throws(() => buildUnverifiedCandidate('https://mercadolivre.com.br.evil.example/p/MLB63335606', cfg), /not_a_supported_product_page/);
+assert.throws(() => buildUnverifiedCandidate('http://www.mercadolivre.com.br/p/MLB63335606', cfg), /not_a_supported_product_page/);
+assert.throws(() => buildUnverifiedCandidate(base, { mattWord: 'tag', mattTool: 'not-numeric' }), /invalid_affiliate_metadata/);
+const official = examineOfficialSocialLink('https://www.mercadolivre.com.br/social/example?matt_word=example-tag&matt_tool=12345678&ref=opaque');
+assert.equal(official.target_type, 'social_profile');
+assert.equal(official.has_product_specific_ref, true);
+assert.equal(official.is_direct_product_url, false);
+console.log('PASS: 18 checks. Dry-run only; commission attribution NOT verified.');
