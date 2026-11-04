@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {safeUrl,findAmazonLinks,getAsin,resolveAmazonAsin,collectCandidates} from './telegram-cloud-onepost.mjs';
+import {safeUrl,findAmazonLinks,getAsin,resolveAmazonAsin,collectCandidates,extractProductTitle} from './telegram-cloud-onepost.mjs';
 const msg=(id,message,entities=[])=>({id,message,entities});
 test('Only HTTPS approved Amazon hosts',()=>{
  assert.ok(safeUrl('https://link.amazon/abc'));
@@ -29,5 +29,14 @@ test('Only fresh messages; no duplicate ASIN',async()=>{
  const found=await collectCandidates([
  msg(541065,'https://link.amazon/a'),msg(541064,'https://link.amazon/b'),msg(541059,'https://link.amazon/old')
  ],stub);
- assert.deepEqual(found,[{message_id:541065,asin:'B09MLBPL1K'}]);
+ assert.deepEqual(found,[{message_id:541065,asin:'B09MLBPL1K',title:null}]);
+});
+
+test('Extracts a factual product name from Telegram page metadata',()=>{
+ assert.equal(extractProductTitle({message:'https://link.amazon/x',
+  media:{webpage:{title:'Mixer Power Inox 3 em 1 600W Elgin Lunar 110V'}}}),
+  'Mixer Power Inox 3 em 1 600W Elgin Lunar 110V');
+});
+test('Avoids attributing a non-product price line as a product name',()=>{
+ assert.equal(extractProductTitle({message:'FRETE GRATIS PARA ASSINANTES PRIME\nhttps://link.amazon/x'}),null);
 });
