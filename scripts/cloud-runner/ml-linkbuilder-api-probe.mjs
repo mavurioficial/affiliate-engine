@@ -5,9 +5,9 @@
 import {unpackageMavuriAuthState} from './auth-state.mjs';
 const PRODUCT='https://www.mercadolivre.com.br/maquininha-3-em-1-kemei-km-1910-aparador-pelo-corpo-agua-resistente/p/MLB21835256';
 const BASE='https://www.mercadolivre.com.br';
-const TARGET=BASE+'/affiliate-program/api/v2/affiliates/linkbuilder/createLink';
+const TARGET=BASE+'/affiliate-program/api/v2/stripe/user/links';
 const TAG='lucasbrasildf';
-const result={test:'ml_linkbuilder_authenticated_api_one_product',read_only_output:true,no_publication:true,
+const result={test:'ml_stripe_user_links_authenticated_one_product',read_only_output:true,no_publication:true,
   authenticated_cookie_bundle_present:false,request_completed:false,
   http_status:null,response_json:false,product_match:false,tag_match:false,
   short_link_returned:false,official_long_ref_returned:false,ok:false,reason:null};
@@ -22,15 +22,15 @@ try{
  const {request}=await import('playwright-core');
  context=await request.newContext({baseURL:BASE,storageState:state,locale:'pt-BR',
   extraHTTPHeaders:{'Accept':'application/json, text/plain, */*','Content-Type':'application/json',
-   'Origin':BASE,'Referer':BASE+'/afiliados/linkbuilder','Accept-Language':'pt-BR,pt;q=0.9'},
+   'Origin':BASE,'Referer':PRODUCT,'Accept-Language':'pt-BR,pt;q=0.9'},
   timeout:20000});
- const response=await context.post(TARGET,{data:{urls:[PRODUCT],tag:TAG},maxRedirects:0});
+ const response=await context.post(TARGET,{data:{buy_box_winner:'MLB5558570502',tag:TAG,url:PRODUCT},maxRedirects:0});
  result.request_completed=true;
  result.http_status=response.status();
  if(response.status()===200){
   let body=null;try{body=await response.json()}catch{}
-  result.response_json=Boolean(body && Array.isArray(body.urls));
-  const row=body?.urls?.[0];
+  result.response_json=Boolean(body && typeof body==='object');
+  const row=Array.isArray(body?.urls)?body.urls[0]:body;
   result.product_match=String(row?.origin_url||'').split('?')[0]===PRODUCT;
   result.tag_match=row?.tag===TAG;
   result.short_link_returned=/^https:\/\/meli\.la\/[A-Za-z0-9]+$/.test(String(row?.short_url||''));
