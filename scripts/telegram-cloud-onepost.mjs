@@ -150,7 +150,7 @@ async function run(){
  if(mode==='send'&&(localHour<8||localHour>=22)){
   console.log('Outside 08:00–22:00 Brasilia: no publication.');return;
  }
- if(!['preview','send','cleanup'].includes(mode))throw Error('Use preview/send/cleanup mode');
+ if(!['preview','send','cleanup','reconcile'].includes(mode))throw Error('Use preview/send/cleanup/reconcile mode');
  if(mode==='cleanup'){
   const token=await githubToken();
   const result=await cloudRequest(token,{mode:'cleanup',confirmed:'EXCLUIR_APENAS_NICHOS'});
@@ -164,6 +164,56 @@ async function run(){
  const {TelegramClient}=await import('teleproto');
  const {StringSession}=await import('teleproto/sessions');
  const token=await githubToken();
+ if(mode==='reconcile'){
+  const state=await cloudRequest(token,{mode:'reconcile_get'});
+  const generalId='3d832e75-a1ac-4e3c-bd4a-b1c357bd48ed';
+  const pending=(state.pending||[]).filter(x=>x.channel_id===generalId);
+  if(!pending.length){console.log(JSON.stringify({phase:'amazon_reconcile',pending:0}));return}
+  const clientRecon=new TelegramClient(new StringSession(session),id,hash,{connectionRetries:2,receiveUpdates:false});
+  const findings=[];
+  try{
+   await clientRecon.connect();
+   const dialogs=await clientRecon.getDialogs({limit:500});
+   const general=dialogs.find(d=>String(d?.title||d?.name||d?.entity?.title||'').toLowerCase()==='mavuri ofertas');
+   if(!general)throw Error('Mavuri Ofertas group missing in Telegram personal session');
+   const oldest=Math.min(...pending.map(x=>new Date(x.created_at).getTime()))-180000;
+   const recent=[];
+   let offsetId=0,complete=false;
+   for(let pageNo=0;pageNo<30;pageNo++){
+    const page=await clientRecon.getMessages(general.entity,{limit:100,...(offsetId?{offsetId}:{})});
+    if(!page.length){complete=true;break}
+    for(const msg of page){
+     const when=msg.date instanceof Date?msg.date.getTime():Number(msg.date)*1000;
+     if(when<oldest){complete=true;break}
+     recent.push(msg);
+    }
+    if(complete||page.length<100){complete=true;break}
+    const last=Number(page[page.length-1]?.id);
+    if(!Number.isSafeInteger(last)||(offsetId&&last>=offsetId))throw Error('History pagination failed');
+    offsetId=last;
+   }
+   for(const p of pending){
+    const created=new Date(p.created_at).getTime();
+    const matched=recent.find(msg=>{
+     const when=msg.date instanceof Date?msg.date.getTime():Number(msg.date)*1000;
+     const body=String(msg.message||'');
+     return Math.abs(when-created)<180000&&
+      body.includes('/dp/'+p.asin+'/ref=nosim?tag=mavuri0a-20');
+    });
+    if(matched)findings.push({id:p.id,status:'sent',telegram_message_id:Number(matched.id)});
+    else if(complete)findings.push({id:p.id,status:'retryable'});
+   }
+   console.log(JSON.stringify({phase:'telegram_reconcile_history',pending:pending.length,
+    scanned:recent.length,complete,found:findings.filter(x=>x.status==='sent').length,
+    safely_missing:findings.filter(x=>x.status==='retryable').length}));
+  }finally{await clientRecon.disconnect().catch(()=>{})}
+  if(findings.length){
+   const outcome=await cloudRequest(token,{mode:'reconcile_apply',
+    confirmed:'VERIFICADO_HISTORICO_TELEGRAM',findings});
+   console.log(JSON.stringify({phase:'amazon_reconcile_applied',...outcome}));
+  }
+  return;
+ }
  const cursor=await cloudRequest(token,{mode:'cursor_get'});
  const lastId=Number(cursor.last_message_id);
  if(!Number.isSafeInteger(lastId)||lastId<541060)
