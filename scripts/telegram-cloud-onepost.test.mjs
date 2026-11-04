@@ -24,12 +24,12 @@ test('Resolves exactly validated two-hop redirect and blocks foreign host',async
  assert.equal(await resolveAmazonAsin('https://link.amazon/q',stub),'B0HD2T6BZZ');
  assert.equal(await resolveAmazonAsin('https://link.amazon/other',stub),null);
 });
-test('Only fresh messages; no duplicate ASIN',async()=>{
+test('Preserve distinct source posts even for same ASIN',async()=>{
  const stub=async()=>({status:301,headers:new Headers({location:'https://www.amazon.com.br/dp/B09MLBPL1K'}),body:null});
  const found=await collectCandidates([
  msg(541065,'https://link.amazon/a'),msg(541064,'https://link.amazon/b'),msg(541059,'https://link.amazon/old')
  ],stub);
- assert.deepEqual(found.map(x=>({message_id:x.message_id,asin:x.asin,title:x.title})),[{message_id:541065,asin:'B09MLBPL1K',title:null}]);
+ assert.deepEqual(found.map(x=>({message_id:x.message_id,asin:x.asin,title:x.title})),[{message_id:541064,asin:'B09MLBPL1K',title:null},{message_id:541065,asin:'B09MLBPL1K',title:null}]);
 });
 
 test('Extracts a factual product name from Telegram page metadata',()=>{
