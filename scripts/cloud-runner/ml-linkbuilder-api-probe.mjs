@@ -13,7 +13,12 @@ const result={test:'ml_stripe_user_links_authenticated_one_product',read_only_ou
   short_link_returned:false,official_long_ref_returned:false,ok:false,reason:null};
 let context;
 try{
- const encrypted=process.env.MAVURI_AUTH_BUNDLE||'',key=process.env.MAVURI_AUTH_KEY||'';
+ const dedicatedBundle=process.env.MAVURI_ML_AUTH_BUNDLE||'';
+ const dedicatedKey=process.env.MAVURI_ML_AUTH_KEY||'';
+ if(Boolean(dedicatedBundle)!==Boolean(dedicatedKey))throw Error('dedicated_ml_session_pair_incomplete');
+ const encrypted=dedicatedBundle||process.env.MAVURI_AUTH_BUNDLE||'';
+ const key=dedicatedKey||process.env.MAVURI_AUTH_KEY||'';
+ result.session_source=dedicatedBundle?'dedicated_ml':'legacy';
  if(!encrypted||!key)throw Error('session_not_configured');
  const state=unpackageMavuriAuthState(encrypted,key);
  const cookies=(state?.cookies||[]).filter(c=>String(c.domain||'').replace(/^\./,'').endsWith('mercadolivre.com.br'));
@@ -43,7 +48,7 @@ try{
   result.reason='api_http_'+response.status();
  }
 }catch(e){
- const expected=new Set(['session_not_configured','no_stored_ml_cookies']);
+ const expected=new Set(['session_not_configured','dedicated_ml_session_pair_incomplete','no_stored_ml_cookies']);
  result.reason=expected.has(e?.message)?e.message:'auth_bundle_or_request_failed';
 }finally{
  try{await context?.dispose()}catch{}
