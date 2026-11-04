@@ -30,6 +30,10 @@ function selfTest(){
 }
 
 async function capture(){
+ // Disabled after Mercado Livre displayed login attempt limit in Playwright Chrome.
+ // Never run a login attempt under automated browser control here.
+ throw Error('ml_automated_login_suspended_due_to_account_rate_limit');
+ /*
  if(!process.stdin.isTTY)throw Error('interactive_local_terminal_required');
  const {chromium}=await import('playwright-core');
  const profile=await mkdtemp(join(tmpdir(),'mavuri-ml-login-'));
@@ -79,6 +83,7 @@ async function capture(){
   });
  }
 }
+*/
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
  const mode=process.argv[2];
  if(mode==='--self-test')selfTest();
