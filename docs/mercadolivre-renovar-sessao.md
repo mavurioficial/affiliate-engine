@@ -13,6 +13,8 @@ garantia de que o Mercado Livre aceitará a execução na nuvem.**
 
 ## Passo 1 — gerar o par criptografado localmente
 
+**Jeito mais simples no Windows:** abra o repositório atualizado no computador e execute o arquivo da raiz `RENOVAR_LOGIN_ML.bat` com duplo clique. Ele verifica Node.js, instala a dependência local sem administrador e abre o Chrome temporário para o login. Os passos manuais abaixo servem como alternativa.
+
 1. Abra um PowerShell na pasta raiz do repositório.
 2. Instale a dependência **na pasta do projeto**, sem privilégios administrativos:
 
