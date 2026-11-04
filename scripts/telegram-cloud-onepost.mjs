@@ -1,10 +1,10 @@
 /**
  * Mavuri recurring collection. Reads newest messages from a group already
- * joined by the user's account, resolves up to eight Amazon ASINs and submits
+ * joined by the user's account, resolves Amazon ASINs and submits
  * candidates to Supabase with short-lived GitHub OIDC. No session write,
- * message archival, or original third-party text used in published message.
+ * message archival. Source offer text is relayed with Amazon links replaced.
  */
-const TARGET='grupotabugado', MAX_MESSAGES=250, MAX_CANDIDATES=8;
+const TARGET='grupotabugado';
 const STORE_HOSTS=new Set(['amazon.com.br','www.amazon.com.br','link.amazon','amzn.to','a.co']);
 const REDIRECT_HOSTS=new Set([...STORE_HOSTS,'amzlinks.in','www.amzlinks.in']);
 const SHORT_HOSTS=new Set(['link.amazon','amzn.to','a.co','amzlinks.in','www.amzlinks.in']);
@@ -20,7 +20,7 @@ export function findAmazonLinks(message){
  for(const ent of message?.entities??[])if(typeof ent?.url==='string')values.push(ent.url);
  const links=[],seen=new Set();
  for(const link of values){const u=safeUrl(link);if(!u||seen.has(u.href))continue;
- seen.add(u.href);links.push(u.href);if(links.length===3)break;}
+ seen.add(u.href);links.push(u.href);}
  return links;
 }
 
@@ -101,19 +101,22 @@ export async function resolveAmazonAsin(link,request=fetch){
  return getAsin(u.href);
 }
 export async function collectCandidates(messages,request=fetch,minUnixSeconds=0){
- const result=[],seen=new Set();
- for(const msg of messages){
+ const result=[];
+ for(const msg of [...messages].reverse()){
   const id=Number(msg?.id);
-  const messageTime=msg?.date instanceof Date?Math.trunc(msg.date.getTime()/1000):Number(msg?.date);
+  const time=msg?.date instanceof Date?Math.trunc(msg.date.getTime()/1000):Number(msg?.date);
   if(!Number.isSafeInteger(id)||id<=541060)continue;
-  if(minUnixSeconds && (!Number.isFinite(messageTime)||messageTime<minUnixSeconds))continue;
-  const links=findAmazonLinks(msg);
+  if(minUnixSeconds&&(!Number.isFinite(time)||time<minUnixSeconds))continue;
+  const links=findAmazonLinks(msg),products=[];
   for(const link of links){
    const asin=await resolveAmazonAsin(link,request);
-   if(!asin||seen.has(asin))continue;seen.add(asin);
-   result.push({message_id:id,asin,title:links.length===1?extractProductTitle(msg):null});
-   if(result.length>=MAX_CANDIDATES)return result;
+   if(asin&&!products.some(p=>p.asin===asin))products.push({asin,source_link:link});
   }
+  if(!products.length)continue;
+  result.push({message_id:id,asin:products[0].asin,
+   title:extractProductTitle(msg),
+   source_text:String(msg?.message||'').slice(0,3500),
+   products});
  }
  return result;
 }
@@ -150,8 +153,23 @@ async function run(){
   const dialogs=await client.getDialogs({limit:500});
   const group=dialogs.find(d=>String(d?.entity?.username||'').toLowerCase()==='grupotabugado');
   if(!group)throw Error('Source group unavailable');
-  const msgs=await client.getMessages(group.entity,{limit:MAX_MESSAGES});
-  const since=Math.floor(Date.now()/1000)-90*60;
+  const since=Math.floor(Date.now()/1000)-24*3600;
+  let offsetId=0;
+  const msgs=[];
+  while(true){
+   const page=await client.getMessages(group.entity,{limit:100,...(offsetId?{offsetId}:{})});
+   if(!page.length)break;
+   let reached=false;
+   for(const m of page){
+    const seconds=m.date instanceof Date?Math.floor(m.date.getTime()/1000):Number(m.date);
+    if(seconds<since){reached=true;break}
+    msgs.push(m);
+   }
+   if(reached||page.length<100)break;
+   const last=Number(page[page.length-1]?.id);
+   if(!Number.isSafeInteger(last)||last>=offsetId&&offsetId!==0)throw Error('Telegram pagination failed');
+   offsetId=last;
+  }
   candidates=await collectCandidates(msgs,fetch,since);
   mlCandidates=collectMercadoLivreCandidates(msgs,since);
   console.log(JSON.stringify({phase:'telegram_cloud_read',group:'@GRUPOTABUGADO',
@@ -161,14 +179,33 @@ async function run(){
  }finally{await client.disconnect().catch(()=>{});}
  if(!candidates.length&&!mlCandidates.length) console.log('No recent Amazon or Mercado Livre candidate; reporting empty cycle to cloud.');
  const token=await githubToken();
- const url='https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-amazon-cloud-batch';
- const response=await fetch(url,{method:'POST',headers:{
- authorization:'Bearer '+token,'content-type':'application/json'
- },body:JSON.stringify({mode,confirmed:mode==='send'?'PUBLICAR':null,
- workflow_run_id:process.env.GITHUB_RUN_ID,candidates,ml_candidates:mlCandidates}),signal:AbortSignal.timeout(24000)});
- const data=await response.json().catch(()=>({ok:false,error:'unexpected_response'}));
- console.log(JSON.stringify({phase:'mavuri_cloud_'+mode,...data}));
- if(!response.ok||!data.ok)throw Error('Cloud rejected: '+(data.error||response.status));
+ const url='https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-amazon-mirror';
+ let sent=0,skipped=0;
+ // Chunking is transport-only: every collected message is processed, without an offer quota.
+ const batches=[];
+ let batch=[];
+ for(const item of candidates){
+  const trial=[...batch,item];
+  if(batch.length&&JSON.stringify(trial).length>50000){batches.push(batch);batch=[]}
+  batch.push(item);
+ }
+ if(batch.length)batches.push(batch);
+ if(!batches.length)batches.push([]);
+ for(let i=0;i<batches.length;i++){
+  const response=await fetch(url,{method:'POST',headers:{
+   authorization:'Bearer '+token,'content-type':'application/json'
+  },body:JSON.stringify({mode,confirmed:mode==='send'?'PUBLICAR':null,
+   workflow_run_id:process.env.GITHUB_RUN_ID,batch_index:i,
+   candidates:batches[i],ml_candidates:i===0?mlCandidates:[]}),signal:AbortSignal.timeout(120000)});
+  const data=await response.json().catch(()=>({ok:false,error:'unexpected_response'}));
+  console.log(JSON.stringify({phase:'mavuri_amazon_mirror_'+mode,batch:i,...data}));
+  if(!response.ok||!data.ok)throw Error('Cloud rejected batch '+i+': '+(data.error||response.status));
+  sent+=Number(data.publications_sent||0);
+  skipped+=Number(data.skipped||0);
+ }
+ console.log(JSON.stringify({phase:'mirror_completed',source_messages:candidates.length,
+  telegram_deliveries:sent,skipped,batches:batches.length}));
+
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href)
  run().catch(e=>{console.error('Pilot failed:',e?.message||'unknown');process.exitCode=1});
