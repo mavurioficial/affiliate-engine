@@ -1,78 +1,34 @@
-# Mercado Livre — renovar sessão da geração de links
+# Mercado Livre — login automatizado suspenso após limite de tentativas
 
-Objetivo: testar a geração oficial de links na nuvem sem PC ligado diariamente.
-Uma renovação pontual de sessão pode ser necessária. **Ainda não existe
-garantia de que o Mercado Livre aceitará a execução na nuvem.**
+**Atualização de segurança — 04/11/2026**
 
-## Requisitos
+O Mercado Livre apresentou "Você alcançou o limite de tentativas" no Chrome aberto por Playwright. Não repita o login nesse navegador automatizado.
 
-- Windows com Google Chrome e Node.js disponíveis (sem exigir administrador).
-- Acesso à conta Mercado Livre afiliada à etiqueta `lucasbrasildf`.
-- Acesso de proprietário ao repositório GitHub `mavurioficial/affiliate-engine`.
-- Arquivos do repositório atualizados, baixados diretamente do GitHub oficial do projeto.
+## Situação do Mavuri
 
-## Passo 1 — gerar o par criptografado localmente
+- RENOVAR_LOGIN_ML.bat desativado: não abre Chrome, não faz login e não envia requisições.
+- ml-session-renew.mjs: captura de sessão desativada. O teste de criptografia fictícia continua disponível.
+- Shopee, Magalu e Amazon: ciclos independentes não afetados.
+- Mercado Livre: geração e publicação automáticas continuam desligadas.
+- OAuth Mercado Livre funciona para endpoints públicos documentados, mas não foi aceito pelas rotas internas de links (401/403).
 
-**Jeito mais simples no Windows:** abra o repositório atualizado no computador e execute o arquivo da raiz `RENOVAR_LOGIN_ML.bat` com duplo clique. Ele verifica Node.js, instala a dependência local sem administrador e abre o Chrome temporário para o login. Os passos manuais abaixo servem como alternativa.
+## Recuperar acesso à conta
 
-1. Abra um PowerShell na pasta raiz do repositório.
-2. Instale a dependência **na pasta do projeto**, sem privilégios administrativos:
+1. Feche o Chrome temporário do teste e o processo do .bat.
+2. Aguarde a liberação de tentativas pelo próprio Mercado Livre. Não há horário garantido.
+3. Utilize apenas o Chrome habitual ou aplicativo oficial e faça login manualmente.
+4. Caso o limite persista, procure o suporte de acesso à conta da plataforma.
+5. Não compartilhe cookies, tokens, HARs ou cabeçalhos de autenticação no chat.
 
-   ```powershell
-   npm install --no-save --no-audit --no-fund --ignore-scripts playwright-core@1.55.0
-   ```
+Não tentaremos modificar o navegador para contornar verificações de segurança.
+Mesmo com cookies renovados, o Mercado Livre pode recusar a execução em datacenter.
 
-3. Execute:
+## Alternativas tecnicamente honestas
 
-   ```powershell
-   node scripts/cloud-runner/ml-session-renew.mjs capture
-   ```
+1. Integração autorizada: verificar com o programa de afiliados ou parceiros se existe acesso de servidor para gerar links oficiais.
+2. Assistência no navegador pessoal: Mavuri prepara os produtos, e o titular usa uma sessão manual normal do Mercado Livre para gerar links oficiais em lote. Não exige PC ligado 24 horas, mas não garante geração contínua na nuvem.
+3. Links diretos com etiqueta: apenas como hipótese de teste de atribuição, sem publicação antes de comprovação e conformidade com as regras.
 
-4. Um Chrome **temporário e separado** será aberto na página do Gerador de Links.
-   Entre na sua conta normalmente, faça a autenticação adicional se solicitada
-   e confirme que a etiqueta é exatamente `lucasbrasildf`.
-5. Depois, volte ao PowerShell e pressione **Enter**. O código confere a etiqueta
-   e gera dois arquivos em `%USERPROFILE%\MavuriCloudAuth\ml-...`:
-
-   - `MAVURI_ML_AUTH_BUNDLE.txt` — sessão criptografada.
-   - `MAVURI_ML_AUTH_KEY.txt` — chave de criptografia.
-
-   Os arquivos **nunca** são adicionados ao Git nem enviados automaticamente.
-
-## Passo 2 — atualizar dois secrets no GitHub
-
-1. Repositório `mavurioficial/affiliate-engine`.
-2. `Settings` → `Environments` → `mavuri-auth-test` → `Environment secrets`.
-3. Adicione/atualize **apenas**:
-
-   - `MAVURI_ML_AUTH_BUNDLE` com o conteúdo do primeiro arquivo.
-   - `MAVURI_ML_AUTH_KEY` com o conteúdo do segundo arquivo.
-
-4. **Não substitua** `MAVURI_AUTH_BUNDLE` e `MAVURI_AUTH_KEY`
-   (secrets legados usados por outros testes Mavuri).
-5. Depois de confirmar os dois secrets, elimine os dois arquivos locais
-   conforme sua política de segurança.
-
-**Nunca** envie os conteúdos dos arquivos, cookies, tokens, HARs ou cabeçalhos
-de autenticação por chat, e-mail, commit, issue ou nos logs do GitHub.
-
-## Passo 3 — teste isolado
-
-Em `Actions`, escolha `Mavuri - teste isolado link afiliado ML` e clique em
-`Run workflow` → `main`. O teste valida apenas um produto (Kemei),
-sem enviar ao Telegram e sem alterar o banco de dados.
-
-A aplicação do Mercado Livre pode retornar HTTP 401/403 mesmo com sessão nova.
-Nesse caso, não insista com métodos de evasão de segurança; a alternativa
-será buscar integração expressamente autorizada com o programa de afiliados.
-
-## Segurança e limites
-
-- O projeto não registra valores de cookies, senhas, headers ou URLs geradas.
-- A captura usa um perfil temporário do Chrome, apagado ao final.
-- Nenhum serviço precisa ficar ligado em seu computador depois da captura.
-- Não foi ativada nenhuma publicação de Mercado Livre.
-- A sessão pode expirar, ser revogada ou deixar de funcionar com mudanças
-  no site e nas políticas do Mercado Livre.
-- A exportação de sessão é sensível; trate ambos os arquivos como senhas,
-  mesmo com o conteúdo criptografado.
+## Referências
+- https://www.mercadolivre.com.br/l/afiliados-gere-seus-links
+- https://www.mercadolivre.com.br/l/comece-a-recomendar
