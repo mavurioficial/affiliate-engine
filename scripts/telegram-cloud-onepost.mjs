@@ -157,21 +157,19 @@ async function run(){
  const {StringSession}=await import('teleproto/sessions');
  const token=await githubToken();
  const cursor=await cloudRequest(token,{mode:'cursor_get'});
- const lastId=cursor.last_message_id===null?null:Number(cursor.last_message_id);
- if(lastId!==null&&(!Number.isSafeInteger(lastId)||lastId<541060))
+ const lastId=Number(cursor.last_message_id);
+ if(!Number.isSafeInteger(lastId)||lastId<541060)
   throw Error('Invalid source cursor');
  console.log(JSON.stringify({phase:'telegram_cursor',last_message_id:lastId,
   initialized:cursor.initialized}));
  const client=new TelegramClient(new StringSession(session),id,hash,{connectionRetries:2,receiveUpdates:false});
- let candidates=[],mlCandidates=[],highestSeen=lastId||0;
+ let candidates=[],mlCandidates=[],highestSeen=lastId;
  try{
   await client.connect();
   if(!await client.getMe())throw Error('Telegram session invalid');
   const dialogs=await client.getDialogs({limit:500});
   const group=dialogs.find(d=>String(d?.entity?.username||'').toLowerCase()==='grupotabugado');
   if(!group)throw Error('Source group unavailable');
-  // Only the very first cycle uses a bounded 24h bootstrap; subsequent cycles use ID.
-  const bootstrapSince=lastId===null?Math.floor(Date.now()/1000)-24*3600:0;
   let offsetId=0;
   const msgs=[];
   while(true){
@@ -180,9 +178,7 @@ async function run(){
    let reached=false;
    for(const m of page){
     const messageId=Number(m.id);
-    const seconds=m.date instanceof Date?Math.floor(m.date.getTime()/1000):Number(m.date);
-    if((lastId!==null&&messageId<=lastId)||
-      (bootstrapSince&&seconds<bootstrapSince)){reached=true;break}
+    if(messageId<=lastId){reached=true;break}
     if(!Number.isSafeInteger(messageId))throw Error('Invalid Telegram message ID');
     highestSeen=Math.max(highestSeen,messageId);
     msgs.push(m);
@@ -193,8 +189,8 @@ async function run(){
     throw Error('Telegram pagination failed');
    offsetId=last;
   }
-  candidates=await collectCandidates(msgs,fetch,bootstrapSince);
-  mlCandidates=collectMercadoLivreCandidates(msgs,bootstrapSince);
+  candidates=await collectCandidates(msgs,fetch);
+  mlCandidates=collectMercadoLivreCandidates(msgs);
   console.log(JSON.stringify({phase:'telegram_cloud_read',group:'@GRUPOTABUGADO',
    messages_checked:msgs.length,amazon_products_resolved:candidates.length,
    asin_ids:candidates.map(c=>c.asin),
@@ -225,7 +221,7 @@ async function run(){
  }
  // The cursor only advances once every delivery has been confirmed.
  // On incomplete deliveries, the next run rereads the same range; audit keys prevent re-sends.
- if(mode==='send'&&unconfirmed===0&&highestSeen>(lastId||0)){
+ if(mode==='send'&&unconfirmed===0&&highestSeen>lastId){
   const committed=await cloudRequest(token,{mode:'cursor_commit',
    confirmed:'PUBLICAR',last_message_id:highestSeen});
   console.log(JSON.stringify({phase:'telegram_cursor_committed',...committed}));
