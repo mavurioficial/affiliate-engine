@@ -2,9 +2,9 @@ name: Mavuri - Uma oferta Amazon do Telegram
 
 on:
   schedule:
-    # A cada 30 minutos entre 08:17 e 21:47 (horário de Brasília).
-    - cron: '17,47 8-21 * * *'
-      timezone: "America/Sao_Paulo"
+    # 08:17-21:47 Brasilia (UTC-3), no fuso UTC padrao do GitHub.
+    - cron: '17,47 11-23 * * *'
+    - cron: '17,47 0 * * *'
   workflow_dispatch:
     inputs:
       mode:
