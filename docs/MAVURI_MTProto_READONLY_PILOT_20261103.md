@@ -42,3 +42,15 @@ O script solicita API ID/hash diretamente no terminal. No primeiro acesso, o Tel
 1. Confirmar uma leitura pontual com a conta do usuário, sem exposição de credenciais.
 2. Para automação recorrente, definir uma fonte/forma de acesso permitida e uma conta ou sessão adequada, sem risco à conta pessoal.
 3. Resolver ASIN/ID ML, validar preços e comissão, e só então simular ou publicar em um canal privado controlado.
+
+## Resultado de execução local informado pelo usuário (03/11/2026, horário de Brasília)
+
+A execução pontual via Node.js portátil + Teleproto no Windows, autenticada voluntariamente pelo usuário, retornou:
+
+- `resultado: leitura_pontual_ok`
+- Grupo: `@GRUPOTABUGADO` (já acessível à conta do usuário)
+- `mensagens_examinadas: 3`, `mensagens_com_links: 3`
+- `links_identificados`: Amazon `2`; Mercado Livre `1`
+- `sessao_salva: false`, `conteudo_salvo: false`, `enviado_ao_supabase: false`, `publicado: false`
+
+Esses números foram conferidos pelo usuário no terminal, sem transferir conteúdo das mensagens ou credenciais para o repositório. A sessão não foi persistida pelo diagnóstico. Não há automação recorrente, bot no grupo, geração de link ou postagem. O resultado comprova exclusivamente leitura pontual da conta autorizada pelo usuário; não altera as restrições de coleta sistemática nem as necessidades de validação comercial.
