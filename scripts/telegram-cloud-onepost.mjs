@@ -131,9 +131,11 @@ async function githubToken(){
  return j.value;
 }
 const CLOUD_URL='https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-amazon-mirror';
-async function cloudRequest(token,request){
+async function cloudRequest(_token,request){
+ // GitHub OIDC credentials are short-lived: mint a fresh token for every batch and cursor commit.
+ const freshToken=await githubToken();
  const response=await fetch(CLOUD_URL,{method:'POST',headers:{
-  authorization:'Bearer '+token,'content-type':'application/json'
+  authorization:'Bearer '+freshToken,'content-type':'application/json'
  },body:JSON.stringify({workflow_run_id:process.env.GITHUB_RUN_ID,...request}),
  signal:AbortSignal.timeout(120000)});
  const data=await response.json().catch(()=>({ok:false,error:'unexpected_response'}));
