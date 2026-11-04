@@ -161,7 +161,7 @@ async function run(){
  }finally{await client.disconnect().catch(()=>{});}
  if(!candidates.length&&!mlCandidates.length) console.log('No recent Amazon or Mercado Livre candidate; reporting empty cycle to cloud.');
  const token=await githubToken();
- const url='https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-amazon-cloud-onepost';
+ const url='https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-amazon-cloud-batch';
  const response=await fetch(url,{method:'POST',headers:{
  authorization:'Bearer '+token,'content-type':'application/json'
  },body:JSON.stringify({mode,confirmed:mode==='send'?'PUBLICAR':null,
