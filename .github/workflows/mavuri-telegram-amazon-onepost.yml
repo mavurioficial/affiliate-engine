@@ -1,0 +1,42 @@
+name: Mavuri - Uma oferta Amazon do Telegram
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Testar leitura ou PUBLICAR UMA oferta no Mavuri Ofertas'
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - send
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: mavuri-telegram-amazon-onepost
+  cancel-in-progress: false
+
+jobs:
+  onepost:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate ASIN resolver without Telegram
+        run: node --test scripts/telegram-cloud-onepost.test.mjs
+      - name: Install Telegram client
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund teleproto@1.232.1
+      - name: Read joined Telegram group and preview or publish ONE Amazon product
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_SESSION_STRING: ${{ secrets.TG_SESSION_STRING }}
+          PILOT_MODE: ${{ inputs.mode }}
+        run: node scripts/telegram-cloud-onepost.mjs
