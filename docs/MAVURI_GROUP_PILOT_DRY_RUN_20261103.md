@@ -54,3 +54,18 @@ O webhook isolado `mavuri-telegram-source-intake` permanece bloqueado até criar
 
 ## Próximo teste operacional sem PC
 Criar bot de entrada exclusivo usando BotFather; salvar token e IDs permitidos nos segredos do Supabase, nunca via chat. Encaminhar uma oferta para esse bot; validar gravação e deduplicação. Bot não captura automaticamente mensagens de terceiros sem inclusão/autorização. Testar publicação somente em destino privado controlado e depois dos gates de link e preço; evitar testes em canais públicos de produção.
+
+## Atualização — conversor local Teleproto (03/11/2026 ~22h01 BRT)
+
+O usuário executou o segundo teste **na própria máquina** com sessão não persistida. Confirmou 3 mensagens do @GRUPOTABUGADO, 3 links: 2 Amazon, 1 Mercado Livre. O script retornou URLs próprias **candidatas** mas marcou `verified_product_match=false`, `verified_price=false`, `publication_allowed=false`.
+
+Mapeamento **comprovado pelo resultado local** (corrigindo a associação anterior de ID do post Amazon):
+- **541060**: `https://link.amazon/B0CccLF8f` → 2 hops → ASIN de prévia `B0HD2T6BZZ` → `https://www.amazon.com.br/dp/B0HD2T6BZZ/ref=nosim?tag=mavuri0a-20`. **Produto não identificado independentemente**; preço não identificado.
+- **541059**: `https://link.amazon/B08aKs8yN` → 2 hops → ASIN de prévia `B09MLBPL1K` → `https://www.amazon.com.br/dp/B09MLBPL1K/ref=nosim?tag=mavuri0a-20`. Referência histórica externa identifica esse ASIN como **Personal VIP folha dupla, leve 32/pague 28, 30 m**, mas preço atual, recorrência e correspondência ao anúncio recente ainda não confirmados.
+- **541058**: `https://meli.la/1DhpTm8` → permanece sem link ML próprio de geração oficial.
+
+O projeto tinha associado erroneamente o texto do Personal à mensagem 541060. Foi corrigido no Supabase para a mensagem **541059**, preservando texto/condições como alegações da fonte. Foi criada nova entrada separada da mensagem 541060, com título/preço nulos, e atribuída a URL da mensagem 541058 ao candidato Marinex.
+
+A nova view privada `mavuri_internal.amazon_forwarded_link_previews` constrói dinamicamente os links Amazon de prévia com ASIN resolvido provisoriamente do relato e ID de rastreamento existente da conta conectada. A view produz 2 URLs candidatas, **0 autorizadas para publicação**; acesso `anon` e `authenticated` negado, `service_role` permitido. Não houve comunicação com os canais nem geração de clique artificial.
+
+**Próximo gate:** confirmar na Amazon o nome/variante de ambos os ASINs e os preços efetivos, de preferência usando dados da Creators API quando a conta estiver apta. Depois usar o Verificador de Links da Amazon antes de habilitar envio. Um URL com tag não equivale a garantia de comissão.
