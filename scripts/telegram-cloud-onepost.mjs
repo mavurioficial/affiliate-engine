@@ -23,6 +23,25 @@ export function findAmazonLinks(message){
  seen.add(u.href);links.push(u.href);if(links.length===3)break;}
  return links;
 }
+
+/** Minimal factual product-name extraction. Never store original Telegram text. */
+export function extractProductTitle(message){
+ const pageTitle=String(message?.media?.webpage?.title||'').replace(/\s+/g,' ').trim();
+ const looksLikeProduct=(line)=>line.length>=12 && line.length<=155 &&
+   /[A-Za-zÀ-ÿ].*[A-Za-zÀ-ÿ].*[A-Za-zÀ-ÿ]/u.test(line) &&
+   !/^(amazon(\.com\.br)?|frete|cupom|promoções?|promoção|preço|oferta|ganhos|link|prime|r\$|https?)/i.test(line);
+ if(looksLikeProduct(pageTitle))return pageTitle;
+ const lines=String(message?.message||'')
+  .replace(/https?:\/\/\S+/giu,' ')
+  .split(/[\n\r]+/)
+  .map(x=>x.replace(/^[^\p{L}\p{N}]+/gu,'').replace(/\s+/g,' ').trim());
+ for(const line of lines){
+  if(looksLikeProduct(line) &&
+    !/^\s*(?:frete gr[aá]tis|assine|ganhe|leve \d|pague \d|r\$|no pix|c[óo]digo|cupom|desconto|s[óo] hoje)/i.test(line))return line;
+ }
+ return null;
+}
+
 export function getAsin(value){
  const u=safeUrl(value,new Set(['amazon.com.br','www.amazon.com.br']));
  if(!u)return null;
@@ -55,7 +74,7 @@ export async function collectCandidates(messages,request=fetch){
   for(const link of findAmazonLinks(msg)){
    const asin=await resolveAmazonAsin(link,request);
    if(!asin||seen.has(asin))continue;seen.add(asin);
-   result.push({message_id:id,asin});
+   result.push({message_id:id,asin,title:extractProductTitle(msg)});
    if(result.length>=MAX_CANDIDATES)return result;
   }
  }
