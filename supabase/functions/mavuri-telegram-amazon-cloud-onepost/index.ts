@@ -6,7 +6,6 @@ const AUD='mavuri-telegram-amazon-onepost';
 const REPO='mavurioficial/affiliate-engine',REPO_ID='1346309308',ACTOR_ID='321065255';
 const REF='refs/heads/main';
 const WORKFLOW=REPO+'/.github/workflows/mavuri-telegram-amazon-onepost.yml@'+REF;
-const DEADLINE=Date.parse('2026-11-08T03:00:00Z');
 const CHANNEL='3d832e75-a1ac-4e3c-bd4a-b1c357bd48ed';
 const CHAT='-1003537630337',USER='70ec226e-e169-46d0-b884-3452870b40c0',TAG='mavuri0a-20';
 const KEYS=createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
@@ -24,7 +23,7 @@ async function authenticate(req:Request){
  });
  if(payload.repository!==REPO||String(payload.repository_id)!==REPO_ID||
  String(payload.actor_id)!==ACTOR_ID||payload.ref!==REF||
- payload.workflow_ref!==WORKFLOW||payload.event_name!=='workflow_dispatch'||
+ payload.workflow_ref!==WORKFLOW||!['workflow_dispatch','schedule'].includes(String(payload.event_name))||
  payload.sub!==`repo:mavurioficial@321065255/affiliate-engine@1346309308:ref:${REF}`||
  String(payload.run_attempt)!=='1'||payload.runner_environment!=='github-hosted')throw Error('claims');
  if(!/^[0-9]{5,20}$/.test(String(payload.run_id||'')))throw Error('run_id');
@@ -54,7 +53,6 @@ async function telegram(method:string,data:unknown){
 }
 Deno.serve(async request=>{
  if(request.method!=='POST')return json({ok:false,error:'post_only'},405);
- if(Date.now()>DEADLINE)return json({ok:false,error:'pilot_expired'},410);
  if(!base||!svc||!telegramToken)return json({ok:false,error:'backend_not_configured'},503);
  let runId:string;
  try{runId=await authenticate(request)}catch{return json({ok:false,error:'workflow_identity_denied'},401)}
