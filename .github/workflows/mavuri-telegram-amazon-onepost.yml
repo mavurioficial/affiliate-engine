@@ -1,10 +1,7 @@
 name: Mavuri - Espelhamento Amazon Telegram
 
 on:
-  schedule:
-    # 08:00-21:30 Brasilia (UTC-3), no fuso UTC padrao do GitHub.
-    - cron: '0,30 11-23 * * *'
-    - cron: '0,30 0 * * *'
+  # Scheduled from Supabase pg_cron to avoid missed GitHub schedule executions.
   workflow_dispatch:
     inputs:
       mode:
