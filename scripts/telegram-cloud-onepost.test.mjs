@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {safeUrl,findAmazonLinks,getAsin,resolveAmazonAsin,collectCandidates} from './telegram-cloud-onepost.mjs';
+const msg=(id,message,entities=[])=>({id,message,entities});
+test('Only HTTPS approved Amazon hosts',()=>{
+ assert.ok(safeUrl('https://link.amazon/abc'));
+ assert.equal(safeUrl('http://link.amazon/abc'),null);
+ assert.equal(safeUrl('https://link.amazon.evil.invalid/a'),null);
+ assert.equal(safeUrl('https://link.amazon:9999/x'),null);
+});
+test('Finds text links and Telegram hidden URLs',()=>{
+ assert.deepEqual(findAmazonLinks(msg(541062,'https://link.amazon/ab! https://link.amazon/ab',
+ [{url:'https://amzn.to/xyz'}])),['https://link.amazon/ab','https://amzn.to/xyz']);
+});
+test('Identifies ASIN only on Amazon product URLs',()=>{
+ assert.equal(getAsin('https://www.amazon.com.br/dp/B0HD2T6BZZ/ref=nosim'),'B0HD2T6BZZ');
+ assert.equal(getAsin('https://amazon.com.br/gp/product/B09MLBPL1K'),'B09MLBPL1K');
+ assert.equal(getAsin('https://amazon.com.br/not-product/B09MLBPL1K'),null);
+});
+test('Resolves exactly validated two-hop redirect and blocks foreign host',async()=>{
+ const paths=new Map([['https://link.amazon/q','https://amzlinks.in/q'],
+ ['https://amzlinks.in/q','https://www.amazon.com.br/dp/B0HD2T6BZZ']]);
+ const stub=async u=>({status:302,headers:new Headers({location:paths.get(u)||'https://evil.invalid/a'}),body:null});
+ assert.equal(await resolveAmazonAsin('https://link.amazon/q',stub),'B0HD2T6BZZ');
+ assert.equal(await resolveAmazonAsin('https://link.amazon/other',stub),null);
+});
+test('Only fresh messages; no duplicate ASIN',async()=>{
+ const stub=async()=>({status:301,headers:new Headers({location:'https://www.amazon.com.br/dp/B09MLBPL1K'}),body:null});
+ const found=await collectCandidates([
+ msg(541065,'https://link.amazon/a'),msg(541064,'https://link.amazon/b'),msg(541059,'https://link.amazon/old')
+ ],stub);
+ assert.deepEqual(found,[{message_id:541065,asin:'B09MLBPL1K'}]);
+});
