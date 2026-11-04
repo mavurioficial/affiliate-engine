@@ -1,10 +1,10 @@
 /**
- * One-shot Mavuri pilot. Reads <= 25 newest messages from a group already
- * joined by the user's account, resolves up to five Amazon ASINs and submits
- * candidates to Supabase with short-lived GitHub OIDC. No cron, session write,
+ * Mavuri recurring collection. Reads newest messages from a group already
+ * joined by the user's account, resolves up to eight Amazon ASINs and submits
+ * candidates to Supabase with short-lived GitHub OIDC. No session write,
  * message archival, or original third-party text used in published message.
  */
-const TARGET='grupotabugado', MAX_MESSAGES=100, MAX_CANDIDATES=8;
+const TARGET='grupotabugado', MAX_MESSAGES=250, MAX_CANDIDATES=8;
 const STORE_HOSTS=new Set(['amazon.com.br','www.amazon.com.br','link.amazon','amzn.to','a.co']);
 const REDIRECT_HOSTS=new Set([...STORE_HOSTS,'amzlinks.in','www.amzlinks.in']);
 const SHORT_HOSTS=new Set(['link.amazon','amzn.to','a.co','amzlinks.in','www.amzlinks.in']);
@@ -151,7 +151,7 @@ async function run(){
   const group=dialogs.find(d=>String(d?.entity?.username||'').toLowerCase()==='grupotabugado');
   if(!group)throw Error('Source group unavailable');
   const msgs=await client.getMessages(group.entity,{limit:MAX_MESSAGES});
-  const since=Math.floor(Date.now()/1000)-75*60;
+  const since=Math.floor(Date.now()/1000)-90*60;
   candidates=await collectCandidates(msgs,fetch,since);
   mlCandidates=collectMercadoLivreCandidates(msgs,since);
   console.log(JSON.stringify({phase:'telegram_cloud_read',group:'@GRUPOTABUGADO',
