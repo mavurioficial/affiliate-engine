@@ -114,7 +114,7 @@ export async function collectCandidates(messages,request=fetch,minUnixSeconds=0)
   }
   if(!products.length)continue;
   result.push({message_id:id,asin:products[0].asin,
-   title:extractProductTitle(msg),
+   title:products.length===1?extractProductTitle(msg):null,
    source_text:String(msg?.message||'').slice(0,3500),
    products});
  }
