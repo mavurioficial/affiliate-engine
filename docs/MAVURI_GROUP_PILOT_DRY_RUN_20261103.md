@@ -69,3 +69,13 @@ O projeto tinha associado erroneamente o texto do Personal à mensagem 541060. F
 A nova view privada `mavuri_internal.amazon_forwarded_link_previews` constrói dinamicamente os links Amazon de prévia com ASIN resolvido provisoriamente do relato e ID de rastreamento existente da conta conectada. A view produz 2 URLs candidatas, **0 autorizadas para publicação**; acesso `anon` e `authenticated` negado, `service_role` permitido. Não houve comunicação com os canais nem geração de clique artificial.
 
 **Próximo gate:** confirmar na Amazon o nome/variante de ambos os ASINs e os preços efetivos, de preferência usando dados da Creators API quando a conta estiver apta. Depois usar o Verificador de Links da Amazon antes de habilitar envio. Um URL com tag não equivale a garantia de comissão.
+
+## Validação visual de produtos Amazon (usuário, 03/11/2026)
+
+Após abrir os dois links próprios de prévia em navegador autenticado no programa Amazon:
+- **ASIN B0HD2T6BZZ**, mensagem `541060`, corresponde a **Lava-Roupas em Pó Omo Todo Ciclo, Tamanho Família, 4 kg**. O print mostra **R$ 50,26**, sendo o desconto de 5% indicado para Pix ou NuPay, com condições de compra/entrega próprias da conta. **Não foi informado preço original do post nem se a oferta equivale ao da origem.**
+- **ASIN B09MLBPL1K**, mensagem `541059`, corresponde ao **Personal Papel Higiênico VIP Folha Dupla, leve 32/pague 28, 30 m**. O print mostra **nenhuma opção de compra em destaque**; uma opção a **R$ 75,90** do vendedor **Hayfral Distribuidora**, mais **R$ 38,12** de entrega. A oferta anunciada pelo grupo era **R$ 33,52 em recorrência**, com frete condicionado a Prime. Essa condição **não aparece** no print do usuário; logo **promoção não validada para publicação**, mas não é possível concluir que desapareceu para todos os clientes/endereços.
+- Ambos os prints mostram `tag=mavuri0a-20` na URL. O formato está correto, mas a presença da tag **não prova uma comissão efetivamente atribuída**.
+
+Os dois registros em `mavuri_internal.external_discovery_candidates` foram atualizados com ASIN, URL canônica, nome do produto, status `needs_price_validation`, observação de preço da captura e `verified_product_match=true`. O preço publicado pelo grupo permanece separado da observação recente; `price_verified_current=false`, `own_affiliate_verified=false` e `publication_allowed=false`.
+A view privada `mavuri_internal.amazon_forwarded_link_previews` agora reflete correspondência do produto validada (2/2), mantendo preço e publicação bloqueados (0/2).
