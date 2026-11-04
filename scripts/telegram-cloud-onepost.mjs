@@ -66,7 +66,7 @@ export function collectMercadoLivreCandidates(messages,minUnixSeconds=0) {
    if(seen.has(key))continue;seen.add(key);
    const match=url.pathname.match(/\/p\/(MLB[0-9]{6,})(?:\/|$)/i);
    found.push({
-    message_id:id,original_url:key,
+    source_message_id:id,original_url:key,
     ml_product_id:match?match[1].toUpperCase():null,
     claimed_title:scoped.length===1?extractProductTitle(msg):null
    });
