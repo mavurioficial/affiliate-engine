@@ -174,7 +174,7 @@ async function run(){
   try{
    await clientRecon.connect();
    const dialogs=await clientRecon.getDialogs({limit:500});
-   const general=dialogs.find(d=>String(d?.title||d?.name||d?.entity?.title||'').toLowerCase()==='mavuri ofertas');
+   const general=dialogs.find(d=>String(d?.entity?.id||'')==='3537630337');
    if(!general)throw Error('Mavuri Ofertas group missing in Telegram personal session');
    const oldest=Math.min(...pending.map(x=>new Date(x.created_at).getTime()))-180000;
    const recent=[];
