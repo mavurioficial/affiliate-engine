@@ -40,3 +40,23 @@ test('Extracts a factual product name from Telegram page metadata',()=>{
 test('Avoids attributing a non-product price line as a product name',()=>{
  assert.equal(extractProductTitle({message:'FRETE GRATIS PARA ASSINANTES PRIME\nhttps://link.amazon/x'}),null);
 });
+
+test('Ignores old messages when a freshness cutoff is set',async()=>{
+ const t=1762260000;
+ const stub=async()=>({status:301,headers:new Headers({location:'https://www.amazon.com.br/dp/B09MLBPL1K'}),body:null});
+ const found=await collectCandidates([
+ {...msg(541070,'https://link.amazon/current'),date:t+15},
+ {...msg(541069,'https://link.amazon/old'),date:t-3600}
+ ],stub,t);
+ assert.deepEqual(found,[{message_id:541070,asin:'B09MLBPL1K',title:null}]);
+});
+test('With multiple links in one message does not assign a possibly wrong title',async()=>{
+ const destinations=new Map([
+  ['https://link.amazon/a','https://www.amazon.com.br/dp/B09MLBPL1K'],
+  ['https://link.amazon/b','https://www.amazon.com.br/dp/B0HD2T6BZZ']
+ ]);
+ const stub=async u=>({status:302,headers:new Headers({location:destinations.get(u)}),body:null});
+ const found=await collectCandidates([msg(541080,'Mixer Elgin 600 W 110 V https://link.amazon/a https://link.amazon/b')],stub);
+ assert.equal(found.length,2);
+ assert.ok(found.every(x=>x.title===null));
+});
