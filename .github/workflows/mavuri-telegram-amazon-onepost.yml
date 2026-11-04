@@ -12,6 +12,7 @@ on:
         options:
           - preview
           - send
+          - cleanup
 
 permissions:
   contents: read
