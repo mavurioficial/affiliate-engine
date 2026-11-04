@@ -32,12 +32,14 @@ async function authenticate(req:Request){
 }
 function parseCandidates(raw:unknown){
  if(!Array.isArray(raw)||raw.length>5)return null;
- const out:{message_id:number,asin:string}[]=[];
+ const out:{message_id:number,asin:string,title:string|null}[]=[];
  for(const item of raw){
   const id=Number(item?.message_id),asin=item?.asin;
   if(!Number.isSafeInteger(id)||id<=541060||id>5000000||
    typeof asin!=='string'||!/^[A-Z0-9]{10}$/.test(asin))return null;
-  out.push({message_id:id,asin});
+  const rawTitle=typeof item?.title==='string'?item.title:'';
+  const title=rawTitle.replace(/[<>\u0000-\u001f]/g,' ').replace(/\s+/g,' ').trim().slice(0,155);
+  out.push({message_id:id,asin,title:title.length>=12?title:null});
  }
  return out;
 }
@@ -86,7 +88,7 @@ Deno.serve(async request=>{
  if(pErr)return json({ok:false,error:'audit_unavailable'},503);
  if(previous)return json({ok:true,already_attempted:true,sent:false,
   status:previous.status,telegram_message_id:previous.telegram_message_id||null});
- let chosen:{message_id:number,asin:string}|null=null;
+ let chosen:{message_id:number,asin:string,title:string|null}|null=null;
  for(const candidate of candidates){
   const {data:old,error:e}=await db.from('mavuri_telegram_onepost_audit')
    .select('status').eq('channel_id',CHANNEL).eq('asin',candidate.asin)
@@ -98,7 +100,7 @@ Deno.serve(async request=>{
  const url='https://www.amazon.com.br/dp/'+chosen.asin+'/ref=nosim?tag='+TAG;
  if(body.mode==='preview')return json({ok:true,sent:false,mode:'preview',
   asin:chosen.asin,source_message_id:chosen.message_id,destination:'Mavuri Ofertas',
-  affiliate_link:url,price_claimed:false});
+  affiliate_link:url,title:chosen.title,price_claimed:false});
  try{
   const chat=await telegram('getChat',{chat_id:CHAT});
   if(String(chat?.id)!==CHAT)return json({ok:false,error:'wrong_telegram_chat'},409);
@@ -107,10 +109,11 @@ Deno.serve(async request=>{
   test_key:testKey,user_id:USER,channel_id:CHANNEL,asin:chosen.asin,status:'claimed'
  });
  if(insertError)return json({ok:false,error:'onepost_already_claimed'},409);
+ const productName=chosen.title?chosen.title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):null;
  const text=[
   '🛍️ <b>Achadinho Amazon | Mavuri</b>',
   '',
-  '📦 <b>Produto Amazon</b>',
+  '📦 <b>'+(productName||'Produto Amazon')+'</b>',
   '',
   '👉 Confira o produto, o preço e as condições diretamente na Amazon:',
   '<a href="'+url+'"><b>VER PRODUTO NA AMAZON</b></a>',
@@ -127,6 +130,7 @@ Deno.serve(async request=>{
   }).eq('test_key',testKey).eq('status','claimed');
   return json({ok:true,sent:true,asin:chosen.asin,
    source_message_id:chosen.message_id,telegram_message_id:messageId,
+   product_title_used:chosen.title||null,
    affiliate_link:url,channel:'Mavuri Ofertas',audit_confirmed:!saveError});
  }catch{
   await db.from('mavuri_telegram_onepost_audit').update({
