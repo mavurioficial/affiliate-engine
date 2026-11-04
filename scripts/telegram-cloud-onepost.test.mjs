@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {safeUrl,findAmazonLinks,getAsin,resolveAmazonAsin,collectCandidates,extractProductTitle} from './telegram-cloud-onepost.mjs';
+import {safeUrl,findAmazonLinks,getAsin,resolveAmazonAsin,collectCandidates,extractProductTitle,collectMercadoLivreCandidates} from './telegram-cloud-onepost.mjs';
 const msg=(id,message,entities=[])=>({id,message,entities});
 test('Only HTTPS approved Amazon hosts',()=>{
  assert.ok(safeUrl('https://link.amazon/abc'));
@@ -59,4 +59,35 @@ test('With multiple links in one message does not assign a possibly wrong title'
  const found=await collectCandidates([msg(541080,'Mixer Elgin 600 W 110 V https://link.amazon/a https://link.amazon/b')],stub);
  assert.equal(found.length,2);
  assert.ok(found.every(x=>x.title===null));
+});
+
+test('Collects Mercado Livre shortened links without rewriting tracking',()=>{
+ const recent=collectMercadoLivreCandidates([
+  msg(541140,'Marinex conjunto de assadeiras 6 peças https://meli.la/1DhpTm8'),
+  msg(541139,'Pré treino Ronnie Coleman https://meli.la/2H56Kz8')
+ ]);
+ assert.equal(recent.length,2);
+ assert.equal(recent[0].original_url,'https://meli.la/1DhpTm8');
+ assert.equal(recent[0].ml_product_id,null);
+ assert.match(recent[0].claimed_title,/Marinex/);
+ assert.equal(recent[1].original_url,'https://meli.la/2H56Kz8');
+});
+test('Only approved Mercado Livre hosts, not lookalike domains',()=>{
+ const result=collectMercadoLivreCandidates([
+  msg(541143,'https://meli.la.evil.invalid/abc https://mercadolivre.com.br/p/MLB12345678'),
+  msg(541142,'https://meli.la/valid https://meli.la/valid')
+ ]);
+ assert.equal(result.length,2);
+ assert.equal(result[0].ml_product_id,'MLB12345678');
+ assert.equal(result[1].original_url,'https://meli.la/valid');
+});
+test('Mercado Livre capture respects date cutoff and uses no other platform',()=>{
+ const date=1762250000,cutoff=date+60;
+ const records=collectMercadoLivreCandidates([
+  {...msg(541146,'https://meli.la/new'),date:date+120},
+  {...msg(541145,'https://meli.la/old'),date:date-100},
+  {...msg(541144,'https://link.amazon/x'),date:date+120}
+ ],cutoff);
+ assert.equal(records.length,1);
+ assert.equal(records[0].original_url,'https://meli.la/new');
 });
