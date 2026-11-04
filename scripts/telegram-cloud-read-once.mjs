@@ -3,7 +3,7 @@ import {StringSession} from 'teleproto/sessions';
 const hosts=new Map([['meli.la','mercadolivre'],['merc.li','mercadolivre'],['www.mercadolivre.com.br','mercadolivre'],['mercadolivre.com.br','mercadolivre'],['link.amazon','amazon'],['amzn.to','amazon'],['a.co','amazon'],['amazon.com.br','amazon'],['www.amazon.com.br','amazon']]);
 export function countLinks(text=''){
  const counts={amazon:0,mercadolivre:0};
- for(const match of String(text).match(/https?:\\/\\/[^\\s<>\"'()[\\]]+/giu)||[]){
+ for(const match of String(text).match(/https?:\/\/[^\s<>"'()[\]]+/giu)||[]){
   try{const u=new URL(match.replace(/[.,;!?]+$/g,''));const shop=hosts.get(u.hostname.toLowerCase());if(u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&shop)counts[shop]++;}catch{}
  }
  return counts;
