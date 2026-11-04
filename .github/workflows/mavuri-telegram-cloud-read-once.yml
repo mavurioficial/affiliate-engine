@@ -1,0 +1,29 @@
+name: Mavuri - Telegram cloud access pilot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mavuri-telegram-cloud-access-pilot
+  cancel-in-progress: false
+
+jobs:
+  cloud-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned Telegram MTProto client
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund teleproto@1.232.1
+      - name: Read 3 joined-group messages (counts only)
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_SESSION_STRING: ${{ secrets.TG_SESSION_STRING }}
+        run: node scripts/telegram-cloud-read-once.mjs
