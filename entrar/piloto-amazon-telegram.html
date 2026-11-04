@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Mavuri — teste Amazon no Telegram</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#152b49;background:#f2f6fb}
+*{box-sizing:border-box}body{margin:0;padding:24px 16px}
+main{max-width:620px;margin:30px auto;background:#fff;padding:26px;border:1px solid #dce7f5;border-radius:20px;box-shadow:0 12px 30px #122c5520}
+h1{font-size:25px;margin:4px 0 6px}.sub{color:#63758a;margin:0 0 25px;line-height:1.55}
+.kicker{font-size:12px;color:#3277b9;font-weight:800;text-transform:uppercase;letter-spacing:.1em}
+.product{border:1px solid #e0e9f4;padding:18px;border-radius:14px;background:#f8fbff}
+.product h2{font-size:18px;margin:0 0 9px;line-height:1.4}
+.product p{margin:8px 0;color:#526780;font-size:14px}
+a{color:#1265b4;overflow-wrap:anywhere}
+.row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #e2e9f2;padding:13px 0;font-size:14px}
+.row strong{text-align:right}
+.action{margin-top:20px;border:0;width:100%;font-weight:800;font-size:16px;padding:16px;border-radius:12px;background:#0b64bf;color:#fff;cursor:pointer}
+.action:disabled{background:#9ba8b7;cursor:not-allowed}
+.status{padding:13px 15px;border-radius:10px;background:#edf4fd;color:#27547f;line-height:1.5;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.status.error{background:#fff1f1;color:#9e2833}
+.status.ok{background:#ecf8f0;color:#206443}
+.foot{margin-top:20px;font-size:13px;line-height:1.55;color:#657587}
+</style>
+</head>
+<body>
+<main>
+<div class="kicker">Mavuri · teste controlado na nuvem</div>
+<h1>Uma oferta. Um grupo.</h1>
+<p class="sub">A oferta foi identificada a partir de uma mensagem do Tá Bugado. Aqui vamos confirmar somente o envio pelo bot Mavuri, sem preço não verificado.</p>
+<div class="product">
+  <h2>🧺 Lava-Roupas em Pó Omo Todo Ciclo — Tamanho Família, 4 kg</h2>
+  <p>Origem do exemplo: Tá Bugado, mensagem 541060</p>
+  <p>Seu link Amazon:<br>
+  <a href="https://www.amazon.com.br/dp/B0HD2T6BZZ/ref=nosim?tag=mavuri0a-20" target="_blank" rel="noopener noreferrer">amazon.com.br/dp/B0HD2T6BZZ?tag=mavuri0a-20</a></p>
+  <div class="row"><span>Canal de destino</span><strong>Mavuri Ofertas</strong></div>
+  <div class="row"><span>Preço anunciado</span><strong>Nenhum</strong></div>
+  <div class="row"><span>Quantidade de envios</span><strong>1, sem repetição</strong></div>
+</div>
+<p id="status" class="status" role="status" aria-live="polite">Verificando o login e o destino…</p>
+<button class="action" id="send" disabled>Publicar uma oferta no Telegram</button>
+<p class="foot">O botão só funciona com seu login Mavuri. Nenhuma mensagem é enviada ao abrir esta página. Se o Telegram não confirmar a entrega, o teste não é repetido automaticamente.</p>
+<p><a href="../index.html">Voltar ao painel Mavuri</a></p>
+</main>
+<script type="module">
+import {getSession} from "../src/app/auth.js";
+const endpoint="https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-amazon-user-confirmed-onepost";
+const status=document.getElementById("status"),send=document.getElementById("send");
+let accessToken=null,ready=false;
+function show(message,mode=""){
+ status.className="status"+(mode?" "+mode:"");
+ status.textContent=message;
+}
+async function request(mode){
+ const session=await getSession();
+ if(!session?.access_token)throw new Error("Faça login primeiro no painel Mavuri e abra este link novamente na mesma janela.");
+ accessToken=session.access_token;
+ const payload=mode==="send"?{mode:"send",confirmation:"PUBLICAR UMA OFERTA"}:{mode:"preview"};
+ const response=await fetch(endpoint,{
+   method:"POST",
+   headers:{"authorization":"Bearer "+accessToken,"apikey":"sb_publishable_DSklSKpNz_Jlwi2Wx089TA_5JR8pBSt","content-type":"application/json"},
+   body:JSON.stringify(payload)
+ });
+ const data=await response.json().catch(()=>({error:"Resposta do servidor indisponível"}));
+ if(!response.ok||!data.ok)throw new Error(data.error||"Operação não concluída");
+ return data;
+}
+async function preflight(){
+ try{
+  const data=await request("preview");
+  if(data.already_attempted){
+    show("Este teste já foi executado. Situação: "+data.previous_status+
+     (data.previous_message_id?" | Mensagem: "+data.previous_message_id:""),data.previous_status==="sent"?"ok":"error");
+    return;
+  }
+  ready=true;send.disabled=false;
+  show("Tudo pronto. Produto, identificador de afiliado e canal conferidos. Nenhuma mensagem foi enviada.","ok");
+ }catch(e){show(e?.message||"Não foi possível validar o teste","error")}
+}
+send.addEventListener("click",async()=>{
+ if(!ready)return;
+ if(!window.confirm("Confirma uma publicação do Omo, sem preço, somente em Mavuri Ofertas?"))return;
+ send.disabled=true;ready=false;
+ show("Enviando uma única mensagem pelo Mavuri…");
+ try{
+   const data=await request("send");
+   show("PUBLICAÇÃO CONFIRMADA no Telegram.\nCanal: "+
+   data.channel+"\nMensagem: "+(data.telegram_message_id||"identificador não retornado")+
+   "\nRegistro: "+(data.audit_recorded?"confirmado":"pendente"),"ok");
+ }catch(e){
+   show("Envio não confirmado: "+(e?.message||"erro")+
+      "\nNão tente novamente automaticamente. Confira o grupo antes de qualquer nova ação.","error");
+ }
+});
+preflight();
+</script>
+</body></html>
