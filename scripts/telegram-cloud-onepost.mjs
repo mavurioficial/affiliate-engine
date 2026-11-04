@@ -198,7 +198,7 @@ async function run(){
      const when=msg.date instanceof Date?msg.date.getTime():Number(msg.date)*1000;
      const body=String(msg.message||'');
      return Math.abs(when-created)<180000&&
-      body.includes('/dp/'+p.asin+'/ref=nosim?tag=mavuri0a-20');
+      body.includes('/dp/'+p.asin+'/ref=nosim?tag=lucasbrasil0e-20');
     });
     if(matched)findings.push({id:p.id,status:'sent',telegram_message_id:Number(matched.id)});
     else if(complete)findings.push({id:p.id,status:'retryable'});
