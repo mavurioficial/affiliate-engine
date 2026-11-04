@@ -159,7 +159,7 @@ async function run(){
    asin_ids:candidates.map(c=>c.asin),
    mercado_livre_links_detected:mlCandidates.length,text_saved:false,session_saved:false}));
  }finally{await client.disconnect().catch(()=>{});}
- if(!candidates.length&&!mlCandidates.length){console.log('No recent Amazon or Mercado Livre candidate; no publication.');return;}
+ if(!candidates.length&&!mlCandidates.length) console.log('No recent Amazon or Mercado Livre candidate; reporting empty cycle to cloud.');
  const token=await githubToken();
  const url='https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-amazon-cloud-onepost';
  const response=await fetch(url,{method:'POST',headers:{
