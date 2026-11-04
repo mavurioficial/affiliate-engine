@@ -29,7 +29,7 @@ test('Only fresh messages; no duplicate ASIN',async()=>{
  const found=await collectCandidates([
  msg(541065,'https://link.amazon/a'),msg(541064,'https://link.amazon/b'),msg(541059,'https://link.amazon/old')
  ],stub);
- assert.deepEqual(found,[{message_id:541065,asin:'B09MLBPL1K',title:null}]);
+ assert.deepEqual(found.map(x=>({message_id:x.message_id,asin:x.asin,title:x.title})),[{message_id:541065,asin:'B09MLBPL1K',title:null}]);
 });
 
 test('Extracts a factual product name from Telegram page metadata',()=>{
@@ -48,7 +48,7 @@ test('Ignores old messages when a freshness cutoff is set',async()=>{
  {...msg(541070,'https://link.amazon/current'),date:t+15},
  {...msg(541069,'https://link.amazon/old'),date:t-3600}
  ],stub,t);
- assert.deepEqual(found,[{message_id:541070,asin:'B09MLBPL1K',title:null}]);
+ assert.deepEqual(found.map(x=>({message_id:x.message_id,asin:x.asin,title:x.title})),[{message_id:541070,asin:'B09MLBPL1K',title:null}]);
 });
 test('With multiple links in one message does not assign a possibly wrong title',async()=>{
  const destinations=new Map([
@@ -57,8 +57,9 @@ test('With multiple links in one message does not assign a possibly wrong title'
  ]);
  const stub=async u=>({status:302,headers:new Headers({location:destinations.get(u)}),body:null});
  const found=await collectCandidates([msg(541080,'Mixer Elgin 600 W 110 V https://link.amazon/a https://link.amazon/b')],stub);
- assert.equal(found.length,2);
- assert.ok(found.every(x=>x.title===null));
+ assert.equal(found.length,1);
+ assert.equal(found[0].products.length,2);
+ assert.equal(found[0].title,null);
 });
 
 test('Collects Mercado Livre shortened links without rewriting tracking',()=>{
