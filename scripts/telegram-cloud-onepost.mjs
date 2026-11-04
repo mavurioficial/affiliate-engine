@@ -42,6 +42,40 @@ export function extractProductTitle(message){
  return null;
 }
 
+
+/** Extract product references from Mercado Livre without rewriting affiliate tracking. */
+const ML_HOSTS=new Set(['meli.la','merc.li','www.mercadolivre.com.br','mercadolivre.com.br']);
+const ML_LIMIT=8;
+export function collectMercadoLivreCandidates(messages,minUnixSeconds=0) {
+ const found=[],seen=new Set();
+ for(const msg of messages) {
+  const id=Number(msg?.id);
+  const time=msg?.date instanceof Date?Math.trunc(msg.date.getTime()/1000):Number(msg?.date);
+  if(!Number.isSafeInteger(id)||id<=541060||
+     (minUnixSeconds&&(!Number.isFinite(time)||time<minUnixSeconds)))continue;
+  const urls=[...String(msg?.message||'').matchAll(URLS)].map(match=>match[0]);
+  for(const entity of msg?.entities||[])if(typeof entity?.url==='string')urls.push(entity.url);
+  const scoped=[],ids=new Set();
+  for(const raw of urls) {
+   const url=safeUrl(raw,ML_HOSTS);
+   if(!url||ids.has(url.href))continue;
+   ids.add(url.href);scoped.push(url);
+  }
+  for(const url of scoped) {
+   const key=url.href;
+   if(seen.has(key))continue;seen.add(key);
+   const match=url.pathname.match(/\/p\/(MLB[0-9]{6,})(?:\/|$)/i);
+   found.push({
+    message_id:id,original_url:key,
+    ml_product_id:match?match[1].toUpperCase():null,
+    claimed_title:scoped.length===1?extractProductTitle(msg):null
+   });
+   if(found.length>=ML_LIMIT)return found;
+  }
+ }
+ return found;
+}
+
 export function getAsin(value){
  const u=safeUrl(value,new Set(['amazon.com.br','www.amazon.com.br']));
  if(!u)return null;
@@ -109,7 +143,7 @@ async function run(){
  const {TelegramClient}=await import('teleproto');
  const {StringSession}=await import('teleproto/sessions');
  const client=new TelegramClient(new StringSession(session),id,hash,{connectionRetries:2,receiveUpdates:false});
- let candidates=[];
+ let candidates=[],mlCandidates=[];
  try{
   await client.connect();
   if(!await client.getMe())throw Error('Telegram session invalid');
@@ -119,17 +153,19 @@ async function run(){
   const msgs=await client.getMessages(group.entity,{limit:MAX_MESSAGES});
   const since=Math.floor(Date.now()/1000)-75*60;
   candidates=await collectCandidates(msgs,fetch,since);
+  mlCandidates=collectMercadoLivreCandidates(msgs,since);
   console.log(JSON.stringify({phase:'telegram_cloud_read',group:'@GRUPOTABUGADO',
    messages_checked:msgs.length,amazon_products_resolved:candidates.length,
-   asin_ids:candidates.map(c=>c.asin),text_saved:false,session_saved:false}));
+   asin_ids:candidates.map(c=>c.asin),
+   mercado_livre_links_detected:mlCandidates.length,text_saved:false,session_saved:false}));
  }finally{await client.disconnect().catch(()=>{});}
- if(!candidates.length){console.log('No new ASIN found; no publication.');return;}
+ if(!candidates.length&&!mlCandidates.length){console.log('No recent Amazon or Mercado Livre candidate; no publication.');return;}
  const token=await githubToken();
  const url='https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-amazon-cloud-onepost';
  const response=await fetch(url,{method:'POST',headers:{
  authorization:'Bearer '+token,'content-type':'application/json'
  },body:JSON.stringify({mode,confirmed:mode==='send'?'PUBLICAR':null,
- workflow_run_id:process.env.GITHUB_RUN_ID,candidates}),signal:AbortSignal.timeout(24000)});
+ workflow_run_id:process.env.GITHUB_RUN_ID,candidates,ml_candidates:mlCandidates}),signal:AbortSignal.timeout(24000)});
  const data=await response.json().catch(()=>({ok:false,error:'unexpected_response'}));
  console.log(JSON.stringify({phase:'mavuri_cloud_'+mode,...data}));
  if(!response.ok||!data.ok)throw Error('Cloud rejected: '+(data.error||response.status));
