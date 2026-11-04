@@ -130,6 +130,16 @@ async function githubToken(){
  if(!r.ok||typeof j.value!=='string')throw Error('GitHub OIDC unavailable');
  return j.value;
 }
+const CLOUD_URL='https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-amazon-mirror';
+async function cloudRequest(token,request){
+ const response=await fetch(CLOUD_URL,{method:'POST',headers:{
+  authorization:'Bearer '+token,'content-type':'application/json'
+ },body:JSON.stringify({workflow_run_id:process.env.GITHUB_RUN_ID,...request}),
+ signal:AbortSignal.timeout(120000)});
+ const data=await response.json().catch(()=>({ok:false,error:'unexpected_response'}));
+ if(!response.ok||!data.ok)throw Error('Cloud '+request.mode+' rejected: '+(data.error||response.status));
+ return data;
+}
 async function run(){
  if(process.env.GITHUB_REPOSITORY!=='mavurioficial/affiliate-engine'||
     process.env.GITHUB_REF!=='refs/heads/main')throw Error('Run only on approved main repository');
@@ -145,15 +155,23 @@ async function run(){
  throw Error('Telegram secrets not set');
  const {TelegramClient}=await import('teleproto');
  const {StringSession}=await import('teleproto/sessions');
+ const token=await githubToken();
+ const cursor=await cloudRequest(token,{mode:'cursor_get'});
+ const lastId=cursor.last_message_id===null?null:Number(cursor.last_message_id);
+ if(lastId!==null&&(!Number.isSafeInteger(lastId)||lastId<541060))
+  throw Error('Invalid source cursor');
+ console.log(JSON.stringify({phase:'telegram_cursor',last_message_id:lastId,
+  initialized:cursor.initialized}));
  const client=new TelegramClient(new StringSession(session),id,hash,{connectionRetries:2,receiveUpdates:false});
- let candidates=[],mlCandidates=[];
+ let candidates=[],mlCandidates=[],highestSeen=lastId||0;
  try{
   await client.connect();
   if(!await client.getMe())throw Error('Telegram session invalid');
   const dialogs=await client.getDialogs({limit:500});
   const group=dialogs.find(d=>String(d?.entity?.username||'').toLowerCase()==='grupotabugado');
   if(!group)throw Error('Source group unavailable');
-  const since=Math.floor(Date.now()/1000)-24*3600;
+  // Only the very first cycle uses a bounded 24h bootstrap; subsequent cycles use ID.
+  const bootstrapSince=lastId===null?Math.floor(Date.now()/1000)-24*3600:0;
   let offsetId=0;
   const msgs=[];
   while(true){
@@ -161,50 +179,62 @@ async function run(){
    if(!page.length)break;
    let reached=false;
    for(const m of page){
+    const messageId=Number(m.id);
     const seconds=m.date instanceof Date?Math.floor(m.date.getTime()/1000):Number(m.date);
-    if(seconds<since){reached=true;break}
+    if((lastId!==null&&messageId<=lastId)||
+      (bootstrapSince&&seconds<bootstrapSince)){reached=true;break}
+    if(!Number.isSafeInteger(messageId))throw Error('Invalid Telegram message ID');
+    highestSeen=Math.max(highestSeen,messageId);
     msgs.push(m);
    }
    if(reached||page.length<100)break;
    const last=Number(page[page.length-1]?.id);
-   if(!Number.isSafeInteger(last)||last>=offsetId&&offsetId!==0)throw Error('Telegram pagination failed');
+   if(!Number.isSafeInteger(last)||(offsetId!==0&&last>=offsetId))
+    throw Error('Telegram pagination failed');
    offsetId=last;
   }
-  candidates=await collectCandidates(msgs,fetch,since);
-  mlCandidates=collectMercadoLivreCandidates(msgs,since);
+  candidates=await collectCandidates(msgs,fetch,bootstrapSince);
+  mlCandidates=collectMercadoLivreCandidates(msgs,bootstrapSince);
   console.log(JSON.stringify({phase:'telegram_cloud_read',group:'@GRUPOTABUGADO',
    messages_checked:msgs.length,amazon_products_resolved:candidates.length,
    asin_ids:candidates.map(c=>c.asin),
-   mercado_livre_links_detected:mlCandidates.length,text_saved:false,session_saved:false}));
+   mercado_livre_links_detected:mlCandidates.length,highest_message_id:highestSeen,
+   previous_cursor:lastId,text_saved:false,session_saved:false}));
  }finally{await client.disconnect().catch(()=>{});}
  if(!candidates.length&&!mlCandidates.length) console.log('No recent Amazon or Mercado Livre candidate; reporting empty cycle to cloud.');
- const token=await githubToken();
- const url='https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-amazon-mirror';
- let sent=0,skipped=0;
- // Chunking is transport-only: every collected message is processed, without an offer quota.
+ let sent=0,skipped=0,unconfirmed=0;
+ // A chunk is only a transport unit, never a selection or publication quota.
  const batches=[];
  let batch=[];
  for(const item of candidates){
   const trial=[...batch,item];
-  if(batch.length&&JSON.stringify(trial).length>50000){batches.push(batch);batch=[]}
+  if(batch.length&&(batch.length>=8||JSON.stringify(trial).length>50000)){
+   batches.push(batch);batch=[];
+  }
   batch.push(item);
  }
  if(batch.length)batches.push(batch);
  if(!batches.length)batches.push([]);
  for(let i=0;i<batches.length;i++){
-  const response=await fetch(url,{method:'POST',headers:{
-   authorization:'Bearer '+token,'content-type':'application/json'
-  },body:JSON.stringify({mode,confirmed:mode==='send'?'PUBLICAR':null,
-   workflow_run_id:process.env.GITHUB_RUN_ID,batch_index:i,
-   candidates:batches[i],ml_candidates:i===0?mlCandidates:[]}),signal:AbortSignal.timeout(120000)});
-  const data=await response.json().catch(()=>({ok:false,error:'unexpected_response'}));
+  const data=await cloudRequest(token,{mode,confirmed:mode==='send'?'PUBLICAR':null,
+   batch_index:i,candidates:batches[i],ml_candidates:i===0?mlCandidates:[]});
   console.log(JSON.stringify({phase:'mavuri_amazon_mirror_'+mode,batch:i,...data}));
-  if(!response.ok||!data.ok)throw Error('Cloud rejected batch '+i+': '+(data.error||response.status));
   sent+=Number(data.publications_sent||0);
   skipped+=Number(data.skipped||0);
+  unconfirmed+=Number(data.unconfirmed||0);
+ }
+ // The cursor only advances once every delivery has been confirmed.
+ // On incomplete deliveries, the next run rereads the same range; audit keys prevent re-sends.
+ if(mode==='send'&&unconfirmed===0&&highestSeen>(lastId||0)){
+  const committed=await cloudRequest(token,{mode:'cursor_commit',
+   confirmed:'PUBLICAR',last_message_id:highestSeen});
+  console.log(JSON.stringify({phase:'telegram_cursor_committed',...committed}));
+ }else if(mode==='send'&&unconfirmed>0){
+  console.log(JSON.stringify({phase:'telegram_cursor_held',unconfirmed,
+   highest_message_id:highestSeen}));
  }
  console.log(JSON.stringify({phase:'mirror_completed',source_messages:candidates.length,
-  telegram_deliveries:sent,skipped,batches:batches.length}));
+  telegram_deliveries:sent,skipped,unconfirmed,batches:batches.length}));
 
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href)
