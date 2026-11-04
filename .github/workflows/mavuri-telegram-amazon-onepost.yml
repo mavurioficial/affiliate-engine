@@ -1,14 +1,14 @@
-name: Mavuri - Uma oferta Amazon do Telegram
+name: Mavuri - Espelhamento Amazon Telegram
 
 on:
   schedule:
-    # 08:17-21:47 Brasilia (UTC-3), no fuso UTC padrao do GitHub.
-    - cron: '17,47 11-23 * * *'
-    - cron: '17,47 0 * * *'
+    # 08:00-21:30 Brasilia (UTC-3), no fuso UTC padrao do GitHub.
+    - cron: '0,30 11-23 * * *'
+    - cron: '0,30 0 * * *'
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Testar leitura ou PUBLICAR UMA oferta no Mavuri Ofertas'
+        description: 'Testar leitura ou espelhar todas as ofertas Amazon nos grupos Mavuri'
         required: true
         default: preview
         type: choice
@@ -27,7 +27,7 @@ concurrency:
 jobs:
   onepost:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,7 +37,7 @@ jobs:
         run: node --test scripts/telegram-cloud-onepost.test.mjs
       - name: Install Telegram client
         run: npm install --no-save --ignore-scripts --no-audit --no-fund teleproto@1.232.1
-      - name: Read joined Telegram group and preview or publish ONE Amazon product
+      - name: Read joined Telegram group and mirror all recent Amazon offers
         env:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
