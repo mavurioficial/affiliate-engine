@@ -29,8 +29,12 @@ jobs:
         run: npm install --no-save --no-audit --no-fund --ignore-scripts playwright-core@1.55.0
       - name: Run offline response validation
         run: node scripts/cloud-runner/ml-link-conversion-probe.mjs --self-test
+      - name: Validate safe ML session renewal bundle (synthetic data only)
+        run: node scripts/cloud-runner/ml-session-renew.mjs --self-test
       - name: Test one authenticated Mercado Livre linkbuilder POST (no publishing)
         env:
+          MAVURI_ML_AUTH_BUNDLE: ${{ secrets.MAVURI_ML_AUTH_BUNDLE }}
+          MAVURI_ML_AUTH_KEY: ${{ secrets.MAVURI_ML_AUTH_KEY }}
           MAVURI_AUTH_BUNDLE: ${{ secrets.MAVURI_AUTH_BUNDLE }}
           MAVURI_AUTH_KEY: ${{ secrets.MAVURI_AUTH_KEY }}
         run: node scripts/cloud-runner/ml-linkbuilder-api-probe.mjs
