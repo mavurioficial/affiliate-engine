@@ -25,7 +25,7 @@ async function authenticate(req:Request){
  if(payload.repository!==REPO||String(payload.repository_id)!==REPO_ID||
  String(payload.actor_id)!==ACTOR_ID||payload.ref!==REF||
  payload.workflow_ref!==WORKFLOW||payload.event_name!=='workflow_dispatch'||
- payload.sub!=='repo:'+REPO+':ref:'+REF||
+ payload.sub!==`repo:mavurioficial@321065255/affiliate-engine@1346309308:ref:${REF}`||
  String(payload.run_attempt)!=='1'||payload.runner_environment!=='github-hosted')throw Error('claims');
  if(!/^[0-9]{5,20}$/.test(String(payload.run_id||'')))throw Error('run_id');
  return String(payload.run_id);
