@@ -137,7 +137,7 @@ async function cloudRequest(token,request){
  },body:JSON.stringify({workflow_run_id:process.env.GITHUB_RUN_ID,...request}),
  signal:AbortSignal.timeout(120000)});
  const data=await response.json().catch(()=>({ok:false,error:'unexpected_response'}));
- if(!response.ok||!data.ok)throw Error('Cloud '+request.mode+' rejected: '+(data.error||response.status));
+ if(!response.ok||!data.ok)throw Error('Cloud '+request.mode+' rejected: '+(data.error||response.status)+' '+(request.mode==='cleanup'?JSON.stringify(data.groups||[]):''));
  return data;
 }
 async function run(){
