@@ -4,7 +4,7 @@
  * candidates to Supabase with short-lived GitHub OIDC. No cron, session write,
  * message archival, or original third-party text used in published message.
  */
-const TARGET='grupotabugado', MAX_MESSAGES=25, MAX_CANDIDATES=5;
+const TARGET='grupotabugado', MAX_MESSAGES=100, MAX_CANDIDATES=8;
 const STORE_HOSTS=new Set(['amazon.com.br','www.amazon.com.br','link.amazon','amzn.to','a.co']);
 const REDIRECT_HOSTS=new Set([...STORE_HOSTS,'amzlinks.in','www.amzlinks.in']);
 const SHORT_HOSTS=new Set(['link.amazon','amzn.to','a.co','amzlinks.in','www.amzlinks.in']);
@@ -66,15 +66,18 @@ export async function resolveAmazonAsin(link,request=fetch){
  }
  return getAsin(u.href);
 }
-export async function collectCandidates(messages,request=fetch){
+export async function collectCandidates(messages,request=fetch,minUnixSeconds=0){
  const result=[],seen=new Set();
  for(const msg of messages){
   const id=Number(msg?.id);
+  const messageTime=msg?.date instanceof Date?Math.trunc(msg.date.getTime()/1000):Number(msg?.date);
   if(!Number.isSafeInteger(id)||id<=541060)continue;
-  for(const link of findAmazonLinks(msg)){
+  if(minUnixSeconds && (!Number.isFinite(messageTime)||messageTime<minUnixSeconds))continue;
+  const links=findAmazonLinks(msg);
+  for(const link of links){
    const asin=await resolveAmazonAsin(link,request);
    if(!asin||seen.has(asin))continue;seen.add(asin);
-   result.push({message_id:id,asin,title:extractProductTitle(msg)});
+   result.push({message_id:id,asin,title:links.length===1?extractProductTitle(msg):null});
    if(result.length>=MAX_CANDIDATES)return result;
   }
  }
@@ -94,6 +97,10 @@ async function run(){
  if(process.env.GITHUB_REPOSITORY!=='mavurioficial/affiliate-engine'||
     process.env.GITHUB_REF!=='refs/heads/main')throw Error('Run only on approved main repository');
  const mode=process.env.PILOT_MODE;
+ const localHour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'America/Sao_Paulo',hour:'2-digit',hourCycle:'h23'}).format(new Date()));
+ if(mode==='send'&&(localHour<8||localHour>=22)){
+  console.log('Outside 08:00–22:00 Brasilia: no publication.');return;
+ }
  if(!['preview','send'].includes(mode))throw Error('Use preview/send mode');
  const id=Number(process.env.TG_API_ID||0),hash=process.env.TG_API_HASH||'',
  session=process.env.TG_SESSION_STRING||'';
@@ -110,7 +117,8 @@ async function run(){
   const group=dialogs.find(d=>String(d?.entity?.username||'').toLowerCase()==='grupotabugado');
   if(!group)throw Error('Source group unavailable');
   const msgs=await client.getMessages(group.entity,{limit:MAX_MESSAGES});
-  candidates=await collectCandidates(msgs);
+  const since=Math.floor(Date.now()/1000)-75*60;
+  candidates=await collectCandidates(msgs,fetch,since);
   console.log(JSON.stringify({phase:'telegram_cloud_read',group:'@GRUPOTABUGADO',
    messages_checked:msgs.length,amazon_products_resolved:candidates.length,
    asin_ids:candidates.map(c=>c.asin),text_saved:false,session_saved:false}));
