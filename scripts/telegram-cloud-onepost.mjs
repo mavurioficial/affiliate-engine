@@ -1,0 +1,111 @@
+/**
+ * One-shot Mavuri pilot. Reads <= 25 newest messages from a group already
+ * joined by the user's account, resolves up to five Amazon ASINs and submits
+ * candidates to Supabase with short-lived GitHub OIDC. No cron, session write,
+ * message archival, or original third-party text used in published message.
+ */
+const TARGET='grupotabugado', MAX_MESSAGES=25, MAX_CANDIDATES=5;
+const STORE_HOSTS=new Set(['amazon.com.br','www.amazon.com.br','link.amazon','amzn.to','a.co']);
+const REDIRECT_HOSTS=new Set([...STORE_HOSTS,'amzlinks.in','www.amzlinks.in']);
+const SHORT_HOSTS=new Set(['link.amazon','amzn.to','a.co','amzlinks.in','www.amzlinks.in']);
+const URLS=/https?:\/\/[^\s<>"'()[\]]+/giu;
+export function safeUrl(raw,allowed=STORE_HOSTS){
+ try{const u=new URL(String(raw).trim().replace(/[.,;!?…]+$/g,''));
+ if(u.protocol!=='https:'||u.username||u.password||u.port||
+ !allowed.has(u.hostname.toLowerCase())||u.href.length>1900)return null;
+ return u;}catch{return null;}
+}
+export function findAmazonLinks(message){
+ const values=[...String(message?.message??'').matchAll(URLS)].map(m=>m[0]);
+ for(const ent of message?.entities??[])if(typeof ent?.url==='string')values.push(ent.url);
+ const links=[],seen=new Set();
+ for(const link of values){const u=safeUrl(link);if(!u||seen.has(u.href))continue;
+ seen.add(u.href);links.push(u.href);if(links.length===3)break;}
+ return links;
+}
+export function getAsin(value){
+ const u=safeUrl(value,new Set(['amazon.com.br','www.amazon.com.br']));
+ if(!u)return null;
+ const m=u.pathname.match(/(?:^|\/)(?:dp|gp\/product|gp\/aw\/d)\/([A-Z0-9]{10})(?:\/|$)/i);
+ return m?.[1]?.toUpperCase()||null;
+}
+export async function resolveAmazonAsin(link,request=fetch){
+ let u=safeUrl(link);if(!u)return null;const visited=new Set();
+ for(let hop=0;hop<5;hop++){
+  const asin=getAsin(u.href);if(asin)return asin;
+  if(visited.has(u.href)||!SHORT_HOSTS.has(u.hostname.toLowerCase()))return null;
+  visited.add(u.href);let response;
+  try{
+   response=await request(u.href,{method:'GET',redirect:'manual',
+    signal:AbortSignal.timeout(10000),headers:{accept:'*/*'}});
+   if(![301,302,303,307,308].includes(response.status))return null;
+   const target=response.headers.get('location');if(!target)return null;
+   const next=safeUrl(new URL(target,u).href,REDIRECT_HOSTS);
+   if(!next)return null;u=next;
+  }catch{return null;}
+  finally{try{await response?.body?.cancel?.();}catch{}}
+ }
+ return getAsin(u.href);
+}
+export async function collectCandidates(messages,request=fetch){
+ const result=[],seen=new Set();
+ for(const msg of messages){
+  const id=Number(msg?.id);
+  if(!Number.isSafeInteger(id)||id<=541060)continue;
+  for(const link of findAmazonLinks(msg)){
+   const asin=await resolveAmazonAsin(link,request);
+   if(!asin||seen.has(asin))continue;seen.add(asin);
+   result.push({message_id:id,asin});
+   if(result.length>=MAX_CANDIDATES)return result;
+  }
+ }
+ return result;
+}
+async function githubToken(){
+ const endpoint=process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+ const secret=process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+ if(!endpoint||!secret)throw Error('GitHub OIDC missing');
+ const u=new URL(endpoint);u.searchParams.set('audience','mavuri-telegram-amazon-onepost');
+ const r=await fetch(u,{headers:{authorization:'bearer '+secret},signal:AbortSignal.timeout(12000)});
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok||typeof j.value!=='string')throw Error('GitHub OIDC unavailable');
+ return j.value;
+}
+async function run(){
+ if(process.env.GITHUB_REPOSITORY!=='mavurioficial/affiliate-engine'||
+    process.env.GITHUB_REF!=='refs/heads/main')throw Error('Run only on approved main repository');
+ const mode=process.env.PILOT_MODE;
+ if(!['preview','send'].includes(mode))throw Error('Use preview/send mode');
+ const id=Number(process.env.TG_API_ID||0),hash=process.env.TG_API_HASH||'',
+ session=process.env.TG_SESSION_STRING||'';
+ if(!Number.isSafeInteger(id)||id<1||!/^[a-f0-9]{32}$/i.test(hash)||session.length<40)
+ throw Error('Telegram secrets not set');
+ const {TelegramClient}=await import('teleproto');
+ const {StringSession}=await import('teleproto/sessions');
+ const client=new TelegramClient(new StringSession(session),id,hash,{connectionRetries:2,receiveUpdates:false});
+ let candidates=[];
+ try{
+  await client.connect();
+  if(!await client.getMe())throw Error('Telegram session invalid');
+  const dialogs=await client.getDialogs({limit:500});
+  const group=dialogs.find(d=>String(d?.entity?.username||'').toLowerCase()==='grupotabugado');
+  if(!group)throw Error('Source group unavailable');
+  const msgs=await client.getMessages(group.entity,{limit:MAX_MESSAGES});
+  candidates=await collectCandidates(msgs);
+  console.log(JSON.stringify({phase:'telegram_cloud_read',group:'@GRUPOTABUGADO',
+   messages_checked:msgs.length,amazon_products_resolved:candidates.length,
+   asin_ids:candidates.map(c=>c.asin),text_saved:false,session_saved:false}));
+ }finally{await client.disconnect().catch(()=>{});}
+ if(!candidates.length){console.log('No new ASIN found; no publication.');return;}
+ const token=await githubToken();
+ const url='https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-amazon-cloud-onepost';
+ const response=await fetch(url,{method:'POST',headers:{
+ authorization:'Bearer '+token,'content-type':'application/json'
+ },body:JSON.stringify({mode,confirmed:mode==='send'?'PUBLICAR':null,
+ workflow_run_id:process.env.GITHUB_RUN_ID,candidates}),signal:AbortSignal.timeout(24000)});
+ const data=await response.json().catch(()=>({ok:false,error:'unexpected_response'}));
+ console.log(JSON.stringify({phase:'mavuri_cloud_'+mode,...data}));
+ if(!response.ok||!data.ok)throw Error('Cloud rejected: '+(data.error||response.status));
+}
+if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href)
+ run().catch(e=>{console.error('Pilot failed:',e?.message||'unknown');process.exitCode=1});
