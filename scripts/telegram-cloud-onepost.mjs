@@ -148,7 +148,13 @@ async function run(){
  if(mode==='send'&&(localHour<8||localHour>=22)){
   console.log('Outside 08:00–22:00 Brasilia: no publication.');return;
  }
- if(!['preview','send'].includes(mode))throw Error('Use preview/send mode');
+ if(!['preview','send','cleanup'].includes(mode))throw Error('Use preview/send/cleanup mode');
+ if(mode==='cleanup'){
+  const token=await githubToken();
+  const result=await cloudRequest(token,{mode:'cleanup',confirmed:'EXCLUIR_APENAS_NICHOS'});
+  console.log(JSON.stringify({phase:'amazon_mirror_cleanup',...result}));
+  return;
+ }
  const id=Number(process.env.TG_API_ID||0),hash=process.env.TG_API_HASH||'',
  session=process.env.TG_SESSION_STRING||'';
  if(!Number.isSafeInteger(id)||id<1||!/^[a-f0-9]{32}$/i.test(hash)||session.length<40)
