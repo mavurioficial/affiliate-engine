@@ -1,6 +1,10 @@
 name: Mavuri - Uma oferta Amazon do Telegram
 
 on:
+  schedule:
+    # A cada 30 minutos entre 08:17 e 21:47 (horário de Brasília).
+    - cron: '17,47 8-21 * * *'
+      timezone: "America/Sao_Paulo"
   workflow_dispatch:
     inputs:
       mode:
@@ -38,5 +42,5 @@ jobs:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
           TG_SESSION_STRING: ${{ secrets.TG_SESSION_STRING }}
-          PILOT_MODE: ${{ inputs.mode }}
+          PILOT_MODE: ${{ github.event_name == 'schedule' && 'send' || inputs.mode }}
         run: node scripts/telegram-cloud-onepost.mjs
