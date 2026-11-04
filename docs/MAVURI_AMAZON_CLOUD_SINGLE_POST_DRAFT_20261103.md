@@ -44,3 +44,23 @@ A chamada de verificação de um publicador pontual feita no turno anterior foi 
 Para concluir um envio real, a opção adequada é um fluxo com **autenticação e confirmação do próprio usuário** no painel Mavuri, limitado a um destino e sem exigir preço. Isso implica uma funcionalidade do painel que não existe hoje para ofertas Amazon sem preço, ou a publicação manual pelo usuário. Não ativar sem testes isolados e proteção contra duplicação.
 
 A leitura recorrente de fontes externas continua separada deste teste e depende de acesso/autorização apropriados.
+
+## ATUALIZAÇÃO DE RESULTADO — envio confirmado (03/11/2026, 23h09 BRT)
+
+**Esta atualização substitui o resultado pendente descrito acima.**
+
+Foi criado um novo publicador **user-confirmed** separado, autenticado com a sessão Mavuri, e uma página estática de confirmação no GitHub Pages:
+
+- Página: `entrar/piloto-amazon-telegram.html`, adicionada à branch `main`.
+- Edge: `mavuri-amazon-user-confirmed-onepost`, verifica usuário autenticado, titularidade do canal, ID de afiliado da conta Amazon, destino único e confirmação explícita. O conteúdo contém `#pub` e **não anuncia preço nem desconto**.
+- Auditoria idempotente: `public.mavuri_telegram_onepost_audit`, RLS habilitada e acesso apenas via `service_role`; a chave de teste impede disparos repetidos.
+
+**Evidências:**
+- Prints do usuário mostram `PUBLICAÇÃO CONFIRMADA no Telegram`, canal `Mavuri Ofertas`, mensagem `3424`, registro confirmado, e mensagem efetivamente visível no Telegram às 23h09.
+- Consulta SQL do projeto ao registro específico confirmou `status='sent'`, `telegram_message_id='3424'`, `asin='B0HD2T6BZZ'`, destino `-1003537630337`, criação em `2026-11-04T02:09:27.712165Z` (23h09 BRT).
+- Produto: Omo Todo Ciclo Tamanho Família, 4 kg; link contém `tag=mavuri0a-20`.
+- Apenas um envio autorizado pelo usuário. **Não há automação recorrente de leitura da origem na nuvem.**
+
+**Estado técnico comprovado:** usuário leu o Tá Bugado em execução pontual local com MTProto (não na nuvem), conversor identificou ASIN e construiu link Mavuri, e a nuvem efetuou 1 postagem após login e confirmação no painel. A leitura da origem na nuvem e qualquer captura recorrente permanecem não implementadas. O envio ao grupo não prova comissão atribuída ou preço promocional.
+
+Próxima etapa: projetar ingestão de fontes autorizadas com revisão de direitos/permissões, mantendo guarda contra duplicidade e preço não verificado; não configurar cron de sessão pessoal em ambiente público sem rever segurança.
