@@ -1,0 +1,31 @@
+name: Mavuri - Check Mercado Livre OAuth Health (No Publishing)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mavuri-ml-oauth-health
+  cancel-in-progress: false
+
+jobs:
+  oauth_health:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: mavuri-auth-test
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-save --ignore-scripts --no-audit --no-fund playwright-core@1.55.0
+      - name: Verify owner session and refresh official ML OAuth token without revealing credentials
+        env:
+          MAVURI_AUTH_BUNDLE: ${{ secrets.MAVURI_AUTH_BUNDLE }}
+          MAVURI_AUTH_KEY: ${{ secrets.MAVURI_AUTH_KEY }}
+        run: node scripts/cloud-runner/ml-oauth-health-probe.mjs
