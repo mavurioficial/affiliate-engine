@@ -26,3 +26,8 @@ jobs:
         run: node --test scripts/cloud-runner/ml-direct-tag-candidate.test.mjs
       - name: Print one NOT-VERIFIED candidate demo (no publication)
         run: node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/maquininha-3-em-1-kemei-km-1910-aparador-pelo-corpo-agua-resistente/p/MLB21835256"
+      - name: Generate 3 candidate links from Ta Bugado (no network or publishing)
+        run: |
+          node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/kit-100-cabide-adulto-preto-reforcado-organizador-combate-antideslizante-slim-adulto-kit-cabides-antiderrapante-para-roupa/p/MLB51931854?pdp_filters=item_id%3AMLB4112839059"
+          node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/camera-inteligente-intelbras-im5sc-con-wi-fi-full-hd-color-branca/p/MLB27705742"
+          node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/mascara-invigo-nutri-enrich-500ml-wella-pro-nutricao-e-hidratacao/p/MLB19605864"
