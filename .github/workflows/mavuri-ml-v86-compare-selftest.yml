@@ -31,3 +31,8 @@ jobs:
           node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/kit-100-cabide-adulto-preto-reforcado-organizador-combate-antideslizante-slim-adulto-kit-cabides-antiderrapante-para-roupa/p/MLB51931854?pdp_filters=item_id%3AMLB4112839059"
           node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/camera-inteligente-intelbras-im5sc-con-wi-fi-full-hd-color-branca/p/MLB27705742"
           node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/mascara-invigo-nutri-enrich-500ml-wella-pro-nutricao-e-hidratacao/p/MLB19605864"
+      - name: Calibrate isolated mavuricloud tag with three distinct products
+        run: |
+          node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/gpu-powercolor-amd-radeon-rx-9060xt-16gb-gddr6-128bits-16g-a/p/MLB51865733" mavuricloud 69434586
+          node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/ar-condicionado-tac-12czgv-split-inverter-12000-btus-tcl/up/MLBU5398848473?pdp_filters=item_id%3AMLB5353376465" mavuricloud 69434586
+          node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/whey-protein-dux-smoothie-dark-cookies-proteina-em-po-900g-outros/p/MLB62745689" mavuricloud 69434586
