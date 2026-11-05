@@ -92,3 +92,28 @@ test('Mercado Livre capture respects date cutoff and uses no other platform',()=
  assert.equal(records.length,1);
  assert.equal(records[0].original_url,'https://meli.la/new');
 });
+
+
+test('Light same-family filter skips only consecutive diaper variants',async()=>{
+ const {amazonFamilyKey,filterAmazonSimilar,isAmazonResumeAfterPause}=await import('./telegram-cloud-onepost.mjs');
+ assert.equal(amazonFamilyKey('Fralda Pampers Premium Care Pants XG 96 unidades'),
+              amazonFamilyKey('Fralda Pampers Premium Care Pants XXG 90 unidades'));
+ assert.equal(amazonFamilyKey('Apple iPhone 17 Pro 256GB'),null);
+ const found=filterAmazonSimilar([
+  {message_id:11,title:'Fralda Pampers Premium Care Pants XG 96 unidades'},
+  {message_id:12,title:'Fralda Pampers Premium Care Pants XXG 90 unidades'},
+  {message_id:13,title:'Smart TV Samsung 55 4K'}]);
+ assert.deepEqual(found.accepted.map(x=>x.message_id),[11,13]);
+ assert.equal(found.blocked.length,1);
+ assert.deepEqual(filterAmazonSimilar([{message_id:14,title:'Fralda Pampers Premium Care Pants XG'}],
+  ['diaper:pampers-premium-care-pants']).accepted,[]);
+ assert.equal(isAmazonResumeAfterPause(new Date(Date.now()-95*60000).toISOString()),true);
+ assert.equal(isAmazonResumeAfterPause(new Date(Date.now()-25*60000).toISOString()),false);
+ assert.equal(isAmazonResumeAfterPause(null),false);
+});
+test('Bulk Mercado Livre candidates can be collected without an eight-link loss',()=>{
+ const messages=Array.from({length:12},(_,i)=>msg(541200+i,
+  'Achado https://meli.la/'+String(10000+i)));
+ assert.equal(collectMercadoLivreCandidates(messages).length,8);
+ assert.equal(collectMercadoLivreCandidates(messages,0,32).length,12);
+});
