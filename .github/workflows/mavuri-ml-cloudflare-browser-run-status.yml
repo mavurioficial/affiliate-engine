@@ -1,0 +1,47 @@
+name: "Mavuri - Cloudflare Browser Run status (sem navegador)"
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Check existing Cloudflare Browser Run worker without launching browser
+        env:
+          CF_WORKER_HEALTH_URL: https://mavuri-ml-public-browser-probe.lukasbrasil.workers.dev/health
+          CF_WORKER_PROBE_URL: https://mavuri-ml-public-browser-probe.lukasbrasil.workers.dev/probe
+        run: |
+          node --input-type=module <<'EOF'
+          const report = {test:"existing_cloudflare_browser_run_worker_status",
+            no_browser_launched:true,no_ml_request:true,no_credentials_used:true,
+            health_status:null,health_ok:false,probe_guard_status:null,
+            probe_guard_ok:false,ok:false};
+          const fetchOnce = async (url, options) => {
+            try {
+              const r = await fetch(url,{...options,signal:AbortSignal.timeout(12000)});
+              const body = await r.text();
+              return {status:r.status,body};
+            }catch(e){return {status:null,body:""};}
+          };
+          const health = await fetchOnce(process.env.CF_WORKER_HEALTH_URL,{method:"GET"});
+          report.health_status = health.status;
+          try {
+            const h=JSON.parse(health.body);
+            report.health_ok=health.status===200 && h.ok===true && h.mode==="ml_cloudflare_free_probe";
+          }catch{}
+          if(report.health_ok){
+            // Deliberately invalid key, must return 401 BEFORE launching a browser.
+            const guard=await fetchOnce(process.env.CF_WORKER_PROBE_URL,{method:"POST",
+              headers:{"Authorization":"Bearer invalid-probe-token-for-check","Content-Type":"application/json"},
+              body:"{}"});
+            report.probe_guard_status=guard.status;
+            report.probe_guard_ok=guard.status===401;
+          }
+          report.ok=report.health_ok&&report.probe_guard_ok;
+          console.log(JSON.stringify(report,null,2));
+          if(!report.ok)process.exitCode=1;
+          EOF
