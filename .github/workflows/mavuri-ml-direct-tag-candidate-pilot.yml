@@ -1,0 +1,22 @@
+name: "Mavuri - ML direct-tag candidate validation (no publishing)"
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Offline tests: product URL normalization, own tag, no publication
+        run: node --test scripts/cloud-runner/ml-direct-tag-candidate.test.mjs
+      - name: Demo Kemei candidate without requesting the ML website
+        run: node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/maquininha-3-em-1-kemei-km-1910-aparador-pelo-corpo-agua-resistente/p/MLB21835256"
