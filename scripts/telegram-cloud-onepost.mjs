@@ -46,7 +46,7 @@ export function extractProductTitle(message){
 /** Extract product references from Mercado Livre without rewriting affiliate tracking. */
 const ML_HOSTS=new Set(['meli.la','merc.li','www.mercadolivre.com.br','mercadolivre.com.br']);
 const ML_LIMIT=8;
-export function collectMercadoLivreCandidates(messages,minUnixSeconds=0) {
+export function collectMercadoLivreCandidates(messages,minUnixSeconds=0,maxCandidates=ML_LIMIT) {
  const found=[],seen=new Set();
  for(const msg of messages) {
   const id=Number(msg?.id);
@@ -70,7 +70,7 @@ export function collectMercadoLivreCandidates(messages,minUnixSeconds=0) {
     ml_product_id:match?match[1].toUpperCase():null,
     claimed_title:scoped.length===1?extractProductTitle(msg):null
    });
-   if(found.length>=ML_LIMIT)return found;
+   if(found.length>=Math.min(512,Math.max(1,Number(maxCandidates)||ML_LIMIT)))return found;
   }
  }
  return found;
@@ -120,6 +120,34 @@ export async function collectCandidates(messages,request=fetch,minUnixSeconds=0)
  }
  return result;
 }
+
+/** Only very specific product families are lightly throttled; all others mirror as before. */
+export function amazonFamilyKey(text){
+ const n=String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+   .toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ');
+ if(!/(fralda|pampers|huggies|mamy poko)/.test(n))return null;
+ if(n.includes('pampers')&&n.includes('premium care')&&n.includes('pants'))return 'diaper:pampers-premium-care-pants';
+ if(n.includes('pampers')&&n.includes('confort sec'))return 'diaper:pampers-confort-sec';
+ if(n.includes('huggies')&&n.includes('tripla protecao'))return 'diaper:huggies-tripla-protecao';
+ if(n.includes('huggies')&&n.includes('supreme care'))return 'diaper:huggies-supreme-care';
+ return null;
+}
+export function filterAmazonSimilar(candidates,recentFamilies=[]){
+ const seen=new Set(recentFamilies.filter(x=>typeof x==='string'));
+ const accepted=[],blocked=[];
+ for(const c of candidates){
+  const key=amazonFamilyKey((c.title||'')+' '+(c.source_text||''));
+  if(key&&seen.has(key)){blocked.push({message_id:c.message_id,family:key});continue;}
+  if(key)seen.add(key);
+  accepted.push({...c,family_key:key});
+ }
+ return {accepted,blocked};
+}
+export function isAmazonResumeAfterPause(lastPolledAt,now=Date.now()){
+ const last=Date.parse(lastPolledAt||'');
+ return Number.isFinite(last)&&last>0&&now-last>90*60000;
+}
+
 async function githubToken(){
  const endpoint=process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
  const secret=process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
@@ -221,6 +249,8 @@ async function run(){
  console.log(JSON.stringify({phase:'telegram_cursor',last_message_id:lastId,
   initialized:cursor.initialized}));
  const client=new TelegramClient(new StringSession(session),id,hash,{connectionRetries:2,receiveUpdates:false});
+ const resumed=mode==='send'&&isAmazonResumeAfterPause(cursor.last_polled_at);
+ const resumeUnixSeconds=Math.floor(Date.now()/1000);
  let candidates=[],mlCandidates=[],highestSeen=lastId;
  try{
   await client.connect();
@@ -247,8 +277,14 @@ async function run(){
     throw Error('Telegram pagination failed');
    offsetId=last;
   }
-  candidates=await collectCandidates(msgs,fetch);
-  mlCandidates=collectMercadoLivreCandidates(msgs);
+  candidates=await collectCandidates(msgs,fetch,resumed?resumeUnixSeconds:0);
+  mlCandidates=collectMercadoLivreCandidates(msgs,0,256);
+  if(mlCandidates.length>=256)throw Error('Mercado Livre candidate backlog too large - cursor not advanced');
+  const familyFiltered=filterAmazonSimilar(candidates,cursor.recent_amazon_families||[]);
+  candidates=familyFiltered.accepted;
+  console.log(JSON.stringify({phase:'amazon_freshness_and_family',resumed,
+   skipped_similar:familyFiltered.blocked.length,retained_amazon:candidates.length,
+   mercato_candidates:mlCandidates.length}));
   console.log(JSON.stringify({phase:'telegram_cloud_read',group:'@GRUPOTABUGADO',
    messages_checked:msgs.length,amazon_products_resolved:candidates.length,
    asin_ids:candidates.map(c=>c.asin),
@@ -271,11 +307,18 @@ async function run(){
  if(!batches.length)batches.push([]);
  for(let i=0;i<batches.length;i++){
   const data=await cloudRequest(token,{mode,confirmed:mode==='send'?'PUBLICAR':null,
-   batch_index:i,candidates:batches[i],ml_candidates:i===0?mlCandidates:[]});
+   batch_index:i,candidates:batches[i],ml_candidates:i===0?mlCandidates.slice(0,8):[]});
   console.log(JSON.stringify({phase:'mavuri_amazon_mirror_'+mode,batch:i,...data}));
   sent+=Number(data.publications_sent||0);
   skipped+=Number(data.skipped||0);
   unconfirmed+=Number(data.unconfirmed||0);
+ }
+ // Save every Mercado Livre candidate separately; the mirror's cursor must not lose
+ // older ML offers merely because Amazon resumed without replaying its backlog.
+ for(let offset=8;offset<mlCandidates.length;offset+=8){
+   const data=await cloudRequest(token,{mode,confirmed:mode==='send'?'PUBLICAR':null,
+    batch_index:0,candidates:[],ml_candidates:mlCandidates.slice(offset,offset+8)});
+   unconfirmed+=Number(data.unconfirmed||0);
  }
  // The cursor only advances once every delivery has been confirmed.
  // On incomplete deliveries, the next run rereads the same range; audit keys prevent re-sends.
@@ -283,6 +326,9 @@ async function run(){
   const committed=await cloudRequest(token,{mode:'cursor_commit',
    confirmed:'PUBLICAR',last_message_id:highestSeen});
   console.log(JSON.stringify({phase:'telegram_cursor_committed',...committed}));
+  }else if(mode==='send'&&unconfirmed===0){
+  const heartbeat=await cloudRequest(token,{mode:'cursor_heartbeat',confirmed:'PUBLICAR'});
+  console.log(JSON.stringify({phase:'amazon_cursor_heartbeat',...heartbeat}));
  }else if(mode==='send'&&unconfirmed>0){
   console.log(JSON.stringify({phase:'telegram_cursor_held',unconfirmed,
    highest_message_id:highestSeen}));
