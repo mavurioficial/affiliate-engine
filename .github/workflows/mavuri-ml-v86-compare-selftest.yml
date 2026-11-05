@@ -22,3 +22,7 @@ jobs:
         run: npm install --no-save --no-audit --no-fund --ignore-scripts playwright-core@1.55.0
       - name: Offline classification self-test
         run: node scripts/cloud-runner/ml-v86-session-inspect.mjs --self-test
+      - name: Offline ML direct-tag product links safety tests (no network)
+        run: node --test scripts/cloud-runner/ml-direct-tag-candidate.test.mjs
+      - name: Print one NOT-VERIFIED candidate demo (no publication)
+        run: node scripts/cloud-runner/ml-direct-tag-candidate.mjs "https://www.mercadolivre.com.br/maquininha-3-em-1-kemei-km-1910-aparador-pelo-corpo-agua-resistente/p/MLB21835256"
