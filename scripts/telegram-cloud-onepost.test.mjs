@@ -117,3 +117,37 @@ test('Bulk Mercado Livre candidates can be collected without an eight-link loss'
  assert.equal(collectMercadoLivreCandidates(messages).length,8);
  assert.equal(collectMercadoLivreCandidates(messages,0,32).length,12);
 });
+
+test('Ketchup and mayonnaise variants share one 30-minute Amazon family',async()=>{
+ const {amazonFamilyKey,filterAmazonSimilar}=await import('./telegram-cloud-onepost.mjs');
+ const captions=[
+  'Heinz Ketchup Tradicional 1,033KG',
+  'Heinz Ketchup Zero Açúcar 373g',
+  'Heinz Ketchup 397G + Maionese 390G',
+  'Heinz Maionese Churrasco 215g'
+ ];
+ assert.deepEqual(captions.map(amazonFamilyKey),Array(4).fill('pantry:ketchup-mayonnaise'));
+ const batch=filterAmazonSimilar(captions.map((title,i)=>({message_id:542014+i,title,source_text:'CUPOM HEINZ20'})));
+ assert.deepEqual(batch.accepted.map(x=>x.message_id),[542014]);
+ assert.deepEqual(batch.blocked.map(x=>x.message_id),[542015,542016,542017]);
+ assert.equal(batch.accepted[0].family_key,'pantry:ketchup-mayonnaise');
+ assert.deepEqual(filterAmazonSimilar([{message_id:542020,title:'Ketchup Picante 500g'}],
+  ['pantry:ketchup-mayonnaise']).accepted,[]);
+});
+test('Toilet-paper pack variants are throttled but unrelated products still pass',async()=>{
+ const {amazonFamilyKey,filterAmazonSimilar}=await import('./telegram-cloud-onepost.mjs');
+ const titles=['Papel Higiênico Neve 12 Rolos','Papel Higienico Personal 32 Rolos',
+  'Detergente Neutro 500ml','Fralda Pampers Premium Care Pants XG'];
+ assert.equal(amazonFamilyKey(titles[0]),'household:toilet-paper');
+ assert.equal(amazonFamilyKey(titles[1]),'household:toilet-paper');
+ assert.equal(amazonFamilyKey('Papel Toalha 6 Rolos'),null);
+ const result=filterAmazonSimilar(titles.map((title,i)=>({message_id:1+i,title})));
+ assert.deepEqual(result.accepted.map(x=>x.message_id),[1,3,4]);
+});
+test('Generic recipes and promotions do not get blocked just for a common term',async()=>{
+ const {amazonFamilyKey}=await import('./telegram-cloud-onepost.mjs');
+ assert.equal(amazonFamilyKey('Kit temperos secos 12 potes'),null);
+ assert.equal(amazonFamilyKey('Heinz molho barbecue 397g'),null);
+ assert.equal(amazonFamilyKey('Molho de tomate Heinz 340g'),null);
+ assert.equal(amazonFamilyKey('Fralda Huggies Supreme Care M 66 unidades'),'diaper:huggies-supreme-care');
+});
