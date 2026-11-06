@@ -125,6 +125,13 @@ export async function collectCandidates(messages,request=fetch,minUnixSeconds=0)
 export function amazonFamilyKey(text){
  const n=String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
    .toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ');
+ // Narrow groups for closely related products that otherwise arrive consecutively.
+ // Ketchup, mayonnaise and mixed kits count as one pantry family for 30 minutes.
+ // Toilet-paper brands/pack sizes likewise share a light 30-minute cooldown.
+ if(/\b(ketchup|catchup|maionese|maioneses|mayonnaise)\b/.test(n))
+   return 'pantry:ketchup-mayonnaise';
+ if(/\b(papel higienico|papeis higienicos)\b/.test(n))
+   return 'household:toilet-paper';
  if(!/(fralda|pampers|huggies|mamy poko)/.test(n))return null;
  if(n.includes('pampers')&&n.includes('premium care')&&n.includes('pants'))return 'diaper:pampers-premium-care-pants';
  if(n.includes('pampers')&&n.includes('confort sec'))return 'diaper:pampers-confort-sec';
