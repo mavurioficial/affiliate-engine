@@ -7,13 +7,15 @@
     "dev": "node scripts/server.mjs",
     "build": "node scripts/build.mjs",
     "preview": "node scripts/server.mjs dist",
-    "check": "node scripts/check.mjs",
-    "test": "node scripts/test-flow.mjs && node scripts/test-dashboard.mjs && node scripts/test-categories.mjs && node scripts/test-category-decisions.mjs && node scripts/test-category-review-draft.mjs && node scripts/test-category-learning.mjs",
+    "check": "node scripts/check.mjs && node --check entrar/growth.js && node --check growth/content.mjs && node --check scripts/growth-generate.mjs && node --check scripts/test-growth.mjs",
+    "test": "node scripts/test-flow.mjs && node scripts/test-dashboard.mjs && node scripts/test-categories.mjs && node scripts/test-category-decisions.mjs && node scripts/test-category-review-draft.mjs && node scripts/test-category-learning.mjs && node scripts/test-growth.mjs",
     "shopee:feed": "node scripts/shopee-feed-runner.mjs",
     "shopee:feed:publish": "node scripts/shopee-feed-runner.mjs --publish",
     "affiliate:queue": "node scripts/affiliate-link-queue-runner.mjs claim",
     "affiliate:queue:complete": "node scripts/affiliate-link-queue-runner.mjs complete",
-    "affiliate:queue:fail": "node scripts/affiliate-link-queue-runner.mjs fail"
+    "affiliate:queue:fail": "node scripts/affiliate-link-queue-runner.mjs fail",
+    "growth:test": "node scripts/test-growth.mjs",
+    "growth:generate": "node scripts/growth-generate.mjs"
   },
   "dependencies": {}
 }
