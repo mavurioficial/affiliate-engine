@@ -272,7 +272,7 @@ async function run(){
    else {
     const source=official[0], recent=await client.getMessages(source.entity,{limit:30});
     const messages=recent.map(m=>({id:Number(m.id),date:new Date(m.date instanceof Date?m.date.getTime():Number(m.date)*1000).toISOString(),text:String(m.message||'').slice(0,12000)}))
-     .filter(m=>Date.now()-Date.parse(m.date)<86400000&&/válid[oa]s?\s+somente\s+em/i.test(m.text)).slice(0,12);
+     .filter(m=>Date.now()-Date.parse(m.date)<86400000&&/válid[oa]s?\s+(?:somente\s+em|at[eé]|em)/i.test(m.text)).slice(0,12);
     const response=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-ml-private-coupons',{
      method:'POST',headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},
      body:JSON.stringify({mode,source_title:String(source.entity.title||source.title).trim(),source_id:String(source.entity.id),messages}),
