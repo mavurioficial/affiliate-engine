@@ -195,7 +195,7 @@ async function mirrorMLSource(client,group,mode){
  for(const e of msg.entities||[])if(e.url)links.push(e.url);
  const ml=[...new Set(links.filter(x=>safeUrl(x,ML_RESOLVE_HOSTS)))];if(!ml.length)continue;
  const products=[];
- for(const link of ml){const resolved=await resolveML(link);if(resolved)products.push({product_url:resolved})}
+ for(const link of ml){const resolved=mlDirect(link)||(new URL(link).hostname==='meli.la'?null:await resolveML(link));if(resolved)products.push({product_url:resolved})}
  // A single-link Telegram preview can provide its exact canonical destination.
  if(!products.length&&ml.length===1){
  const page=msg.media?.webpage;
