@@ -204,8 +204,8 @@ async function mirrorMLSource(client,group,mode){
  if(direct)products.push({product_url:direct});
  }
  }
- if(products.length!==ml.length){unresolved.push(Number(msg.id));continue}
- candidates.push({message_id:Number(msg.id),source_date:date.toISOString(),source_text:String(msg.message||'').slice(0,3500),products});
+ if(products.length!==ml.length){unresolved.push(Number(msg.id));if(ml.length!==1)continue;products.length=0;}
+ candidates.push({message_id:Number(msg.id),original_url:ml[0],source_date:date.toISOString(),source_text:String(msg.message||'').slice(0,3500),products});
  }
  console.log(JSON.stringify({phase:'ml_exact_link_resolution',source_posts:candidates.length+unresolved.length,resolved:candidates.length,unresolved}));
  const selected=filterAmazonSimilar(candidates).accepted;
