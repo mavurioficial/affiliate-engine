@@ -263,6 +263,24 @@ async function run(){
   await client.connect();
   if(!await client.getMe())throw Error('Telegram session invalid');
   const dialogs=await client.getDialogs({limit:500});
+
+  // Read only the named official coupon channel already joined by this account.
+  // Coupon failures are isolated so offer collection can continue.
+  try {
+   const official=dialogs.filter(d=>/^Afiliados e Criadores Mercado(?: Livre)?(?: Brasil)?\s*(?:🇧🇷)?$/i.test(String(d?.entity?.title||d?.title||'').trim()));
+   if(official.length!==1)console.log(JSON.stringify({phase:'ml_official_coupons',source_matches:official.length,status:'source_unavailable_or_ambiguous'}));
+   else {
+    const source=official[0], recent=await client.getMessages(source.entity,{limit:30});
+    const messages=recent.map(m=>({id:Number(m.id),date:new Date(m.date instanceof Date?m.date.getTime():Number(m.date)*1000).toISOString(),text:String(m.message||'').slice(0,12000)}))
+     .filter(m=>Date.now()-Date.parse(m.date)<86400000&&/válid[oa]s?\s+somente\s+em/i.test(m.text)).slice(0,12);
+    const response=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-ml-private-coupons',{
+     method:'POST',headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},
+     body:JSON.stringify({mode,source_title:String(source.entity.title||source.title).trim(),source_id:String(source.entity.id),messages}),
+     signal:AbortSignal.timeout(90000)});
+    const result=await response.json();
+    console.log(JSON.stringify({phase:'ml_official_coupons',source_title:String(source.entity.title||source.title),source_id:String(source.entity.id),messages_checked:messages.length,http_status:response.status,...result}));
+   }
+  }catch{console.log(JSON.stringify({phase:'ml_official_coupons',status:'collection_failed_check_next_cycle'}))}
   const group=dialogs.find(d=>String(d?.entity?.username||'').toLowerCase()==='grupotabugado');
   if(!group)throw Error('Source group unavailable');
   let offsetId=0;
