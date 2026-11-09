@@ -155,6 +155,66 @@ export function isAmazonResumeAfterPause(lastPolledAt,now=Date.now()){
  return Number.isFinite(last)&&last>0&&now-last>90*60000;
 }
 
+
+const ML_RESOLVE_HOSTS=new Set(['meli.la','merc.li','www.mercadolivre.com.br','mercadolivre.com.br','produto.mercadolivre.com.br']);
+export function mlDirect(raw){
+ const u=safeUrl(raw,ML_RESOLVE_HOSTS);if(!u||!u.hostname.endsWith('mercadolivre.com.br'))return null;
+ if(/\/p\/MLB\d{6,}(?:\/|$)/i.test(u.pathname)||/\/MLB-?\d{6,}(?:-|\/|$)/i.test(u.pathname))return u.href;
+ return null;
+}
+export async function resolveML(link,request=fetch){
+ let u=safeUrl(link,ML_RESOLVE_HOSTS);const seen=new Set();
+ for(let i=0;u&&i<6;i++){
+ const direct=mlDirect(u.href);if(direct)return direct;
+ if(seen.has(u.href))break;seen.add(u.href);
+ let r;
+ try{
+ r=await request(u.href,{redirect:'manual',signal:AbortSignal.timeout(12000),headers:{'user-agent':'Mozilla/5.0',accept:'text/html'}});
+ if([301,302,303,307,308].includes(r.status)){const target=r.headers.get('location');u=target?safeUrl(new URL(target,u).href,ML_RESOLVE_HOSTS):null;continue}
+ if(!r.ok)return null;
+ const html=(await r.text()).slice(0,1000000);
+ // Only explicit redirect/canonical metadata, never recommendations or title search.
+ const urls=[...html.matchAll(/<(?:meta|link)\b[^>]+>/gi)].flatMap(m=>{
+ const tag=m[0];if(!/(?:rel=["']canonical|property=["']og:url|http-equiv=["']refresh)/i.test(tag))return [];
+ return [...tag.matchAll(/(?:href|content)=["']([^"']+)["']/gi)].map(x=>x[1].replace(/&amp;/g,'&').replace(/^.*?url=/i,''));
+ });
+ const directURLs=[...new Set(urls.map(mlDirect).filter(Boolean))];
+ if(directURLs.length===1)return directURLs[0];
+ return null;
+ }catch{return null}finally{try{await r?.body?.cancel?.()}catch{}}
+ }
+ return null;
+}
+async function mirrorMLSource(client,group,mode){
+ const recent=await client.getMessages(group.entity,{limit:100});
+ const candidates=[],unresolved=[];
+ for(const msg of [...recent].reverse()){
+ const date=new Date(msg.date instanceof Date?msg.date.getTime():Number(msg.date)*1000);
+ if(Date.now()-date.getTime()>2*3600000)continue;
+ const links=[...String(msg.message||'').matchAll(URLS)].map(x=>x[0]);
+ for(const e of msg.entities||[])if(e.url)links.push(e.url);
+ const ml=[...new Set(links.filter(x=>safeUrl(x,ML_RESOLVE_HOSTS)))];if(!ml.length)continue;
+ const products=[];
+ for(const link of ml){const resolved=await resolveML(link);if(resolved)products.push({product_url:resolved})}
+ // A single-link Telegram preview can provide its exact canonical destination.
+ if(!products.length&&ml.length===1){
+ const page=msg.media?.webpage;
+ if(page&&String(page.url||'')===ml[0]){
+ const direct=mlDirect(page.displayUrl)||mlDirect(page.display_url);
+ if(direct)products.push({product_url:direct});
+ }
+ }
+ if(products.length!==ml.length){unresolved.push(Number(msg.id));continue}
+ candidates.push({message_id:Number(msg.id),source_date:date.toISOString(),source_text:String(msg.message||'').slice(0,3500),products});
+ }
+ console.log(JSON.stringify({phase:'ml_exact_link_resolution',source_posts:candidates.length+unresolved.length,resolved:candidates.length,unresolved}));
+ const selected=filterAmazonSimilar(candidates).accepted;
+ for(let i=0;i<selected.length;i+=8){
+ const r=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-ml-mirror',{method:'POST',headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},body:JSON.stringify({mode,candidates:selected.slice(i,i+8)}),signal:AbortSignal.timeout(120000)});
+ const j=await r.json();console.log(JSON.stringify({phase:'ml_source_mirror',http_status:r.status,...j}));if(!r.ok||!j.ok)throw Error('ML mirror failed');
+ }
+}
+
 async function githubToken(){
  const endpoint=process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
  const secret=process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
@@ -283,6 +343,7 @@ async function run(){
   }catch{console.log(JSON.stringify({phase:'ml_official_coupons',status:'collection_failed_check_next_cycle'}))}
   const group=dialogs.find(d=>String(d?.entity?.username||'').toLowerCase()==='grupotabugado');
   if(!group)throw Error('Source group unavailable');
+  try{await mirrorMLSource(client,group,mode)}catch(e){console.log(JSON.stringify({phase:'ml_mirror_error',error:String(e.message)}))}
   let offsetId=0;
   const msgs=[];
   while(true){
