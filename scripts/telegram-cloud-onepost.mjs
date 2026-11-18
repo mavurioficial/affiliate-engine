@@ -332,7 +332,7 @@ async function run(){
    else {
     const source=official[0], recent=await client.getMessages(source.entity,{limit:30});
     const messages=recent.map(m=>({id:Number(m.id),date:new Date(m.date instanceof Date?m.date.getTime():Number(m.date)*1000).toISOString(),text:String(m.message||'').slice(0,12000)}))
-     .filter(m=>Date.now()-Date.parse(m.date)<86400000&&/válid[oa]s?\s+(?:somente\s+em|at[eé]|em)/i.test(m.text)).slice(0,12);
+     .filter(m=>Date.now()-Date.parse(m.date)<86400000&&/(?:🎟|🎫|cupom|cupons|OFF)/i.test(m.text)).slice(0,30);
     const response=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-ml-private-coupons',{
      method:'POST',headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},
      body:JSON.stringify({mode,source_title:String(source.entity.title||source.title).trim(),source_id:String(source.entity.id),messages}),
@@ -343,6 +343,39 @@ async function run(){
   }catch{console.log(JSON.stringify({phase:'ml_official_coupons',status:'collection_failed_check_next_cycle'}))}
   const group=dialogs.find(d=>String(d?.entity?.username||'').toLowerCase()==='grupotabugado');
   if(!group)throw Error('Source group unavailable');
+  // Preserve the affiliate channel above and add Tá Bugado as another ML coupon source.
+  // Backend uses the existing code + date + channel key to deduplicate across sources.
+  try {
+   const recent=await client.getMessages(group.entity,{limit:100});
+   const messages=recent.map(m=>({
+    id:Number(m.id),
+    date:new Date(m.date instanceof Date?m.date.getTime():Number(m.date)*1000).toISOString(),
+    text:String(m.message||'').slice(0,12000)
+   })).filter(m=>Date.now()-Date.parse(m.date)<86400000 &&
+     /(?:🎟|🎫|cupom|cupons|OFF)/i.test(m.text)).slice(0,30);
+   if(messages.length){
+    const resp=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-ml-private-coupons',{
+     method:'POST',
+     headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},
+     body:JSON.stringify({
+      mode,source_title:String(group.entity.title||group.title||'').trim(),
+      source_username:'grupotabugado',source_id:String(group.entity.id),
+      messages
+     }),
+     signal:AbortSignal.timeout(90000)
+    });
+    const result=await resp.json().catch(()=>({error:'invalid_response'}));
+    console.log(JSON.stringify({phase:'ml_tabugado_coupons',source:'@GRUPOTABUGADO',
+      messages_checked:messages.length,http_status:resp.status,...result}));
+    if(!resp.ok||!result.ok)throw Error('ML Tá Bugado coupon processing failed');
+   }else{
+    console.log(JSON.stringify({phase:'ml_tabugado_coupons',messages_checked:0,
+      status:'no_recent_coupon_candidates'}));
+   }
+  }catch(error){
+   console.log(JSON.stringify({phase:'ml_tabugado_coupons',
+    status:'collection_failed_check_next_cycle',error:String(error?.message||error).slice(0,180)}));
+  }
   try{await mirrorMLSource(client,group,mode)}catch(e){console.log(JSON.stringify({phase:'ml_mirror_error',error:String(e.message)}))}
   let offsetId=0;
   const msgs=[];
