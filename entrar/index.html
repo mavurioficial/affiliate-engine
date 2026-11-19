@@ -4,11 +4,13 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="theme-color" content="#061a45"/>
-  <meta name="description" content="Entre grátis no Mavuri Ofertas no WhatsApp ou Telegram. Encontre ofertas e cupons de Mercado Livre, Shopee, Amazon e Magalu — e peça promoções dos produtos que procura."/>
+  <meta name="description" content="Entre grátis no grupo de achadinhos Mavuri no WhatsApp. Receba ofertas de Mercado Livre, Shopee, Amazon e Magalu. Acompanhe também pelo Telegram."/>
   <meta property="og:type" content="website"/>
-  <meta property="og:title" content="Mavuri Ofertas — entre grátis!"/>
-  <meta property="og:description" content="Achadinhos, promoções e cupons no WhatsApp e Telegram. Peça também uma oferta especial."/>
+  <meta property="og:title" content="Mavuri — achadinhos e promoções no WhatsApp"/>
+  <meta property="og:description" content="Participe grátis do grupo de ofertas Mavuri no WhatsApp. Confira oportunidades e cupons de lojas conhecidas."/>
+  <link rel="canonical" href="https://mavurioficial.github.io/affiliate-engine/entrar/"/>
   <title>Mavuri Ofertas — Entre grátis no WhatsApp ou Telegram</title>
+  <script src="./growth.js" defer></script>
   <style>
     :root{color-scheme:light;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#16305d;background:#f4f7fc;font-synthesis:none}
     *{box-sizing:border-box}
@@ -179,6 +181,7 @@
       .marketplaces .marketplace-amazon img{width:78px;height:24px}
       .marketplaces .marketplace-magalu img{width:82px;height:38px}
     }
+    .join-reassurance{text-align:center;margin:15px 0 0;color:#5b708f;font-size:13px;line-height:1.5}
   </style>
 </head>
 <body>
@@ -191,8 +194,8 @@
       <div class="hero-content">
         <div>
           <span class="eyebrow">Ofertas e cupons todos os dias</span>
-          <h1>Seu próximo <em>achadinho</em> começa aqui.</h1>
-          <p class="lead">Promoções de Mercado Livre, Shopee, Amazon e Magalu. Entre grátis no WhatsApp ou Telegram.</p>
+          <h1>Achadinhos e promoções no <em>WhatsApp</em>.</h1>
+          <p class="lead">Ofertas de Mercado Livre, Shopee, Amazon e Magalu. Participe gratuitamente e confira os preços antes de comprar.</p>
         </div>
         <div class="hero-art" aria-hidden="true">
           <span class="glow"></span>
@@ -208,19 +211,20 @@
   <main>
     <section class="join shell" id="entrar" aria-labelledby="join-title">
       <div class="join-wrap">
-        <div class="join-head"><span class="tag">ENTRE GRÁTIS</span><h2 id="join-title">Entre agora no Mavuri Ofertas</h2><p class="sublead">Escolha WhatsApp ou Telegram e comece a receber promoções.</p></div>
+        <div class="join-head"><span class="tag">ENTRE GRÁTIS</span><h2 id="join-title">Participe do grupo Mavuri no WhatsApp</h2><p class="sublead">Toque no convite oficial. Se preferir, acompanhe as ofertas pelo Telegram.</p></div>
         <div class="channels">
           <a class="channel whatsapp cta-button" href="https://chat.whatsapp.com/G2Q71W49Zrn10eLbXDB0UD" target="_blank" rel="noopener noreferrer" aria-label="Clique aqui para entrar no grupo Mavuri Ofertas do WhatsApp">
             <span class="channel-symbol" aria-hidden="true"><img class="social-logo" src="./assets/whatsapp.svg" width="34" height="34" alt=""></span>
-            <span class="channel-copy"><strong>Clique aqui para entrar no grupo</strong><small>WhatsApp · Mavuri Ofertas</small></span>
+            <span class="channel-copy"><strong>Entrar no grupo do WhatsApp</strong><small>Convite oficial · participação gratuita</small></span>
             <span class="arrow" aria-hidden="true">➜</span>
           </a>
           <a class="channel telegram cta-button" href="https://t.me/+U5TG_qViml4yNTVh" target="_blank" rel="noopener noreferrer" aria-label="Clique aqui para entrar no canal Mavuri Ofertas do Telegram">
             <span class="channel-symbol" aria-hidden="true"><img class="social-logo" src="./assets/telegram.svg" width="34" height="34" alt=""></span>
-            <span class="channel-copy"><strong>Clique aqui para entrar no canal</strong><small>Telegram · Mavuri Ofertas</small></span>
+            <span class="channel-copy"><strong>Prefiro acompanhar pelo Telegram</strong><small>Canal de ofertas Mavuri</small></span>
             <span class="arrow" aria-hidden="true">➜</span>
           </a>
         </div>
+        <p class="join-reassurance">Sem cadastro no site. Os preços, cupons e estoques são definidos pelas lojas e podem mudar.</p>
         <div class="join-tools"><button class="share share-secondary" id="share" type="button">↗ Compartilhar Mavuri</button></div>
         <div class="marketplaces" aria-label="Lojas com ofertas divulgadas no Mavuri">
           <span>Ofertas de</span>
@@ -291,7 +295,10 @@
   <script>
     (function(){
       "use strict";
-      const entry=window.location.href;
+      const shareUrl=new URL("./",window.location.href);
+      shareUrl.search="";shareUrl.hash="";
+      shareUrl.searchParams.set("origem","compartilhamento");
+      shareUrl.searchParams.set("campanha","convite_membro");
       const originParam=(new URLSearchParams(location.search).get("origem")||"direto").toLowerCase();
       const origins=["whatsapp","telegram","instagram","facebook","direto","outros"];
       const source=origins.includes(originParam)?originParam:"outros";
@@ -302,7 +309,7 @@
       function message(text,ok){output.textContent=text;output.className="response "+(ok?"ok":"error");}
       const share=document.getElementById("share");
       share.addEventListener("click",async function(){
-        const data={title:"Mavuri Ofertas",text:"Entre grátis no Mavuri Ofertas no WhatsApp ou Telegram!",url:entry.split("#")[0]};
+        const data={title:"Mavuri Ofertas",text:"Entre grátis no Mavuri Ofertas no WhatsApp ou Telegram!",url:shareUrl.toString()};
         try{
           if(navigator.share){await navigator.share(data);return;}
           if(navigator.clipboard){await navigator.clipboard.writeText(data.url);share.textContent="✓ Link copiado";return;}

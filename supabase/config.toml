@@ -1,0 +1,4 @@
+# Apenas o endpoint de telemetria é público; os demais preservam suas configurações.
+# A Edge Function valida origem, formato e tamanho. Origem não impede bots.
+[functions.mavuri-growth-event]
+verify_jwt = false
