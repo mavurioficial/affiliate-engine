@@ -407,6 +407,37 @@ async function run(){
    console.log(JSON.stringify({phase:'shopee_tabugado_redemption',
     status:'intake_failed_next_cycle',error:String(error?.message||error).slice(0,150)}));
   }
+  // Independent multi-platform coupon intelligence: Tá Bugado Magalu + Amazon.
+  // Only records sightings/cross-checks official Magalu coupons. NEVER publishes
+  // or forwards source affiliate URLs (Amazon needs separate official validation).
+  try {
+   const recent=await client.getMessages(group.entity,{limit:100});
+   const messages=recent.map(m=>({
+    id:Number(m.id),
+    date:new Date(m.date instanceof Date?m.date.getTime():Number(m.date)*1000).toISOString(),
+    text:String(m.message||'').slice(0,8500)
+   })).filter(m=>Date.now()-Date.parse(m.date)<24*3600000 &&
+      /(?:magalu|magazine\s+luiza|amazon|amzn\.to|link\.amazon)/i.test(m.text)&&
+      /(?:cupom|cupons|voucher|resgate)/i.test(m.text)).slice(0,35);
+   if(messages.length){
+    const resp=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-external-coupons',{
+     method:'POST',
+     headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},
+     body:JSON.stringify({mode:mode==='send'?'ingest':'preview',
+      source_title:String(group.entity.title||group.title||'').trim(),
+      source_username:'grupotabugado',source_id:String(group.entity.id),messages}),
+     signal:AbortSignal.timeout(70000)
+    });
+    const result=await resp.json().catch(()=>({error:'invalid_response'}));
+    console.log(JSON.stringify({phase:'magalu_amazon_external_coupons',
+      source:'@GRUPOTABUGADO',messages_checked:messages.length,http_status:resp.status,...result}));
+    if(!resp.ok||result.ok!==true)throw Error('External coupon discovery failed');
+   }else console.log(JSON.stringify({phase:'magalu_amazon_external_coupons',
+    status:'no_candidate_messages',messages_checked:0}));
+  }catch(error){
+   console.log(JSON.stringify({phase:'magalu_amazon_external_coupons',
+    status:'intake_failed_next_cycle',error:String(error?.message||error).slice(0,150)}));
+  }
   try{await mirrorMLSource(client,group,mode)}catch(e){console.log(JSON.stringify({phase:'ml_mirror_error',error:String(e.message)}))}
   let offsetId=0;
   const msgs=[];
