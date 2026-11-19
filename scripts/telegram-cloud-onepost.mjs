@@ -376,6 +376,37 @@ async function run(){
    console.log(JSON.stringify({phase:'ml_tabugado_coupons',
     status:'collection_failed_check_next_cycle',error:String(error?.message||error).slice(0,180)}));
   }
+  // Shopee redemption coupons: separate from ML, Amazon, and offers.
+  // Only backend may verify the official Shopee page and mint our affiliate link.
+  try {
+   const recent=await client.getMessages(group.entity,{limit:100});
+   const messages=recent.map(m=>({
+     id:Number(m.id),
+     date:new Date(m.date instanceof Date?m.date.getTime():Number(m.date)*1000).toISOString(),
+     text:String(m.message||'').slice(0,10000)
+   })).filter(m=>Date.now()-Date.parse(m.date)<12*3600000 &&
+      /shopee/i.test(m.text)&&/(?:cupom|cupons|resgat|voucher)/i.test(m.text)).slice(0,30);
+   if(messages.length){
+    const resp=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-shopee-redemption',{
+     method:'POST',
+     headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},
+     body:JSON.stringify({
+      mode,source_title:String(group.entity.title||group.title||'').trim(),
+      source_username:'grupotabugado',source_id:String(group.entity.id),messages
+     }),
+     signal:AbortSignal.timeout(90000)
+    });
+    const data=await resp.json().catch(()=>({error:'invalid_response'}));
+    console.log(JSON.stringify({phase:'shopee_tabugado_redemption',
+      source:'@GRUPOTABUGADO',messages_checked:messages.length,
+      http_status:resp.status,...data}));
+    if(!resp.ok||data.ok!==true)throw Error('Shopee redemption intake rejected');
+   }else console.log(JSON.stringify({phase:'shopee_tabugado_redemption',
+      messages_checked:0,status:'no_coupon_signals'}));
+  }catch(error){
+   console.log(JSON.stringify({phase:'shopee_tabugado_redemption',
+    status:'intake_failed_next_cycle',error:String(error?.message||error).slice(0,150)}));
+  }
   try{await mirrorMLSource(client,group,mode)}catch(e){console.log(JSON.stringify({phase:'ml_mirror_error',error:String(e.message)}))}
   let offsetId=0;
   const msgs=[];
