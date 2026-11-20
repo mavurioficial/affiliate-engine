@@ -93,7 +93,7 @@ try{
   if(!idres.ok||!idbody.value)throw Error('OIDC unavailable');
   const res=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-amazon-photo-test',{
    method:'POST',headers:{authorization:'Bearer '+idbody.value,'content-type':'application/json'},
-   body:JSON.stringify({workflow_run_id:process.env.GITHUB_RUN_ID,source_message_id:SOURCE_ID,original_message_id:ORIGINAL_ID,asin:ASIN,caption,caption_entities:captionEntities,photo_b64:output.toString('base64')}),
+   body:JSON.stringify({workflow_run_id:process.env.GITHUB_RUN_ID,source_message_id:SOURCE_ID,original_message_id:ORIGINAL_ID,asin:ASIN,caption,caption_entities:[],photo_b64:output.toString('base64')}),
    signal:AbortSignal.timeout(90000)});
   const body=await res.json().catch(()=>({error:'invalid-json'}));
   console.log(JSON.stringify({phase:'test_publication',http_status:res.status,ok:body.ok,posted:body.posted||false,telegram_message_id:body.telegram_message_id||null,error:body.error||null,details:String(body.details||'').slice(0,180)}));
