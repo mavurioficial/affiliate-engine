@@ -36,6 +36,10 @@ try{
  const [generalMsg]=await cli.getMessages(general.entity,{ids:[ORIGINAL_ID]});
  const [sourceMsg]=await cli.getMessages(source.entity,{ids:[SOURCE_ID]});
  if(Number(generalMsg?.id)!==ORIGINAL_ID||Number(sourceMsg?.id)!==SOURCE_ID)throw Error('original source message not found');
+ const recentTest=await cli.getMessages(general.entity,{limit:100});
+ const existingTest=recentTest.filter(m=>String(m.message||'').includes('🧪 TESTE DE LAYOUT — AMAZON | MAVURI'));
+ console.log(JSON.stringify({phase:'telegram_history_safety',scanned:recentTest.length,existing_test_messages:existingTest.map(m=>Number(m.id))}));
+ if(existingTest.length)throw Error('test already exists in Telegram history, refusing duplicate');
  original=String(generalMsg.message||'').trim();
  if(!original.includes('/dp/'+ASIN+'/ref=nosim?tag=lucasbrasil0e-20'))throw Error('message affiliate destination mismatch');
  if(!String(sourceMsg.message||'').toLowerCase().includes('amazon') &&
@@ -92,7 +96,7 @@ try{
    body:JSON.stringify({workflow_run_id:process.env.GITHUB_RUN_ID,source_message_id:SOURCE_ID,original_message_id:ORIGINAL_ID,asin:ASIN,caption,caption_entities:captionEntities,photo_b64:output.toString('base64')}),
    signal:AbortSignal.timeout(90000)});
   const body=await res.json().catch(()=>({error:'invalid-json'}));
-  console.log(JSON.stringify({phase:'test_publication',http_status:res.status,ok:body.ok,posted:body.posted||false,telegram_message_id:body.telegram_message_id||null,error:body.error||null}));
+  console.log(JSON.stringify({phase:'test_publication',http_status:res.status,ok:body.ok,posted:body.posted||false,telegram_message_id:body.telegram_message_id||null,error:body.error||null,details:String(body.details||'').slice(0,180)}));
   if(!res.ok||body.ok!==true||body.posted!==true)throw Error('test publication unconfirmed: '+(body.error||res.status));
  }
 }finally{await cli.disconnect().catch(()=>{});}
