@@ -25,7 +25,7 @@ async function getImageCandidate(m,label){
  }
  return null;
 }
-let chosen, caption, original;
+let chosen, caption, original, captionEntities;
 try{
  await cli.connect();
  if(!await cli.getMe())throw Error('Telegram session not authenticated');
@@ -41,6 +41,20 @@ try{
  if(!String(sourceMsg.message||'').toLowerCase().includes('amazon') &&
     !String(sourceMsg.message||'').includes('amzn.to') && !String(sourceMsg.message||'').includes('link.amazon'))throw Error('unexpected source text');
  caption='🧪 TESTE DE LAYOUT — AMAZON | MAVURI\n\n'+original;
+ const prefixLen=caption.length-original.length;
+ captionEntities=(generalMsg.entities||[]).flatMap(e=>{
+  const name=String(e.className||e.constructor?.name||'').replace(/^MessageEntity/,'').toLowerCase();
+  const type=({bold:'bold',italic:'italic',code:'code',underline:'underline',strike:'strikethrough',strikethrough:'strikethrough',url:'url',texturl:'text_link',spoiler:'spoiler'})[name];
+  const off=Number(e.offset),len=Number(e.length);
+  if(!type||!Number.isInteger(off)||!Number.isInteger(len)||off<0||len<1||off+len>original.length)return [];
+  const data={type,offset:off+prefixLen,length:len};
+  if(type==='text_link'){
+   const target=String(e.url||'');
+   if(!/^https:\/\/(?:www\.)?amazon\.com\.br\//.test(target))return [];
+   data.url=target;
+  }
+  return [data];
+ });
  if(caption.length>1024)throw Error('original caption exceeds Telegram 1024 limit; no publication, needs split design');
  const sourcePic=await getImageCandidate(sourceMsg,'source-telegram');
  const generalPic=await getImageCandidate(generalMsg,'existing-amazon-preview');
@@ -62,7 +76,7 @@ try{
    }
   }catch(e){console.log(JSON.stringify({phase:'remote_image_unavailable',reason:String(e.message||e).slice(0,95)}));}
  }
- const available=[remotePic,sourcePic,generalPic].filter(Boolean);
+ const available=[sourcePic,remotePic,generalPic].filter(Boolean);
  chosen=available.find(x=>x.width>=450&&x.height>=350)||available[0];
  if(!chosen)throw Error('no product photo available; no public post sent');
  console.log(JSON.stringify({phase:'preflight',mode,source_message_id:SOURCE_ID,original_message_id:ORIGINAL_ID,asin:ASIN,original_length:original.length,caption_length:caption.length,links:(original.match(/https?:\/\//g)||[]).length,selected_image:chosen.source,width:chosen.width,height:chosen.height}));
@@ -75,7 +89,7 @@ try{
   if(!idres.ok||!idbody.value)throw Error('OIDC unavailable');
   const res=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-amazon-photo-test',{
    method:'POST',headers:{authorization:'Bearer '+idbody.value,'content-type':'application/json'},
-   body:JSON.stringify({workflow_run_id:process.env.GITHUB_RUN_ID,source_message_id:SOURCE_ID,original_message_id:ORIGINAL_ID,asin:ASIN,caption,photo_b64:output.toString('base64')}),
+   body:JSON.stringify({workflow_run_id:process.env.GITHUB_RUN_ID,source_message_id:SOURCE_ID,original_message_id:ORIGINAL_ID,asin:ASIN,caption,caption_entities:captionEntities,photo_b64:output.toString('base64')}),
    signal:AbortSignal.timeout(90000)});
   const body=await res.json().catch(()=>({error:'invalid-json'}));
   console.log(JSON.stringify({phase:'test_publication',http_status:res.status,ok:body.ok,posted:body.posted||false,telegram_message_id:body.telegram_message_id||null,error:body.error||null}));
