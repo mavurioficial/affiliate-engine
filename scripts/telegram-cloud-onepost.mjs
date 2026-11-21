@@ -360,6 +360,13 @@ async function run(){
   await client.connect();
   if(!await client.getMe())throw Error('Telegram session invalid');
   const dialogs=await client.getDialogs({limit:500});
+  // Non-sensitive discovery: check whether the coupon group supplied in the user screenshot
+  // is already in this Telegram account. Do not read or publish from it without pinning its ID.
+  const possibleMlCouponGroups=dialogs.filter(d=>{
+   const title=String(d?.entity?.title||d?.title||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();
+   return /cupons?/.test(title)&&/mercado\\s*livre/.test(title);
+  }).map(d=>({title:String(d?.entity?.title||d?.title||'').slice(0,95),source_id:String(d?.entity?.id||'')}));
+  console.log(JSON.stringify({phase:'ml_additional_source_discovery',groups:possibleMlCouponGroups}));
 
   // Read only the named official coupon channel already joined by this account.
   // Coupon failures are isolated so offer collection can continue.
