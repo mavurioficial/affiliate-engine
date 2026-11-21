@@ -127,6 +127,33 @@ try{
  const dialogs=await cli.getDialogs({limit:500});
  const general=dialogs.find(x=>String(x?.entity?.id||"")===sourceId);
  if(!general)throw Error("Mavuri general channel unavailable");
+ if(mode==="preview"){
+  const samples=[
+   [1936,"mercadolivre","offer"],[10519,"shopee","offer"],
+   [10027,"amazon","offer"],[10522,"magalu","offer"],
+   [9986,"mercadolivre","coupon"],[9608,"shopee","coupon"],
+   [10489,"amazon","offer"],[9989,"magalu","coupon"]
+  ];
+  const history=await cli.getMessages(general.entity,{ids:samples.map(x=>x[0])});
+  const byId=new Map(history.filter(Boolean).map(m=>[Number(m.id),m]));
+  let passed=0;
+  for(const [id,platform,kind] of samples){
+   const msg=byId.get(id);
+   if(!msg)throw Error("Historic preview source missing "+id);
+   const recognized=classify(String(msg.message||""));
+   if(recognized?.platform!==platform||recognized?.kind!==kind)
+    throw Error("Historic format recognition failed "+id+" saw "+JSON.stringify(recognized));
+   let hasPhoto=null;
+   if(kind==="offer"){
+    const prepared=await productImage(msg,platform);
+    hasPhoto=!!prepared;
+   }
+   console.log(JSON.stringify({phase:"historical_readonly_validation",source_id:id,platform,kind,
+     recognized:true,has_photo:hasPhoto}));
+   passed++;
+  }
+  console.log(JSON.stringify({phase:"historical_readonly_passed",count:passed}));
+ }
  let offsetId=0;
  for(let pageNo=0;pageNo<22;pageNo++){
   const page=await cli.getMessages(general.entity,{limit:100,...(offsetId?{offsetId}:{})});
