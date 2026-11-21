@@ -461,6 +461,58 @@ async function run(){
   candidates=await collectCandidates(msgs,fetch,resumed?resumeUnixSeconds:0);
   mlCandidates=collectMercadoLivreCandidates(msgs,0,256);
   if(mlCandidates.length>=256)throw Error('Mercado Livre candidate backlog too large - cursor not advanced');
+  // Keep the original product photograph while authenticated to the source group.
+  // No photo is persisted. If photo retrieval fails, the existing text post remains valid.
+  if(candidates.length){
+    const byId=new Map(msgs.map(m=>[Number(m.id),m]));
+    let sharpLib=null;
+    try{sharpLib=(await import('sharp')).default}catch(e){
+      console.log(JSON.stringify({phase:'amazon_photo_dependency_missing',error:String(e?.message||e).slice(0,80)}));
+    }
+    let photoOk=0,photoMiss=0;
+    for(const item of candidates){
+      const msg=byId.get(item.message_id);
+      const candidatesMedia=[msg?.media?.photo,msg?.media?.webpage?.photo].filter(Boolean);
+      let compressed=null;
+      if(sharpLib){
+        for(const photo of candidatesMedia){
+          try{
+            const downloaded=await client.downloadMedia(photo,{workers:1});
+            if(!downloaded)continue;
+            const buf=Buffer.isBuffer(downloaded)?downloaded:Buffer.from(downloaded);
+            const details=await sharpLib(buf,{limitInputPixels:12000000}).metadata();
+            if((details.width||0)<150||(details.height||0)<150)continue;
+            const jpeg=await sharpLib(buf,{limitInputPixels:12000000})
+              .resize(850,850,{fit:'contain',background:'#ffffff'})
+              .jpeg({quality:80,mozjpeg:true}).toBuffer();
+            if(jpeg.length>=6000&&jpeg.length<=190000){compressed=jpeg;break}
+          }catch(e){console.log(JSON.stringify({phase:'amazon_photo_source_error',message_id:item.message_id,error:String(e?.message||e).slice(0,75)}));}
+        }
+        if(!compressed){
+          // Exact ASIN image URL only; never guess from a title or other product.
+          const url='https://m.media-amazon.com/images/P/'+item.asin+'.01._SCLZZZZZZZ_SX800_.jpg';
+          try{
+            const res=await fetch(url,{signal:AbortSignal.timeout(10000),headers:{accept:'image/jpeg'}});
+            if(res.ok){
+              const buf=Buffer.from(await res.arrayBuffer());
+              if(buf.length>=5000&&buf.length<2000000){
+                const meta=await sharpLib(buf,{limitInputPixels:12000000}).metadata();
+                if((meta.width||0)>=350&&(meta.height||0)>=350){
+                  const jpeg=await sharpLib(buf,{limitInputPixels:12000000})
+                    .resize(850,850,{fit:'contain',background:'#ffffff'})
+                    .jpeg({quality:80,mozjpeg:true}).toBuffer();
+                  if(jpeg.length>=6000&&jpeg.length<=190000)compressed=jpeg;
+                }
+              }
+            }
+          }catch(e){console.log(JSON.stringify({phase:'amazon_photo_fallback_error',message_id:item.message_id,error:String(e?.message||e).slice(0,75)}));}
+        }
+      }
+      if(compressed){item.photo_b64=compressed.toString('base64');photoOk++}
+      else photoMiss++;
+    }
+    console.log(JSON.stringify({phase:'amazon_photo_preparation',prepared:photoOk,unavailable:photoMiss,total:candidates.length}));
+  }
   const familyFiltered=filterAmazonSimilar(candidates,cursor.recent_amazon_families||[]);
   candidates=familyFiltered.accepted;
   console.log(JSON.stringify({phase:'amazon_freshness_and_family',resumed,
@@ -479,7 +531,7 @@ async function run(){
  let batch=[];
  for(const item of candidates){
   const trial=[...batch,item];
-  if(batch.length&&(batch.length>=8||JSON.stringify(trial).length>50000)){
+  if(batch.length&&(batch.length>=8||JSON.stringify(trial).length>1350000)){
    batches.push(batch);batch=[];
   }
   batch.push(item);
