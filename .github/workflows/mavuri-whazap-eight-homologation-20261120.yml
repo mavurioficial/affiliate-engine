@@ -1,0 +1,36 @@
+name: Mavuri - 8 publicacoes de homologacao Whazap
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Previa sem envio ou publicar oito testes unicos"
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - publish
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: mavuri-whazap-eight-homologation-20261120
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Dependencias Telegram e imagem
+        run: npm install --no-save --no-audit --no-fund teleproto@1.232.1 sharp@0.34.5
+      - name: Reproduzir publicacoes do Telegram apenas no grupo WhatsApp de testes
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_SESSION_STRING: ${{ secrets.TG_SESSION_STRING }}
+          TEST_MODE: ${{ inputs.mode }}
+        run: node scripts/mavuri-whazap-eight-homologation-20261120.mjs
