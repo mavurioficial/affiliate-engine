@@ -57,9 +57,16 @@ try{
    if(spec.platform==="amazon"){
     raw=await cli.downloadMedia(sourcePhotoMsg.media?.photo||sourcePhotoMsg.media,{workers:1});
    }else if(spec.platform==="magalu"){
-    const response=await fetch(productImageMagalu,{signal:AbortSignal.timeout(16000)});
-    if(!response.ok)throw Error("Magalu product photo missing "+response.status);
-    raw=Buffer.from(await response.arrayBuffer());
+    try{
+      const response=await fetch(productImageMagalu,{signal:AbortSignal.timeout(12000)});
+      if(response.ok)raw=Buffer.from(await response.arrayBuffer());
+      else console.log(JSON.stringify({phase:"magalu_highres_unavailable",http_status:response.status}));
+    }catch(e){console.log(JSON.stringify({phase:"magalu_highres_unavailable",error:String(e?.message||e).slice(0,90)}));}
+    // The original picture is always the grounded fallback if Magalu CDN blocks GitHub.
+    if(!raw){
+      if(!msg.media?.photo)throw Error("Original Magalu Telegram post has no photo");
+      raw=await cli.downloadMedia(msg.media.photo,{workers:1});
+    }
    }else{
     if(!msg.media?.photo)throw Error("Original Telegram offer lacks photo "+spec.source);
     raw=await cli.downloadMedia(msg.media.photo,{workers:1});
