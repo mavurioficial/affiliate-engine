@@ -363,8 +363,8 @@ async function run(){
   // Non-sensitive discovery: check whether the coupon group supplied in the user screenshot
   // is already in this Telegram account. Do not read or publish from it without pinning its ID.
   const possibleMlCouponGroups=dialogs.filter(d=>{
-   const title=String(d?.entity?.title||d?.title||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();
-   return /cupons?/.test(title)&&/mercado\\s*livre/.test(title);
+   const title=String(d?.entity?.title||d?.title||'').toLowerCase();
+   return /cupons?/.test(title)&&/mercado.*livre/.test(title);
   }).map(d=>({title:String(d?.entity?.title||d?.title||'').slice(0,95),source_id:String(d?.entity?.id||'')}));
   console.log(JSON.stringify({phase:'ml_additional_source_discovery',groups:possibleMlCouponGroups}));
 
