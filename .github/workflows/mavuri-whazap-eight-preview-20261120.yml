@@ -1,0 +1,21 @@
+name: Mavuri - pesquisa homologacao 8 WhatsApp
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-audit --no-fund teleproto@1.232.1 sharp@0.34.5
+      - name: Conferir mensagens ja publicadas sem enviar nada
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_SESSION_STRING: ${{ secrets.TG_SESSION_STRING }}
+        run: node scripts/mavuri-whazap-eight-preview-20261120.mjs
