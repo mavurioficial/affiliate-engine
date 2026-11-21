@@ -35,7 +35,7 @@ jobs:
       - name: Validate ASIN resolver without Telegram
         run: node --test scripts/telegram-cloud-onepost.test.mjs
       - name: Install Telegram client
-        run: npm install --no-save --ignore-scripts --no-audit --no-fund teleproto@1.232.1
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund teleproto@1.232.1 sharp@0.34.5
       - name: Read joined Telegram group and mirror all recent Amazon offers
         env:
           TG_API_ID: ${{ secrets.TG_API_ID }}
