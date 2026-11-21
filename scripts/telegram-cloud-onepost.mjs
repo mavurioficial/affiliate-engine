@@ -185,6 +185,43 @@ export async function resolveML(link,request=fetch){
  }
  return null;
 }
+// Iterate the full last 24 hours for ML coupon messages. Never silently truncate a source.
+async function recentMLCouponMessages(client,entity,pattern){
+ const all=[];let offsetId=0,completed=false;
+ for(let pageNo=0;pageNo<12;pageNo++){
+  const page=await client.getMessages(entity,{limit:100,...(offsetId?{offsetId}:{})});
+  if(!page.length){completed=true;break}
+  for(const m of page){
+   const when=m.date instanceof Date?m.date.getTime():Number(m.date)*1000;
+   if(!Number.isFinite(when))continue;
+   if(Date.now()-when>86400000){completed=true;break}
+   const text=String(m.message||'').slice(0,9000);
+   if(pattern.test(text))all.push({id:Number(m.id),date:new Date(when).toISOString(),text});
+  }
+  if(completed||page.length<100){completed=true;break}
+  const last=Number(page[page.length-1]?.id);
+  if(!Number.isSafeInteger(last)||(offsetId&&last>=offsetId))throw Error('ML coupon history pagination invalid');
+  offsetId=last;
+ }
+ if(!completed)throw Error('ML coupon 24h history exceeds safety boundary');
+ return all.reverse();
+}
+async function submitMLCouponMessages(messages,source,mode,label){
+ let detected=0,packets=0;
+ for(let offset=0;offset<messages.length;offset+=20){
+  // Packet size protects the HTTP request; no selection cap is applied to coupons.
+  const chunk=messages.slice(offset,offset+20);
+  const response=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-ml-private-coupons',{
+    method:'POST',headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},
+    body:JSON.stringify({mode,...source,messages:chunk}),signal:AbortSignal.timeout(90000)});
+  const result=await response.json().catch(()=>({error:'invalid_response'}));
+  console.log(JSON.stringify({phase:'ml_coupons_'+label,packet:Math.floor(offset/20)+1,
+   messages_checked:chunk.length,http_status:response.status,...result}));
+  if(!response.ok||!result.ok)throw Error('ML coupon packet rejected: '+String(result.error||response.status));
+  detected+=Number(result.discovered||0);packets++;
+ }
+ console.log(JSON.stringify({phase:'ml_coupons_'+label+'_complete',messages:messages.length,packets,coupons_detected:detected}));
+}
 async function mirrorMLSource(client,group,mode){
  const recent=await client.getMessages(group.entity,{limit:100});
  const candidates=[],unresolved=[];
@@ -330,15 +367,12 @@ async function run(){
    const official=dialogs.filter(d=>/^Afiliados e Criadores Mercado(?: Livre)?(?: Brasil)?\s*(?:🇧🇷)?$/i.test(String(d?.entity?.title||d?.title||'').trim()));
    if(official.length!==1)console.log(JSON.stringify({phase:'ml_official_coupons',source_matches:official.length,status:'source_unavailable_or_ambiguous'}));
    else {
-    const source=official[0], recent=await client.getMessages(source.entity,{limit:30});
-    const messages=recent.map(m=>({id:Number(m.id),date:new Date(m.date instanceof Date?m.date.getTime():Number(m.date)*1000).toISOString(),text:String(m.message||'').slice(0,12000)}))
-     .filter(m=>Date.now()-Date.parse(m.date)<86400000&&/(?:🎟|🎫|cupom|cupons|OFF)/i.test(m.text)).slice(0,30);
-    const response=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-ml-private-coupons',{
-     method:'POST',headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},
-     body:JSON.stringify({mode,source_title:String(source.entity.title||source.title).trim(),source_id:String(source.entity.id),messages}),
-     signal:AbortSignal.timeout(90000)});
-    const result=await response.json();
-    console.log(JSON.stringify({phase:'ml_official_coupons',source_title:String(source.entity.title||source.title),source_id:String(source.entity.id),messages_checked:messages.length,http_status:response.status,...result}));
+    const source=official[0];
+   const messages=await recentMLCouponMessages(client,source.entity,/(?:🎟|🎫|cupom|cupons|OFF)/i);
+   if(messages.length)await submitMLCouponMessages(messages,{
+    source_title:String(source.entity.title||source.title).trim(),source_id:String(source.entity.id)
+   },mode,'official');
+   else console.log(JSON.stringify({phase:'ml_official_coupons',status:'no_recent_coupon_signals'}));
    }
   }catch{console.log(JSON.stringify({phase:'ml_official_coupons',status:'collection_failed_check_next_cycle'}))}
   const group=dialogs.find(d=>String(d?.entity?.username||'').toLowerCase()==='grupotabugado');
@@ -346,35 +380,14 @@ async function run(){
   // Preserve the affiliate channel above and add Tá Bugado as another ML coupon source.
   // Backend uses the existing code + date + channel key to deduplicate across sources.
   try {
-   const recent=await client.getMessages(group.entity,{limit:100});
-   const messages=recent.map(m=>({
-    id:Number(m.id),
-    date:new Date(m.date instanceof Date?m.date.getTime():Number(m.date)*1000).toISOString(),
-    text:String(m.message||'').slice(0,12000)
-   })).filter(m=>Date.now()-Date.parse(m.date)<86400000 &&
-     /(?:🎟|🎫|cupom|cupons|OFF)/i.test(m.text)).slice(0,30);
-   if(messages.length){
-    const resp=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-ml-private-coupons',{
-     method:'POST',
-     headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},
-     body:JSON.stringify({
-      mode,source_title:String(group.entity.title||group.title||'').trim(),
-      source_username:'grupotabugado',source_id:String(group.entity.id),
-      messages
-     }),
-     signal:AbortSignal.timeout(90000)
-    });
-    const result=await resp.json().catch(()=>({error:'invalid_response'}));
-    console.log(JSON.stringify({phase:'ml_tabugado_coupons',source:'@GRUPOTABUGADO',
-      messages_checked:messages.length,http_status:resp.status,...result}));
-    if(!resp.ok||!result.ok)throw Error('ML Tá Bugado coupon processing failed');
-   }else{
-    console.log(JSON.stringify({phase:'ml_tabugado_coupons',messages_checked:0,
-      status:'no_recent_coupon_candidates'}));
-   }
+   const messages=await recentMLCouponMessages(client,group.entity,/(?:🎟|🎫|cupom|cupons|OFF)/i);
+   if(messages.length)await submitMLCouponMessages(messages,{
+    source_title:String(group.entity.title||group.title||'').trim(),
+    source_username:'grupotabugado',source_id:String(group.entity.id)
+   },mode,'tabugado');
+   else console.log(JSON.stringify({phase:'ml_tabugado_coupons',messages_checked:0,status:'no_recent_coupon_candidates'}));
   }catch(error){
-   console.log(JSON.stringify({phase:'ml_tabugado_coupons',
-    status:'collection_failed_check_next_cycle',error:String(error?.message||error).slice(0,180)}));
+   console.log(JSON.stringify({phase:'ml_tabugado_coupons',status:'collection_failed_check_next_cycle',error:String(error?.message||error).slice(0,180)}));
   }
   // Shopee redemption coupons: separate from ML, Amazon, and offers.
   // Only backend may verify the official Shopee page and mint our affiliate link.
