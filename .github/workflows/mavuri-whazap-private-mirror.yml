@@ -1,0 +1,38 @@
+name: Mavuri - WAHA grupo privado 08h-22h
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Simular ou copiar apenas as publicacoes novas para o grupo privado"
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - send
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: mavuri-whazap-private-mirror
+  cancel-in-progress: false
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verificar codigo do espelhamento
+        run: node --check scripts/mavuri-whazap-private-mirror.mjs
+      - name: Preparar Telegram e imagens
+        run: npm install --no-save --no-audit --no-fund teleproto@1.232.1 sharp@0.34.5
+      - name: Espelhar somente Mavuri Ofertas no grupo WAHA de homologacao
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_SESSION_STRING: ${{ secrets.TG_SESSION_STRING }}
+          MIRROR_MODE: ${{ inputs.mode }}
+        run: node scripts/mavuri-whazap-private-mirror.mjs
