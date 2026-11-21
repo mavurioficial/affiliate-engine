@@ -9,7 +9,8 @@ não destinos necessários ao funcionamento da WAHA.
 
 ## Implantado (21/11/2026, fase de transição)
 - `public.mavuri_publication_events`: eventos únicos por origem.
-- `public.mavuri_publisher_deliveries`: fila própria, deduplicação e status.
+- `public.mavuri_publisher_deliveries`: duas filas de destino independentes, `waha_test` e `telegram`, deduplicação por (evento, destino) e status separados.
+- Trigger `mavuri_internal.mavuri_enqueue_event_delivery`: cada aprovação gera as duas entregas, independentemente de os destinos estarem habilitados. Teste transacional de fanout 2/2 passou, sem envio.
 - `public.mavuri_publisher_controls`: chave de ativação e janela do piloto.
 - Trigger em `flow_delivery_jobs`: captura ofertas selecionadas antes da
   entrega Telegram; cupons Shopee em `flow_coupon_delivery_jobs`.
@@ -20,11 +21,14 @@ não destinos necessários ao funcionamento da WAHA.
   não consulta publicações dos canais Mavuri.
 - Função `mavuri-waha-independent-publisher`: entrega exclusivamente ao
   grupo privado de testes, com imagem, legenda, link e auditoria próprios.
+- Função `mavuri-telegram-independent-publisher`: entrega ao Telegram a partir dos mesmos eventos aprovados; tem controle próprio e não consulta a WAHA. Instalado, **ainda desativado**.
+- Cron `mavuri-independent-telegram-publisher-2min`: existe, mas só dispara se o controle do novo Telegram estiver habilitado; o publicador antigo continua ativo.
 - Crons de coleta sombra (5 min) e publicador (2 min). O cron do publicador
   depende de `mavuri_publisher_controls.enabled=true`.
 
 ## Segurança operacional (estado atual)
 - `mavuri_publisher_controls.waha_test.enabled = false`.
+- `mavuri_publisher_controls.telegram.enabled = false` — **somente o novo publicador** está desligado; o Telegram legado continua publicando.
 - O espelhamento anterior `mavuri_whazap_test_mirror_control.enabled = true`
   permanece ligado no piloto, para não interromper publicações durante a
   verificação de cobertura. **Não ativar ambos simultaneamente**, para não
@@ -44,7 +48,7 @@ não destinos necessários ao funcionamento da WAHA.
    publicador, não apenas nos testes manuais.
 4. Conferir deduplicação, pausas, falhas e recuperação de entrega
    sem duplicar mensagens cujo estado seja `unconfirmed`.
-5. Fazer a virada ATÔMICA somente depois de validar cobertura:
+5. Fazer a virada ATÔMICA do WhatsApp somente depois de validar cobertura:
    ```sql
    BEGIN;
    UPDATE public.mavuri_whazap_test_mirror_control
@@ -53,9 +57,10 @@ não destinos necessários ao funcionamento da WAHA.
    SET enabled=true,updated_at=now() WHERE destination='waha_test';
    COMMIT;
    ```
-6. Após a virada, simular indisponibilidade do publicador Telegram mantendo
+6. Migrar o publicador Telegram legado para o novo consumidor de eventos, em outra troca controlada, sem manter dois publicadores para o mesmo destino.
+7. Após a virada, simular indisponibilidade do publicador Telegram mantendo
    o coletor e as fontes do Mavuri operacionais. Comparar as filas e logs.
-7. **Não** ativar WhatsApp público nem canal sem nova aprovação.
+8. **Não** ativar WhatsApp público nem canal sem nova aprovação.
 
 ## Auditoria de origem (sem revelar texto/links em logs)
 ```sql
