@@ -3,7 +3,7 @@ import sharp from 'sharp';
 const {TelegramClient}=await import('teleproto');
 const {StringSession}=await import('teleproto/sessions');
 const cli=new TelegramClient(new StringSession(process.env.TG_SESSION_STRING),Number(process.env.TG_API_ID),process.env.TG_API_HASH,{connectionRetries:2,receiveUpdates:false});
-const wanted=[10522,10519,10490,10489,10488,10487,10486,10485,10484,10483,10482,10481,10480,10479,10478,10027,9989,9986,9608,5370,5349,5333];
+const wanted=[10522,10519,10490,10489,10488,10487,10486,10485,10484,10483,10482,10481,10480,10479,10478,10027,9989,9986,9608,1936,1935,1931,5370,5349,5333];
 try{
  await cli.connect();
  const me=await cli.getMe();if(!me)throw Error('Telegram session missing');
