@@ -104,3 +104,14 @@ Não religar o antigo espelhamento Telegram→WhatsApp enquanto
 público sem autorização separada. Não habilitar os antigos publicadores
 Telegram sem desabilitar o novo, para evitar duplicações. As novas tabelas
 possuem RLS e não dão acesso de dados a `anon`/`authenticated`.
+
+## Supervisor WAHA automático — 21/11/2026, 22h03
+- Edge Function `mavuri-waha-auto-recovery`: checa estado da sessão `mavuri_waha` a cada 5 minutos, inclusive fora da janela de publicações, até o vencimento configurado do piloto.
+- Se o estado da API for `STOPPED`, faz exclusivamente `POST /api/sessions/mavuri_waha/start` na sessão existente; nunca faz logout, delete, reset, QR ou envia mensagens.
+- Proteções: máximo de uma tentativa a cada 15 minutos e três tentativas por janela móvel de 60 minutos; claim atômico no banco impede reinicializações simultâneas.
+- Estados `STARTING` aguardam, `WORKING` atualiza o heartbeat e `SCAN_QR_CODE`/estados inesperados exigem atenção manual registrada, sem iniciar sessões inadvertidamente.
+- Tabelas `mavuri_waha_recovery_state` e `mavuri_waha_recovery_log` registram saúde, tentativas, sucesso e falhas; RLS ativa e sem acesso de `anon`/`authenticated`.
+- Cron `mavuri-waha-session-supervisor-every-5min` executa o supervisor. `mavuri-waha-stale-queue-quarantine-every-5min` preserva, mas pausa automaticamente, entregas com mais de 60 minutos sem envio para revalidação de preços e cupons.
+- Durante a indisponibilidade de 21/11, as 234 entregas antigas foram preservadas como `paused`, não apagadas. Novas entregas só são enviadas na janela 08h–22h e exclusivamente ao grupo privado autorizado.
+- Autoteste em 21/11 às 22h03: endpoint em `WORKING`, resposta HTTP 200, nenhuma mensagem enviada. O cenário real `STOPPED` ainda não foi forçado em teste, para não desconectar o grupo.
+- Limitação: se a conta exigir autenticação por QR, a API não consegue autorizar o telefone sozinha. O evento ficará como atenção manual, registrado no banco. Falta definir canal privado de alerta externo para notificações desse cenário.
