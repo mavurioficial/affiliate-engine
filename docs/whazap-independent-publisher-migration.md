@@ -115,3 +115,14 @@ possuem RLS e não dão acesso de dados a `anon`/`authenticated`.
 - Durante a indisponibilidade de 21/11, as 234 entregas antigas foram preservadas como `paused`, não apagadas. Novas entregas só são enviadas na janela 08h–22h e exclusivamente ao grupo privado autorizado.
 - Autoteste em 21/11 às 22h03: endpoint em `WORKING`, resposta HTTP 200, nenhuma mensagem enviada. O cenário real `STOPPED` ainda não foi forçado em teste, para não desconectar o grupo.
 - Limitação: se a conta exigir autenticação por QR, a API não consegue autorizar o telefone sozinha. O evento ficará como atenção manual, registrado no banco. Falta definir canal privado de alerta externo para notificações desse cenário.
+
+## Recuperação somente por falha de publicação — 21/11/2026, após 22h
+- O cron `mavuri-waha-session-supervisor-every-5min` foi **removido**. O sistema não consulta mais o estado WAHA periodicamente fora das tentativas de publicação.
+- O cron normal `mavuri-independent-waha-publisher-2min` continua executando apenas na janela configurada. Se houver mensagens novas na fila, ele valida a conexão antes de enviá-las.
+- Caso a validação produza `waha_not_connected` (ou `waha_group_lookup_failed`), o próprio publicador faz uma chamada autenticada ao endpoint `mavuri-waha-auto-recovery/check`. A rotina só tenta iniciar a sessão existente se o provedor confirmar `STOPPED`.
+- Caso a API rejeite explicitamente o envio com status 409/422/503, corpo `status:STOPPED|STARTING` e `expected` contendo `WORKING`, a entrega volta para a fila com atraso, sem perder o ID, e solicita recuperação. Falhas ambíguas não são reenviadas automaticamente.
+- Mantidos limites de 1 tentativa de inicialização por 15 minutos, máximo de 3 por hora e proteção contra concorrência.
+- O cron `mavuri-waha-stale-queue-quarantine-every-5min` permanece: **consulta apenas o banco**, sem acessar a WAHA, para pausar publicações antigas que precisem de nova validação comercial.
+- Sem mensagens novas, não há motivo para verificar a WAHA. Se a sessão cair depois das 22h, a próxima publicação elegível, na janela 08h–22h, acionará a verificação e a recuperação.
+- Testes não destrutivos: supervisor `/dry-run` retornou `WORKING`, preview do publicador retornou fila vazia, e execução fora da janela retornou `disabled_or_outside_window`; sem publicação.
+- O cenário real de uma nova sessão `STOPPED` ainda não foi forçado; fica pendente confirmação no próximo erro real.
