@@ -14,7 +14,14 @@ export async function loadDashboardOperations(supabase, days = 1) {
   if (!data || typeof data !== 'object' || !Array.isArray(data.channels)) {
     throw new Error('Resumo operacional inválido. Atualize o painel.')
   }
-  return data
+  // The current-channel monitor is owner-only; legacy metrics remain available if it fails.
+  let monitor = null, monitorError = ''
+  try {
+    const m = await supabase.rpc('mavuri_monitor_dashboard')
+    if (m.error || !m.data || !Array.isArray(m.data.queues)) throw new Error('monitor unavailable')
+    monitor = m.data
+  } catch { monitorError = 'Indicadores do monitor indisponíveis nesta sessão.' }
+  return { ...data, monitor, monitorError }
 }
 
 const quantity = (value) => Math.max(0, Number(value) || 0).toLocaleString('pt-BR')
@@ -92,9 +99,35 @@ export function renderDashboardOperations(state, escapeHtml, formatDateTime) {
     ).join('') + '</div>'
     : '<p>Nenhuma falha registrada no período.</p>'
 
+  const monitor = data.monitor
+  const monitoring = (() => {
+    if (!monitor) return '<section class="ops-subpanel"><h3>Monitor dos canais atuais</h3><p>' + safe(data.monitorError || 'Dados indisponíveis.') + '</p></section>'
+    const groups = monitor.groups || []
+    const volumes = monitor.volumes || []
+    const stamp = v => v ? safe(formatDateTime(v)) : '—'
+    const cards = ['waha_test','telegram'].map(dest => {
+      const name = dest === 'waha_test' ? 'WhatsApp · WAHA' : 'Telegram'
+      const q = monitor.queues.find(x => x.destination === dest) || {}
+      const group = groups.find(x => x.channel === (dest === 'waha_test' ? 'whatsapp' : 'telegram'))
+      const rows = volumes.filter(x => x.destination === dest)
+      const total = kind => rows.filter(x => x.kind === kind).reduce((n,x) => n + Number(x.items || 0),0)
+      const messages = rows.reduce((n,x) => n + Number(x.messages || 0),0)
+      const change = group?.previous_count == null ? 'Sem base anterior' : 'Saldo: ' + (group.participant_count - group.previous_count)
+      return '<article class="ops-subpanel"><h3>' + safe(name) + '</h3><p>' +
+        (dest === 'waha_test' ? 'Sessão: ' + safe(monitor.wa_status || 'desconhecida') + ' · verificada ' + stamp(monitor.session_checked_at) : 'Último recibo: ' + stamp(q.last_receipt)) +
+        '</p><div class="ops-quality-grid"><div><b>' + quantity(total('offer')) + '</b><small>Ofertas hoje</small></div><div><b>' + quantity(total('coupon')) + '</b><small>Cupons hoje</small></div><div><b>' + quantity(messages) + '</b><small>Mensagens com recibo</small></div></div><p>Última publicação: ' + stamp(q.last_receipt) +
+        '</p><p>Fila: ' + quantity(q.queued) + ' · Pausadas: ' + quantity(q.paused) + ' · Falhas hoje: ' + quantity(q.failed_today) + ' · Sem confirmação: ' + quantity(q.unconfirmed_today) +
+        '</p><p>Participantes: <strong>' + (group ? quantity(group.participant_count) : '—') + '</strong> · ' + safe(change) + (group ? ' · ' + stamp(group.checked_at) : '') + '</p></article>'
+    }).join('')
+    const alertRows = (monitor.latest_alerts || []).map(a => '<div><strong>' + safe(a.event) + '</strong><small>' + stamp(a.created_at) + ' · ' + safe(a.provider_status || '') + '</small></div>').join('')
+    const history = (monitor.group_history || []).map(g => '<div><strong>' + safe(g.day) + ' · ' + safe(g.channel) + '</strong><span>' + quantity(g.participant_count) + ' participantes</span></div>').join('')
+    return '<section class="ops-subpanel"><h3>Monitor dos canais atuais · hoje</h3><p>Dados da operação independente; não somar com os indicadores legados abaixo.</p><div class="ops-columns">' + cards + '</div><p>WhatsApp: ' +
+      quantity(monitor.ack_messages) + ' mensagens com confirmação de dispositivo via webhook (cobertura em validação). Recibo da API não equivale a leitura.</p><p>Vencimento Whazap registrado: ' + stamp(monitor.expires_at) +
+      ' · Entradas/saídas registradas pelo webhook: ' + quantity(monitor.participant_changes?.joins) + '/' + quantity(monitor.participant_changes?.leaves) + ' (cobertura em validação).</p><h3>Histórico de participantes</h3><div class="ops-error-list">' + (history || '<p>Sem histórico.</p>') + '</div><h3>Alertas administrativos recentes</h3><div class="ops-error-list">' + (alertRows || '<p>Sem alertas.</p>') + '</div></section>'
+  })()
   return '<section class="dashboard-panel ops-panel" aria-label="Painel operacional">' +
-    heading +
-    '<div class="ops-updated"><span class="ops-status ' + statusClass + '">' + safe(status) +
+    heading + monitoring +
+    '<div class="ops-updated"><span class="ops-status ' + statusClass + '">' + safe(monitor ? 'Indicadores legados (Whapi): ' + status : status) +
     '</span><span>Atualizado em ' + safe(formatDateTime(data.generated_at)) + '</span>' +
     (state.loading ? '<span>Atualizando…</span>' : '') + '</div>' +
     (state.error ? '<div class="notice" role="alert">' + safe(state.error) + '</div>' : '') +
