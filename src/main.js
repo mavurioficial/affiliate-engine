@@ -1,5 +1,5 @@
 import { getSession, onAuthChange, signIn, signOut, supabase } from './auth.js'
-import { loadDashboardOperations, renderDashboardOperations, normalizeDashboardPeriod } from './application/dashboard-operations.js'
+import { loadDashboardOperations, renderDashboardOperations, normalizeDashboardPeriod } from './application/dashboard-operations.js?v=0.1.55'
 import { loadCategoryReviews, renderCategoryReviews, normalizeCategoryReviewView, normalizeCategoryReviewMarketplace } from './application/category-review.js?v=0.1.48'
 import { applyCategoryDecision, reviseCategoryDecision, undoCategoryDecision, loadCategoryDecisionHistory, renderCategoryHistoryList } from './application/category-decisions.js?v=0.1.48'
 import { loadCategoryLearningCandidates, renderCategoryLearningCandidates } from './application/category-learning.js?v=0.1.48'
