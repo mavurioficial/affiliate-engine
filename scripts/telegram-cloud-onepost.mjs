@@ -246,8 +246,8 @@ async function mirrorMLSource(client,group,mode){
  }
  console.log(JSON.stringify({phase:'ml_exact_link_resolution',source_posts:candidates.length+unresolved.length,resolved:candidates.length,unresolved}));
  const selected=filterAmazonSimilar(candidates).accepted;
- for(let i=0;i<selected.length;i+=8){
- const r=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-ml-mirror',{method:'POST',headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},body:JSON.stringify({mode,candidates:selected.slice(i,i+8)}),signal:AbortSignal.timeout(120000)});
+ for(let i=0;i<Math.max(1,selected.length);i+=8){
+ const r=await fetch('https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-telegram-ml-mirror',{method:'POST',headers:{authorization:'Bearer '+await githubToken(),'content-type':'application/json'},body:JSON.stringify({mode,candidates:selected.slice(i,i+8),include_official:i===0&&selected.length<8}),signal:AbortSignal.timeout(120000)});
  const j=await r.json();console.log(JSON.stringify({phase:'ml_source_mirror',http_status:r.status,...j}));if(!r.ok||!j.ok)throw Error('ML mirror failed');
  }
 }
