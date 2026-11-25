@@ -552,7 +552,7 @@ async function run(){
  if(!batches.length)batches.push([]);
  for(let i=0;i<batches.length;i++){
   const data=await cloudRequest(token,{mode,confirmed:mode==='send'?'PUBLICAR':null,
-   batch_index:i,candidates:batches[i],ml_candidates:i===0?mlCandidates.slice(0,8):[]});
+   batch_index:i,candidates:batches[i],include_official:i===0&&candidates.length<8,ml_candidates:i===0?mlCandidates.slice(0,8):[]});
   console.log(JSON.stringify({phase:'mavuri_amazon_mirror_'+mode,batch:i,...data}));
   sent+=Number(data.publications_sent||0);
   skipped+=Number(data.skipped||0);
