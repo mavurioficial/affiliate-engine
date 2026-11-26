@@ -287,11 +287,40 @@
       </div>
     </section>
   </main>
-  <footer><div class="shell"><strong>MAVURI OFERTAS</strong> · Compartilhe boas oportunidades com quem gosta de economizar.<br/>Participação gratuita. Alguns links são de afiliados e podem gerar comissão para o Mavuri sem custo extra. Preços, estoques e cupons são definidos pelas lojas e podem mudar.</div></footer>
+  <footer><div class="shell"><strong>MAVURI OFERTAS</strong> · Compartilhe boas oportunidades com quem gosta de economizar.<br/>Participação gratuita. Alguns links são de afiliados e podem gerar comissão para o Mavuri sem custo extra. Preços, estoques e cupons são definidos pelas lojas e podem mudar.<br/>Medimos visitas e cliques de entrada por origem, sem cookies de rastreamento, dados de contato ou identificação persistente do visitante.</div></footer>
   <script>
     (function(){
       "use strict";
       const entry=window.location.href;
+      // Aquisição: uma visita por carregamento, sem cookies ou identificadores persistentes.
+      const query=new URLSearchParams(location.search);
+      const medium=(query.get("utm_medium")||"").toLowerCase();
+      const utm=(query.get("utm_source")||"").toLowerCase();
+      const origem=(query.get("origem")||"").toLowerCase();
+      const referrer=(()=>{try{return new URL(document.referrer).hostname.toLowerCase()}catch{return ""}})();
+      const meta=["meta","facebook","instagram","fb","ig"].includes(utm);
+      let acquisitionSource="direct";
+      if(query.get("qa")==="1") acquisitionSource="qa";
+      else if(meta&&["paid","paid_social","cpc","ads"].includes(medium)) acquisitionSource="meta_paid";
+      else if(utm==="referral"||origem==="indicacao") acquisitionSource="referral";
+      else if(["facebook","fb"].includes(utm)||origem==="facebook"||/(^|\.)facebook\.com$/.test(referrer)) acquisitionSource="facebook_organic";
+      else if(["instagram","ig"].includes(utm)||origem==="instagram"||/(^|\.)instagram\.com$/.test(referrer)) acquisitionSource="instagram_organic";
+      else if(utm==="whatsapp"||origem==="whatsapp") acquisitionSource="whatsapp";
+      else if(utm==="telegram"||origem==="telegram") acquisitionSource="telegram";
+      else if(utm||origem||referrer) acquisitionSource="other";
+      const visitId=globalThis.crypto?.randomUUID?.();
+      const sent=new Set();
+      function acquisition(event){
+        if(!visitId||sent.has(event))return;
+        sent.add(event);
+        try{fetch("https://otikoxnfotyjgphrdudn.supabase.co/functions/v1/mavuri-acquisition-event",{
+          method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({visit_id:visitId,event:event,source:acquisitionSource}),
+          keepalive:true,credentials:"omit",referrerPolicy:"no-referrer"
+        }).catch(()=>{});}catch(e){}
+      }
+      acquisition("page_view");
+      document.querySelector(".channel.whatsapp")?.addEventListener("click",()=>acquisition("join_whatsapp"));
+      document.querySelector(".channel.telegram")?.addEventListener("click",()=>acquisition("join_telegram"));
       const originParam=(new URLSearchParams(location.search).get("origem")||"direto").toLowerCase();
       const origins=["whatsapp","telegram","instagram","facebook","direto","outros"];
       const source=origins.includes(originParam)?originParam:"outros";
@@ -302,7 +331,8 @@
       function message(text,ok){output.textContent=text;output.className="response "+(ok?"ok":"error");}
       const share=document.getElementById("share");
       share.addEventListener("click",async function(){
-        const data={title:"Mavuri Ofertas",text:"Entre grátis no Mavuri Ofertas no WhatsApp ou Telegram!",url:entry.split("#")[0]};
+        acquisition("share");
+        const data={title:"Mavuri Ofertas",text:"Entre grátis no Mavuri Ofertas no WhatsApp ou Telegram!",url:new URL("?origem=indicacao",location.origin+location.pathname).href};
         try{
           if(navigator.share){await navigator.share(data);return;}
           if(navigator.clipboard){await navigator.clipboard.writeText(data.url);share.textContent="✓ Link copiado";return;}
