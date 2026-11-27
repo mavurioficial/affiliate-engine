@@ -16,5 +16,6 @@ jobs:
           node-version: 20
       - run: npm run check
       - run: npm test
+      - run: node scripts/test-ml-external-link-staging.mjs
       - run: node scripts/test-cloud-auth-main.mjs
       - run: node --test scripts/telegram-cloud-onepost.test.mjs
